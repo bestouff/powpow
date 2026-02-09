@@ -1725,8 +1725,16 @@ pub fn staff_list(
 
     for (staff, latest_season) in staff_with_seasons {
         let full_name = format!("{} {}", staff.first_name, staff.last_name);
-        let phone = if show_contact { staff.phone.as_deref().unwrap_or("") } else { "" };
-        let email_display = if show_contact { staff.email.as_str() } else { "" };
+        let phone = if show_contact {
+            staff.phone.as_deref().unwrap_or("")
+        } else {
+            ""
+        };
+        let email_display = if show_contact {
+            staff.email.as_str()
+        } else {
+            ""
+        };
         let comment_display = staff.comment.clone();
 
         let (season_tag_class, season_display) = match latest_season {
@@ -1819,11 +1827,11 @@ pub fn staff_list(
             vertical-align: bottom !important;
             position: sticky;
             top: 0;
-            background-color: var(--bulma-scheme-main);
+            background: white !important;
             z-index: 10;
         }
         th.atelier-col {
-            background-color: var(--bulma-background);
+            background: white !important;
             padding: 8px 4px !important;
             min-width: 30px;
             max-width: 30px;
@@ -4480,10 +4488,7 @@ pub fn audit_page(
     )
 }
 
-pub fn validation_page(
-    pending: &[(Staff, Atelier)],
-    prefix: &str,
-) -> String {
+pub fn validation_page(pending: &[(Staff, Atelier)], prefix: &str) -> String {
     let mut rows = String::new();
 
     for (staff, atelier) in pending {
