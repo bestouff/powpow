@@ -1703,9 +1703,16 @@ pub fn staff_list(
     roles: &[Role],
     current_season: i16,
     prefix: &str,
+    show_contact: bool,
 ) -> String {
     let mut rows_html = String::new();
     let staff_count = staff_with_seasons.len();
+
+    let contact_headers = if show_contact {
+        "<th>Email</th><th>Téléphone</th>"
+    } else {
+        ""
+    };
 
     // Build atelier header columns
     let mut atelier_headers = String::new();
@@ -1718,7 +1725,8 @@ pub fn staff_list(
 
     for (staff, latest_season) in staff_with_seasons {
         let full_name = format!("{} {}", staff.first_name, staff.last_name);
-        let phone = staff.phone.as_deref().unwrap_or("");
+        let phone = if show_contact { staff.phone.as_deref().unwrap_or("") } else { "" };
+        let email_display = if show_contact { staff.email.as_str() } else { "" };
         let comment_display = staff.comment.clone();
 
         let (season_tag_class, season_display) = match latest_season {
@@ -1769,12 +1777,17 @@ pub fn staff_list(
             r#"<td></td>"#.to_string()
         };
 
+        let contact_cells = if show_contact {
+            format!(r#"<td>{}</td><td>{}</td>"#, email_display, phone)
+        } else {
+            String::new()
+        };
+
         rows_html.push_str(&format!(
             r#"
                 <tr class="{row_class}">
                     <td><a href="{p}/person/{id}"><strong>{full_name}</strong></a></td>
-                    <td>{email}</td>
-                    <td>{phone}</td>
+                    {contact_cells}
                     <td><span class="tag {season_tag_class}">{season_display}</span></td>
                     {atelier_cells}
                     {admin_cell}
@@ -1784,8 +1797,7 @@ pub fn staff_list(
             p = prefix,
             id = staff.id,
             full_name = full_name,
-            email = staff.email,
-            phone = phone,
+            contact_cells = contact_cells,
             season_tag_class = season_tag_class,
             season_display = season_display,
             atelier_cells = atelier_cells,
@@ -1869,8 +1881,7 @@ pub fn staff_list(
                         <thead>
                             <tr>
                                 <th>Nom</th>
-                                <th>Email</th>
-                                <th>Téléphone</th>
+                                {contact_headers}
                                 <th class="has-text-centered atelier-col"><span class="vertical-text">Dernière saison</span></th>
                                 {atelier_headers}
                                 <th class="has-text-centered atelier-col"><span class="vertical-text">Admin</span></th>
@@ -1910,6 +1921,7 @@ pub fn person_detail(
     prefix: &str,
     is_self: bool,
     is_admin: bool,
+    show_contact: bool,
     todos: &[TodoItem],
 ) -> String {
     let can_edit_ateliers = is_self || is_admin;
@@ -2036,7 +2048,24 @@ pub fn person_detail(
         )
     };
 
-    let phone_display = staff.phone.as_deref().unwrap_or("—");
+    let contact_html = if show_contact {
+        let phone_display = staff.phone.as_deref().unwrap_or("—");
+        format!(
+            r#"<p>
+                                <strong>Email:</strong><br>
+                                <a href="mailto:{email}">{email}</a>
+                            </p>
+                            <p>
+                                <strong>Téléphone:</strong><br>
+                                {phone}
+                            </p>"#,
+            email = staff.email,
+            phone = phone_display,
+        )
+    } else {
+        String::new()
+    };
+
     let comment_display = if staff.comment.is_empty() {
         "—"
     } else {
@@ -2190,14 +2219,7 @@ pub fn person_detail(
                                 <strong>Nom complet:</strong><br>
                                 <span class="is-size-5">{first_name} {last_name}</span>
                             </p>
-                            <p>
-                                <strong>Email:</strong><br>
-                                <a href="mailto:{email}">{email}</a>
-                            </p>
-                            <p>
-                                <strong>Téléphone:</strong><br>
-                                {phone}
-                            </p>
+                            {contact_html}
                             {comment_html}
                         </div>
                     </div>
@@ -2230,8 +2252,7 @@ pub fn person_detail(
         p = prefix,
         first_name = staff.first_name,
         last_name = staff.last_name,
-        email = staff.email,
-        phone = phone_display,
+        contact_html = contact_html,
         comment_html = comment_html,
         admin_box_html = admin_box_html,
         current_season = current_season,
@@ -3228,7 +3249,7 @@ pub fn calendar(
     all_ateliers: &[Atelier],
     prefix: &str,
     viewer_id: uuid::Uuid,
-    is_admin: bool,
+    _is_admin: bool,
 ) -> String {
     // Build nav links for ateliers
     let mut atelier_nav = String::new();
@@ -3346,7 +3367,7 @@ pub fn calendar(
     // Build rows (staff)
     let mut rows_html = String::new();
     for staff in staff_list {
-        let can_toggle = staff.id == viewer_id || is_admin;
+        let can_toggle = staff.id == viewer_id;
         let disabled_attr = if can_toggle { "" } else { "disabled" };
         let name = format!(
             "{} {}",

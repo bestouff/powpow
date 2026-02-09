@@ -343,12 +343,16 @@ async fn list_users(
 }
 
 async fn list_staff(
-    RequireStaff(_staff): RequireStaff,
+    RequireStaff(viewer): RequireStaff,
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
     let current_season = get_current_season();
+
+    // Chiefs and admins can see contact info (email/phone)
+    let show_contact = viewer.is_admin || viewer.is_god
+        || database::is_chief(&state.db, viewer.id).await.unwrap_or(false);
 
     let staff_list = match database::get_all_staff_with_season(&state.db).await {
         Ok(list) => list,
@@ -386,7 +390,7 @@ async fn list_staff(
         }
     });
 
-    Html(templates::staff_list(staff_list, &ateliers, &roles, current_season, &prefix))
+    Html(templates::staff_list(staff_list, &ateliers, &roles, current_season, &prefix, show_contact))
 }
 
 #[derive(Debug, Deserialize)]
@@ -451,14 +455,15 @@ async fn view_person(
 
     // Determine viewer permissions
     let is_self = viewer_id == id;
-    let is_viewer_admin = if is_self {
-        staff.is_admin
+    let (is_viewer_admin, is_viewer_chief) = if is_self {
+        (staff.is_admin, database::is_chief(&state.db, viewer_id).await.unwrap_or(false))
     } else {
         match database::get_staff_by_id(&state.db, viewer_id).await {
-            Ok(Some(v)) => v.is_admin,
-            _ => false,
+            Ok(Some(v)) => (v.is_admin || v.is_god, database::is_chief(&state.db, viewer_id).await.unwrap_or(false)),
+            _ => (false, false),
         }
     };
+    let show_contact = is_self || is_viewer_admin || is_viewer_chief;
 
     // Get all ateliers
     let ateliers = match database::get_all_ateliers(&state.db).await {
@@ -547,7 +552,7 @@ async fn view_person(
         Vec::new()
     };
 
-    Html(templates::person_detail(&staff, &ateliers, &roles, current_season, &prefix, is_self, is_viewer_admin, &todos)).into_response()
+    Html(templates::person_detail(&staff, &ateliers, &roles, current_season, &prefix, is_self, is_viewer_admin, show_contact, &todos)).into_response()
 }
 
 #[derive(Debug, Deserialize)]
@@ -870,8 +875,8 @@ async fn toggle_presence_api(
     State(state): State<AppState>,
     Json(payload): Json<TogglePresenceRequest>,
 ) -> impl IntoResponse {
-    // Authorization: non-admins can only toggle their own availability
-    if payload.staff_id != me.id && !me.is_admin {
+    // Authorization: only the staff member themselves can toggle their own availability
+    if payload.staff_id != me.id {
         return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "Vous ne pouvez modifier que votre propre disponibilité"})));
     }
 
