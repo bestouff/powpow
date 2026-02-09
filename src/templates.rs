@@ -109,14 +109,29 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str) -> String {
                     <span class="icon mr-2"><i class="fas fa-skiing"></i></span>
                     <strong>PowPow pour AGH'IL</strong>
                 </a>
+                <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="main-navbar">
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                </a>
             </div>
-            <div class="navbar-menu">
+            <div id="main-navbar" class="navbar-menu">
                 <div class="navbar-end">
                     {links}
                 </div>
             </div>
         </div>
-    </nav>"#,
+    </nav>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {{
+        var burger = document.querySelector('.navbar-burger');
+        var menu = document.getElementById(burger.dataset.target);
+        burger.addEventListener('click', function() {{
+            burger.classList.toggle('is-active');
+            menu.classList.toggle('is-active');
+        }});
+    }});
+    </script>"#,
         p = prefix,
         links = links,
     )
