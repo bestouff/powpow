@@ -1,0 +1,8 @@
+Package: @@PKG@@
+Version: @@VERSION@@
+Architecture: @@ARCH@@
+Maintainer: AGHIL <contact@aghil.fr>
+Description: Powpow - AGHIL volunteer management platform
+Depends: libssl3, ca-certificates, postgresql
+Section: web
+Priority: optional

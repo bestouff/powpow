@@ -1,0 +1,23 @@
+[Unit]
+Description=Powpow - AGHIL volunteer management
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/powpow.conf
+ExecStart=/usr/sbin/powpow
+Restart=on-failure
+RestartSec=5
+WorkingDirectory=/
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target
