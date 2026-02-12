@@ -14,7 +14,7 @@ pub struct TodoItem {
 
 /// Format a phone number to international format
 /// Assumes French numbers if no country code is present
-fn format_phone_international(phone: &str) -> String {
+pub fn format_phone_international(phone: &str) -> String {
     if phone.is_empty() {
         return String::new();
     }
@@ -178,7 +178,7 @@ fn page(
 {badge_css}
 {badge_script}
 {me_script}
-    <footer class="footer py-4"><div class="content has-text-centered"><p class="is-size-7 has-text-grey">PowPow pour AG'HIL, &copy;2026 Xavier Bestel &lt;xav@bes.tel&gt;</p></div></footer>
+    <footer class="footer py-4"><div class="content has-text-centered"><p class="is-size-7 has-text-grey">PowPow v{version} pour AG'HIL, &copy;2026 Xavier Bestel &lt;xav@bes.tel&gt;</p></div></footer>
 </body>
 </html>"#,
         title = title,
@@ -189,6 +189,7 @@ fn page(
         badge_css = badge_css,
         badge_script = badge_script,
         me_script = me_script,
+        version = env!("CARGO_PKG_VERSION"),
     )
 }
 
@@ -1946,6 +1947,7 @@ pub fn person_detail(
     is_admin: bool,
     show_contact: bool,
     todos: &[TodoItem],
+    payment_history: &[crate::models::PaymentHistoryEntry],
 ) -> String {
     let can_edit_ateliers = is_self || is_admin;
     let mut ateliers_html = String::new();
@@ -2071,7 +2073,34 @@ pub fn person_detail(
         )
     };
 
-    let contact_html = if show_contact {
+    let can_edit_contact = is_self || is_admin;
+    let contact_html = if can_edit_contact && show_contact {
+        let phone_value = staff.phone.as_deref().unwrap_or("");
+        format!(
+            r#"<div class="field">
+                                <label class="label">Email:</label>
+                                <div class="control has-icons-left">
+                                    <input class="input" type="email" id="edit-email" value="{email}">
+                                    <span class="icon is-left"><i class="fas fa-envelope"></i></span>
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">Téléphone:</label>
+                                <div class="control has-icons-left">
+                                    <input class="input" type="tel" id="edit-phone" value="{phone}">
+                                    <span class="icon is-left"><i class="fas fa-phone"></i></span>
+                                </div>
+                            </div>
+                            <div class="control mt-2">
+                                <button class="button is-small is-info" id="save-contact-btn">
+                                    <span class="icon"><i class="fas fa-save"></i></span>
+                                    <span>Enregistrer</span>
+                                </button>
+                            </div>"#,
+            email = staff.email,
+            phone = phone_value,
+        )
+    } else if show_contact {
         let phone_display = staff.phone.as_deref().unwrap_or("—");
         format!(
             r#"<p>
@@ -2193,6 +2222,85 @@ pub fn person_detail(
         )
     };
 
+    // Build payment history section
+    let payment_history_html = if payment_history.is_empty() {
+        String::new()
+    } else {
+        let mut items_html = String::new();
+        for entry in payment_history {
+            let icon = match entry.source.as_str() {
+                "helloasso" => r#"<span class="icon has-text-link"><i class="fas fa-ticket-alt"></i></span>"#,
+                "check" => r#"<span class="icon has-text-success"><i class="fas fa-money-check"></i></span>"#,
+                _ => r#"<span class="icon has-text-warning"><i class="fas fa-coins"></i></span>"#,
+            };
+            let date_display = entry.date.as_deref().unwrap_or("—");
+            let amount_display = entry.amount.map(|a| {
+                if entry.source == "helloasso" {
+                    format!("{:.2}€", a as f32 / 100.0)
+                } else {
+                    format!("{}€", a)
+                }
+            }).unwrap_or_else(|| "—".to_string());
+            let name = format!("{} {}", capitalize_words(&entry.first_name), capitalize_words(&entry.last_name));
+            let email_display = entry.email.as_deref().unwrap_or("—");
+            let phone_display = entry.phone.as_deref()
+                .map(|p| format_phone_international(p))
+                .unwrap_or_else(|| "—".to_string());
+            let payer_line = if let Some(ref payer) = entry.payer_email {
+                if entry.email.as_deref() != Some(payer.as_str()) {
+                    format!(r#"<span class="is-size-7 has-text-grey">Payeur: {}</span><br>"#, payer)
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
+            items_html.push_str(&format!(
+                r#"<div class="box mb-3 p-3">
+                    <div class="columns is-mobile is-vcentered is-multiline">
+                        <div class="column is-narrow">
+                            {icon}
+                        </div>
+                        <div class="column">
+                            <strong>{item_type}</strong> — Saison {season}<br>
+                            <span class="is-size-7 has-text-grey">{date} — {amount}</span>
+                        </div>
+                        <div class="column is-5-tablet is-12-mobile">
+                            <span class="is-size-7">{name}</span><br>
+                            <span class="is-size-7">{email}</span><br>
+                            <span class="is-size-7">{phone}</span><br>
+                            {payer_line}
+                        </div>
+                    </div>
+                </div>"#,
+                icon = icon,
+                item_type = format!("{} {}", entry.item_type, match entry.source.as_str() {
+                    "helloasso" => "HelloAsso",
+                    "check" => "Chèque",
+                    _ => "Liquide",
+                }),
+                season = entry.season,
+                date = date_display,
+                amount = amount_display,
+                name = name,
+                email = email_display,
+                phone = phone_display,
+                payer_line = payer_line,
+            ));
+        }
+        format!(
+            r#"<div class="box">
+                        <h2 class="title is-4">
+                            <span class="icon"><i class="fas fa-history"></i></span>
+                            Historique des cotisations
+                        </h2>
+                        {items_html}
+                    </div>"#,
+            items_html = items_html,
+        )
+    };
+
     let extra_head = r##"    <style>
         .atelier-checkbox {
             width: 1.25rem;
@@ -2270,6 +2378,8 @@ pub fn person_detail(
                     {plannings_box}
                 </div>
             </div>
+
+            {payment_history_html}
         </div>
     </section>"##,
         p = prefix,
@@ -2283,6 +2393,7 @@ pub fn person_detail(
         ateliers_html = ateliers_html,
         plannings_box = plannings_box,
         todo_html = todo_html,
+        payment_history_html = payment_history_html,
     );
 
     // Build admin-only scripts conditionally
@@ -2459,6 +2570,43 @@ pub fn person_detail(
         ""
     };
 
+    let contact_scripts = if can_edit_contact && show_contact {
+        r##"
+        // Handle contact save
+        document.getElementById('save-contact-btn').addEventListener('click', async function() {
+            if (!confirm('Attention à bien vérifier avant de confirmer !')) return;
+            const email = document.getElementById('edit-email').value;
+            const phone = document.getElementById('edit-phone').value;
+            const btn = this;
+            btn.classList.add('is-loading');
+
+            try {
+                const response = await fetch(`${prefix}/api/person/${staffId}/contact`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email: email, phone: phone || null })
+                });
+
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error);
+                }
+
+                location.reload();
+            } catch (error) {
+                console.error('Error:', error);
+                showNotification('Erreur: ' + error.message, 'danger');
+            } finally {
+                btn.classList.remove('is-loading');
+            }
+        });
+"##
+    } else {
+        ""
+    };
+
     let scripts = format!(
         r##"    <script>
         const staffId = "{staff_id}";
@@ -2518,10 +2666,13 @@ pub fn person_detail(
         }});
 
         {admin_scripts}
+
+        {contact_scripts}
     </script>"##,
         p = prefix,
         staff_id = staff.id,
         admin_scripts = admin_scripts,
+        contact_scripts = contact_scripts,
     );
 
     let title = format!("{} {} - AGHIL", staff.first_name, staff.last_name);

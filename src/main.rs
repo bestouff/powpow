@@ -130,6 +130,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/person/{id}", get(view_person))
         .route("/api/person/{id}/role", post(toggle_role))
         .route("/api/person/{id}/comment", post(update_comment))
+        .route("/api/person/{id}/contact", post(update_contact))
         .route("/import/{item_id}", get(import_staff))
         .route("/import/{item_id}", post(do_import_staff))
         .route("/cash", get(list_cash).post(create_cash))
@@ -552,7 +553,15 @@ async fn view_person(
         Vec::new()
     };
 
-    Html(templates::person_detail(&staff, &ateliers, &roles, current_season, &prefix, is_self, is_viewer_admin, show_contact, &todos)).into_response()
+    let payment_history = match database::get_staff_payment_history(&state.db, id).await {
+        Ok(h) => h,
+        Err(e) => {
+            error!("Error fetching payment history: {}", e);
+            Vec::new()
+        }
+    };
+
+    Html(templates::person_detail(&staff, &ateliers, &roles, current_season, &prefix, is_self, is_viewer_admin, show_contact, &todos, &payment_history)).into_response()
 }
 
 #[derive(Debug, Deserialize)]
@@ -793,6 +802,51 @@ async fn update_comment(
         Err(e) => {
             error!("Error updating comment: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct UpdateContactPayload {
+    email: String,
+    phone: Option<String>,
+}
+
+async fn update_contact(
+    RequireStaff(me): RequireStaff,
+    State(state): State<AppState>,
+    axum::extract::Path(staff_id): axum::extract::Path<uuid::Uuid>,
+    Json(payload): Json<UpdateContactPayload>,
+) -> impl IntoResponse {
+    // Only allow editing own contact info, or if admin/god
+    if me.id != staff_id && !me.is_admin && !me.is_god {
+        return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "Accès refusé"}))).into_response();
+    }
+
+    let email = payload.email.trim().to_lowercase();
+    if email.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Email requis"}))).into_response();
+    }
+
+    let phone = payload.phone
+        .as_deref()
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .map(|p| templates::format_phone_international(p));
+
+    match database::update_staff_contact(&state.db, staff_id, &email, phone.as_deref()).await {
+        Ok(_) => {
+            let _ = database::insert_audit(
+                &state.db, Some(me.id),
+                &format!("{} {}", me.first_name, me.last_name),
+                "Modification contact",
+                &format!("staff={} email={} phone={}", staff_id, email, phone.as_deref().unwrap_or("")),
+            ).await;
+            (StatusCode::OK, Json(serde_json::json!({"success": true}))).into_response()
+        }
+        Err(e) => {
+            error!("Error updating contact: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response()
         }
     }
 }

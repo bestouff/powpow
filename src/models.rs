@@ -239,6 +239,21 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Cash {
     }
 }
 
+// Payment history (unified view of HelloAsso + cash payments for a staff member)
+#[derive(Debug, Clone, Serialize)]
+pub struct PaymentHistoryEntry {
+    pub season: i16,
+    pub source: String,              // "helloasso", "cash", "check"
+    pub date: Option<String>,        // formatted DD/MM/YYYY
+    pub amount: Option<i32>,         // in euros
+    pub item_type: String,           // "Don", "Adhésion"
+    pub first_name: String,
+    pub last_name: String,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub payer_email: Option<String>,
+}
+
 // HelloAsso API Models
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HelloAssoTokenResponse {

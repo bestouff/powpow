@@ -1,4 +1,4 @@
-use crate::models::{Atelier, Cash, Membership, Need, Role, Staff, StaffMatchType, StaffWithSeason, User};
+use crate::models::{Atelier, Cash, Membership, Need, PaymentHistoryEntry, Role, Staff, StaffMatchType, StaffWithSeason, User};
 use anyhow::Result;
 use futures_util::StreamExt;
 use sqlx::PgPool;
@@ -1159,6 +1159,105 @@ pub async fn update_staff_comment(pool: &PgPool, staff_id: uuid::Uuid, comment: 
     .await?;
 
     Ok(())
+}
+
+/// Update a staff member's email and phone
+pub async fn update_staff_contact(pool: &PgPool, staff_id: uuid::Uuid, email: &str, phone: Option<&str>) -> Result<()> {
+    sqlx::query(
+        r"UPDATE staff SET email = $2, phone = $3, updated_at = NOW() WHERE id = $1",
+    )
+    .bind(staff_id)
+    .bind(email)
+    .bind(phone)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Get payment history for a staff member (both HelloAsso and cash payments)
+pub async fn get_staff_payment_history(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<PaymentHistoryEntry>> {
+    let rows = sqlx::query(
+        r"SELECT
+            p.season,
+            CASE WHEN p.helloasso_item_id IS NOT NULL THEN 'helloasso' ELSE c.payment_method END AS source,
+            m.order_date AS ha_date,
+            c.date AS cash_date,
+            COALESCE(m.amount, c.amount) AS amount,
+            m.item_type AS ha_item_type,
+            c.is_membership AS cash_is_membership,
+            m.beneficiary_first_name AS ha_first_name,
+            m.beneficiary_last_name AS ha_last_name,
+            c.first_name AS cash_first_name,
+            c.last_name AS cash_last_name,
+            COALESCE(m.email, c.email) AS email,
+            COALESCE(m.phone, c.phone) AS phone,
+            m.payer_email
+        FROM payments p
+        LEFT JOIN memberships m ON p.helloasso_item_id = m.helloasso_item_id
+        LEFT JOIN cash c ON p.cash_id = c.id
+        WHERE p.staff = $1
+        ORDER BY COALESCE(m.order_date, c.date::timestamptz) DESC",
+    )
+    .bind(staff_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut entries = Vec::new();
+    for row in &rows {
+        let source: String = row.get("source");
+        let is_helloasso = source == "helloasso";
+
+        let date = if is_helloasso {
+            let d: Option<chrono::DateTime<chrono::Utc>> = row.get("ha_date");
+            d.map(|d| d.format("%d/%m/%Y").to_string())
+        } else {
+            let d: Option<chrono::NaiveDate> = row.get("cash_date");
+            d.map(|d| d.format("%d/%m/%Y").to_string())
+        };
+
+        let item_type = if is_helloasso {
+            let t: Option<String> = row.get("ha_item_type");
+            match t.as_deref() {
+                Some("Donation") => "Don".to_string(),
+                _ => "Adhésion".to_string(),
+            }
+        } else {
+            let is_membership: Option<bool> = row.get("cash_is_membership");
+            if is_membership.unwrap_or(true) { "Adhésion".to_string() } else { "Don".to_string() }
+        };
+
+        let first_name = if is_helloasso {
+            let n: Option<String> = row.get("ha_first_name");
+            n.unwrap_or_default()
+        } else {
+            let n: Option<String> = row.get("cash_first_name");
+            n.unwrap_or_default()
+        };
+
+        let last_name = if is_helloasso {
+            let n: Option<String> = row.get("ha_last_name");
+            n.unwrap_or_default()
+        } else {
+            let n: Option<String> = row.get("cash_last_name");
+            n.unwrap_or_default()
+        };
+
+        entries.push(PaymentHistoryEntry {
+            season: row.get("season"),
+            source,
+            date,
+            amount: row.get("amount"),
+            item_type,
+            first_name,
+            last_name,
+            email: row.get("email"),
+            phone: row.get("phone"),
+            payer_email: row.get("payer_email"),
+        });
+    }
+
+    Ok(entries)
 }
 
 // Cash payment functions
