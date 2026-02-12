@@ -1554,6 +1554,42 @@ pub async fn get_needs_for_day(pool: &PgPool, day: chrono::NaiveDate) -> Result<
     Ok(needs)
 }
 
+/// Fetch all future needs together with per-half presence counts.
+/// Returns (Need, first_half_count, second_half_count).
+pub async fn get_all_future_needs_with_counts(
+    pool: &PgPool,
+    from: chrono::NaiveDate,
+) -> Result<Vec<(Need, i64, i64)>> {
+    let rows = sqlx::query(
+        r"
+        SELECT n.id, n.day, n.atelier, n.quantity, n.nightly,
+               COUNT(DISTINCT CASE WHEN p.first_half  THEN p.staff END) AS h1,
+               COUNT(DISTINCT CASE WHEN p.second_half THEN p.staff END) AS h2
+        FROM needs n
+        LEFT JOIN presence p ON p.needs = n.id
+        WHERE n.day >= $1
+        GROUP BY n.id
+        ORDER BY n.day, n.atelier
+        ",
+    )
+    .bind(from)
+    .fetch_all(pool)
+    .await?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        let need = Need {
+            id: row.try_get("id")?,
+            day: row.try_get("day")?,
+            atelier: row.try_get("atelier")?,
+            quantity: row.try_get("quantity")?,
+            nightly: row.try_get("nightly")?,
+        };
+        result.push((need, row.try_get("h1")?, row.try_get("h2")?));
+    }
+    Ok(result)
+}
+
 /// Upsert a need (INSERT or UPDATE on conflict day+atelier)
 pub async fn upsert_need(
     pool: &PgPool,
@@ -1921,7 +1957,7 @@ pub async fn get_pending_validations(
     let rows = if let Some(atelier_ids) = chief_of_ateliers {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.needs_validation AS a_needs_validation
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -1935,7 +1971,7 @@ pub async fn get_pending_validations(
     } else {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.needs_validation AS a_needs_validation
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -1967,6 +2003,7 @@ pub async fn get_pending_validations(
             name: row.try_get("a_name")?,
             slug: row.try_get("a_slug")?,
             needs_validation: row.try_get("a_needs_validation")?,
+            default_nightly: row.try_get("a_default_nightly")?,
         };
         result.push((staff, atelier));
     }

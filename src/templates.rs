@@ -3340,9 +3340,9 @@ pub fn calendar(
         let complete_class = if both_complete { " cal-complete" } else { "" };
 
         let (first_label_h, second_label_h) = if need.nightly {
-            ("S", "N")
+            ("soir", "nuit")
         } else {
-            ("M", "AM")
+            ("matin", "après-midi")
         };
         header_html.push_str(&format!(
             r#"<th class="cal-day-col has-text-centered{sunday_class}{complete_class}"><div class="cal-day-name">{day_name}</div><div class="cal-day-date">{day_date}</div><div class="cal-day-count"><span class="{first_class}">{first_label_h} {filled_first}/{qty}</span> <span class="{second_class}">{second_label_h} {filled_second}/{qty}</span></div></th>"#,
@@ -3414,9 +3414,9 @@ pub fn calendar(
             let second_checked = if second_half { "checked" } else { "" };
 
             let (first_label, second_label) = if need.nightly {
-                ("S", "N")
+                ("soir", "nuit")
             } else {
-                ("M", "AM")
+                ("matin", "après-midi")
             };
 
             let active_class = if first_half || second_half {
@@ -3469,13 +3469,13 @@ pub fn calendar(
         .cal-table { border-collapse: collapse; white-space: nowrap; }
         .cal-table th, .cal-table td { border: 1px solid var(--bulma-border); padding: 0.3rem 0.4rem; vertical-align: middle; }
         .cal-table thead { position: sticky; top: 0; z-index: 4; }
-        .cal-table thead th { background: var(--bulma-background); }
+        .cal-table thead th { background: #f5f5f5 !important; }
         .cal-name-col { position: sticky; left: 0; z-index: 2; min-width: 150px; }
-        .cal-table thead th.cal-name-col { z-index: 5; background: var(--bulma-background); }
-        .cal-table tbody tr:nth-child(odd) td { background: var(--bulma-scheme-main); }
-        .cal-table tbody tr:nth-child(even) td { background: var(--bulma-scheme-main-bis); }
-        .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: var(--bulma-scheme-main); }
-        .cal-table tbody tr:nth-child(even) td.cal-name-col { background: var(--bulma-scheme-main-bis); }
+        .cal-table thead th.cal-name-col { z-index: 5; background: #f5f5f5 !important; }
+        .cal-table tbody tr:nth-child(odd) td { background: white; }
+        .cal-table tbody tr:nth-child(even) td { background: #fafafa; }
+        .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: white; }
+        .cal-table tbody tr:nth-child(even) td.cal-name-col { background: #fafafa; }
         .cal-sunday { background: var(--bulma-link-light) !important; }
         .cal-complete { background: var(--bulma-success-light) !important; }
         .cal-cell.cal-active { background: var(--bulma-success) !important; color: var(--bulma-success-invert); }
@@ -3807,10 +3807,159 @@ pub fn render_upcoming_week_email(upcoming: &[(chrono::NaiveDate, String, i16, i
 pub fn calendar_editor(
     all_ateliers: &[Atelier],
     editable_ids: &[uuid::Uuid],
-    upcoming: &[(chrono::NaiveDate, String, i16, i64)],
+    future_needs: &[(Need, i64, i64)],
     prefix: &str,
 ) -> String {
-    let week_html = render_upcoming_week(upcoming);
+    use std::collections::{BTreeMap, BTreeSet};
+
+    // Collect unique sorted days
+    let days: Vec<chrono::NaiveDate> = {
+        let mut s = BTreeSet::new();
+        for (n, _, _) in future_needs {
+            s.insert(n.day);
+        }
+        s.into_iter().collect()
+    };
+
+    // For each day, determine (has_day_need, has_night_need)
+    let mut day_types: BTreeMap<chrono::NaiveDate, (bool, bool)> = BTreeMap::new();
+    for (n, _, _) in future_needs {
+        let entry = day_types.entry(n.day).or_insert((false, false));
+        if n.nightly {
+            entry.1 = true;
+        } else {
+            entry.0 = true;
+        }
+    }
+
+    // Build needs_map: (atelier_id, day) -> (&Need, h1_count, h2_count)
+    let mut needs_map: HashMap<(uuid::Uuid, chrono::NaiveDate), (&Need, i64, i64)> = HashMap::new();
+    for (n, h1, h2) in future_needs {
+        needs_map.insert((n.atelier, n.day), (n, *h1, *h2));
+    }
+
+    // French day-of-week abbreviations
+    let day_abbrev = |d: chrono::NaiveDate| -> &'static str {
+        match d.weekday() {
+            chrono::Weekday::Mon => "lun.",
+            chrono::Weekday::Tue => "mar.",
+            chrono::Weekday::Wed => "mer.",
+            chrono::Weekday::Thu => "jeu.",
+            chrono::Weekday::Fri => "ven.",
+            chrono::Weekday::Sat => "sam.",
+            chrono::Weekday::Sun => "dim.",
+        }
+    };
+
+    // Sub-column count for a day
+    let subcols = |d: &chrono::NaiveDate| -> usize {
+        let (has_day, has_night) = day_types.get(d).copied().unwrap_or((false, false));
+        if has_day && has_night { 4 } else { 2 }
+    };
+
+    // --- Build table HTML ---
+    // Header row 1: Atelier + date columns
+    let mut header1 = String::from(r#"<th rowspan="2" class="cal-name-col">Atelier</th>"#);
+    for d in &days {
+        let n = subcols(d);
+        header1.push_str(&format!(
+            r#"<th class="day-start" colspan="{n}">{dow} {dd}/{mm}</th>"#,
+            n = n,
+            dow = day_abbrev(*d),
+            dd = format!("{:02}", d.day()),
+            mm = format!("{:02}", d.month()),
+        ));
+    }
+
+    // Header row 2: sub-column labels
+    let mut header2 = String::new();
+    for d in &days {
+        let (has_day, has_night) = day_types.get(d).copied().unwrap_or((false, false));
+        if has_day && has_night {
+            header2.push_str(r#"<th class="day-start">matin</th><th>a-m</th><th>soir</th><th>nuit</th>"#);
+        } else if has_night {
+            header2.push_str(r#"<th class="day-start">soir</th><th>nuit</th>"#);
+        } else {
+            header2.push_str(r#"<th class="day-start">matin</th><th>a-m</th>"#);
+        }
+    }
+
+    // Body rows
+    let mut body = String::new();
+    for atelier in all_ateliers {
+        body.push_str(&format!(
+            r#"<tr><td class="cal-name-col">{name}</td>"#,
+            name = atelier.name,
+        ));
+
+        for d in &days {
+            let (has_day, has_night) = day_types.get(d).copied().unwrap_or((false, false));
+            let mixed = has_day && has_night;
+            let n_subcols = if mixed { 4 } else { 2 };
+            let day_str = d.format("%Y-%m-%d").to_string();
+            let entry = needs_map.get(&(atelier.id, *d));
+            let mut first = true; // track first cell of this day group
+
+            // Helper: class string for a cell, adding day-start on the first one
+            let mut cell_class = |extra: &str| -> String {
+                let ds = if first { first = false; " day-start" } else { "" };
+                if extra.is_empty() {
+                    format!("day-cell{}", ds)
+                } else {
+                    format!("day-cell has-text-centered {} {}", extra, ds)
+                }
+            };
+
+            match entry {
+                None => {
+                    for _ in 0..n_subcols {
+                        let cls = cell_class("");
+                        body.push_str(&format!(
+                            r#"<td class="{cls}" data-day="{day}"></td>"#,
+                            cls = cls, day = day_str,
+                        ));
+                    }
+                }
+                Some((need, h1, h2)) => {
+                    let qty = need.quantity as i64;
+                    let pad_before = if mixed && need.nightly { 2 } else { 0 };
+                    let pad_after = if mixed && !need.nightly { 2 } else { 0 };
+
+                    for _ in 0..pad_before {
+                        let cls = cell_class("");
+                        body.push_str(&format!(
+                            r#"<td class="{cls}" data-day="{day}"></td>"#,
+                            cls = cls, day = day_str,
+                        ));
+                    }
+
+                    // First half cell
+                    let css1 = if *h1 >= qty { "cell-ok" } else { "cell-deficit" };
+                    let cls1 = cell_class(css1);
+                    body.push_str(&format!(
+                        r#"<td class="{cls}" data-day="{day}">{h}/{q}</td>"#,
+                        cls = cls1, day = day_str, h = h1, q = qty,
+                    ));
+                    // Second half cell
+                    let css2 = if *h2 >= qty { "cell-ok" } else { "cell-deficit" };
+                    let cls2 = cell_class(css2);
+                    body.push_str(&format!(
+                        r#"<td class="{cls}" data-day="{day}">{h}/{q}</td>"#,
+                        cls = cls2, day = day_str, h = h2, q = qty,
+                    ));
+
+                    for _ in 0..pad_after {
+                        let cls = cell_class("");
+                        body.push_str(&format!(
+                            r#"<td class="{cls}" data-day="{day}"></td>"#,
+                            cls = cls, day = day_str,
+                        ));
+                    }
+                }
+            }
+        }
+        body.push_str("</tr>");
+    }
 
     // Build calendar page links
     let mut calendar_links = String::new();
@@ -3833,122 +3982,89 @@ pub fn calendar_editor(
     }
     editable_json.push(']');
 
-    // Build atelier cards data as JSON for JS
+    // Build atelier cards data as JSON for JS (used in the modal)
     let mut ateliers_json = String::from("[");
     for (i, a) in all_ateliers.iter().enumerate() {
         if i > 0 {
             ateliers_json.push(',');
         }
         ateliers_json.push_str(&format!(
-            r#"{{"id":"{}","name":"{}","slug":"{}"}}"#,
-            a.id, a.name, a.slug
+            r#"{{"id":"{}","name":"{}","slug":"{}","default_nightly":{}}}"#,
+            a.id, a.name, a.slug, a.default_nightly
         ));
     }
     ateliers_json.push(']');
 
+    let no_data_row = if days.is_empty() {
+        r#"<tr><td class="cal-name-col" colspan="100%"><em>Aucun besoin à venir. Utilisez le bouton ci-dessus pour en créer.</em></td></tr>"#
+    } else {
+        ""
+    };
+
     let extra_head = r##"    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/css/bulma-calendar.min.css">
     <style>
         .calendar-links { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.2rem; }
-        .editor-columns { display: flex; gap: 2rem; flex-wrap: wrap; align-items: flex-start; }
-        .editor-left { flex: 0 0 auto; }
-        .editor-right { flex: 1 1 400px; min-width: 300px; }
+        .cal-scroll { overflow-x: auto; max-height: 85vh; }
+        .cal-table { border-collapse: collapse; white-space: nowrap; }
+        .cal-table th, .cal-table td { border: 1px solid var(--bulma-border); padding: 0.3rem 0.5rem; vertical-align: middle; }
+        .cal-table thead { position: sticky; top: 0; z-index: 4; }
+        .cal-table thead th { background: #f5f5f5 !important; text-align: center; }
+        .cal-name-col { position: sticky; left: 0; z-index: 2; min-width: 150px; }
+        .cal-table thead th.cal-name-col { z-index: 5; background: #f5f5f5 !important; text-align: left; }
+        .cal-table tbody tr:nth-child(odd) td { background: white; }
+        .cal-table tbody tr:nth-child(even) td { background: #eef1f5; }
+        .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: white; }
+        .cal-table tbody tr:nth-child(even) td.cal-name-col { background: #eef1f5; }
+        .cal-table .day-start { border-left: 2.5px solid var(--bulma-grey-light) !important; }
+        .cal-table td.day-cell { cursor: pointer; }
+        .cal-table td.day-cell:hover { background: var(--bulma-link-light) !important; }
+        .cell-ok { color: var(--bulma-success-dark); font-weight: 600; background: var(--bulma-success-light) !important; }
+        .cell-deficit { color: var(--bulma-danger-dark); font-weight: 600; }
+        .notification.toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 100; min-width: 300px;
+        }
+        /* Modal: atelier cards grid */
+        .atelier-cards { display: flex; flex-wrap: wrap; gap: 1rem; }
+        .atelier-card {
+            border: 1px solid var(--bulma-border); border-radius: 6px; padding: 1rem;
+            min-width: 220px; flex: 1 1 220px; max-width: 320px;
+            background: var(--bulma-scheme-main); transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .atelier-card.has-need { border-color: var(--bulma-link); box-shadow: 0 0 0 1px var(--bulma-link); }
+        .atelier-card .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.6rem; }
+        .atelier-card .field { margin-bottom: 0.5rem; }
+        .atelier-card .card-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+        /* Nightly toggle switch (bulma-switch-control style) */
+        .nightly-switch { display: flex; align-items: center; gap: 0.5rem; user-select: none; }
+        .nightly-switch .side-label { font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem; color: var(--bulma-grey); }
+        .nightly-switch .side-label.is-active { color: var(--bulma-text); font-weight: 600; }
+        label.switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+        label.switch input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
+        label.switch .check { position: relative; display: inline-block; width: 2.75em; height: 1.5em; background: hsl(48, 100%, 67%); border-radius: 1em; transition: background 0.3s; flex-shrink: 0; border: 1px solid transparent; }
+        label.switch .check::before { content: ""; position: absolute; top: 0.15em; left: 0.15em; width: 1.15em; height: 1.15em; background: #fff; border-radius: 50%; transition: transform 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        label.switch input[type="checkbox"]:checked + .check { background: hsl(217, 71%, 53%); }
+        label.switch input[type="checkbox"]:checked + .check::before { transform: translateX(1.25em); }
+        label.switch input[type="checkbox"]:disabled + .check { opacity: 0.5; cursor: not-allowed; }
         /* Highlight dates that have needs */
         .datetimepicker .datepicker-body .datepicker-dates .datepicker-days .datepicker-date .date-item.has-need {
-            background-color: var(--bulma-link) !important;
-            color: var(--bulma-link-invert) !important;
-            font-weight: bold;
-            border-color: var(--bulma-link) !important;
+            background-color: var(--bulma-link) !important; color: var(--bulma-link-invert) !important;
+            font-weight: bold; border-color: var(--bulma-link) !important;
         }
         .datetimepicker .datepicker-body .datepicker-dates .datepicker-days .datepicker-date .date-item.has-need:hover {
-            background-color: var(--bulma-link-dark) !important;
-            border-color: var(--bulma-link-dark) !important;
+            background-color: var(--bulma-link-dark) !important; border-color: var(--bulma-link-dark) !important;
             color: var(--bulma-link-invert) !important;
         }
         .datetimepicker .datepicker-body .datepicker-dates .datepicker-days .datepicker-date .date-item.has-need.is-active {
-            background-color: var(--bulma-link-active) !important;
-            border-color: var(--bulma-link-active) !important;
+            background-color: var(--bulma-link-active) !important; border-color: var(--bulma-link-active) !important;
         }
-        .notification.toast {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-            min-width: 300px;
-        }
-        /* Atelier cards grid */
-        .atelier-cards { display: flex; flex-wrap: wrap; gap: 1rem; }
-        .atelier-card {
-            border: 1px solid var(--bulma-border);
-            border-radius: 6px;
-            padding: 1rem;
-            min-width: 220px;
-            flex: 1 1 220px;
-            max-width: 320px;
-            background: var(--bulma-scheme-main);
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-        .atelier-card.has-need {
-            border-color: var(--bulma-link);
-            box-shadow: 0 0 0 1px var(--bulma-link);
-        }
-        .atelier-card .card-title {
-            font-weight: 600;
-            font-size: 0.95rem;
-            margin-bottom: 0.6rem;
-        }
-        .atelier-card .field { margin-bottom: 0.5rem; }
-        .atelier-card .card-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
-        /* Nightly toggle switch */
-        .nightly-switch {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            user-select: none;
-        }
-        .nightly-switch .switch-label {
-            display: flex;
-            align-items: center;
-            gap: 0.2rem;
-            font-size: 0.8rem;
-            color: var(--bulma-grey);
-            transition: color 0.2s;
-            cursor: pointer;
-        }
-        .nightly-switch .switch-label.is-selected {
-            color: var(--bulma-text);
-            font-weight: 600;
-        }
-        .nightly-switch .switch-track {
-            position: relative;
-            width: 36px;
-            height: 20px;
-            background: var(--bulma-warning);
-            border-radius: 10px;
-            cursor: pointer;
-            transition: background 0.3s;
-            flex-shrink: 0;
-        }
-        .nightly-switch .switch-track.is-night {
-            background: var(--bulma-info);
-        }
-        .nightly-switch .switch-track .switch-thumb {
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 16px;
-            height: 16px;
-            background: white;
-            border-radius: 50%;
-            transition: left 0.3s;
-        }
-        .nightly-switch .switch-track.is-night .switch-thumb {
-            left: 18px;
-        }
-        /* Week overview */
-        .week-overview { max-width: 700px; }
-        .week-day { padding: 0.5rem 0; border-bottom: 1px solid var(--bulma-border-weak); display: flex; align-items: center; gap: 0.4rem; }
-        .week-day:last-child { border-bottom: none; }
+        /* Ensure datetimepicker renders properly inside modal */
+        #add-modal .datetimepicker { position: relative; z-index: 1; }
+        #add-modal .modal-card-body { overflow: visible; }
+        /* Modal editor layout */
+        .editor-columns { display: flex; gap: 2rem; flex-wrap: wrap; align-items: flex-start; }
+        .editor-left { flex: 0 0 auto; }
+        .editor-right { flex: 1 1 400px; min-width: 300px; }
     </style>"##;
 
     let content = format!(
@@ -3966,35 +4082,74 @@ pub fn calendar_editor(
                 {calendar_links}
             </div>
 
-            <div class="editor-columns">
-                <div class="editor-left">
-                    <input type="date" id="calendar-widget">
-                </div>
-
-                <div class="editor-right">
-                    <div id="edit-panel" style="display:none;">
-                        <h2 class="subtitle is-5 mb-3" id="edit-panel-title">—</h2>
-                        <div class="atelier-cards" id="atelier-cards"></div>
-                    </div>
-                    <div id="no-selection" class="notification is-info is-light">
-                        <span class="icon"><i class="fas fa-hand-pointer"></i></span>
-                        Sélectionnez une date sur le calendrier pour gérer les besoins.
-                    </div>
-                </div>
+            <div class="mb-4">
+                <button class="button is-primary" id="open-add-modal">
+                    <span class="icon"><i class="fas fa-plus"></i></span>
+                    <span>Ajouter des besoins en bénévoles</span>
+                </button>
             </div>
 
-            <hr>
-            <h2 class="title is-5 mb-3">
-                <span class="icon"><i class="fas fa-forward"></i></span>
-                Semaine à venir
-            </h2>
-            <div class="week-overview">
-                {week_html}
+            <div class="cal-scroll">
+                <table class="cal-table table is-bordered is-narrow is-hoverable">
+                    <thead>
+                        <tr>{header1}</tr>
+                        <tr>{header2}</tr>
+                    </thead>
+                    <tbody>
+                        {no_data_row}
+                        {body}
+                    </tbody>
+                </table>
             </div>
         </div>
-    </section>"##,
+    </section>
+
+    <!-- Modal: day editor (opened by clicking a cell) -->
+    <div class="modal" id="day-modal">
+        <div class="modal-background"></div>
+        <div class="modal-card" style="max-width:900px;width:95vw;">
+            <header class="modal-card-head">
+                <p class="modal-card-title" id="day-modal-title">—</p>
+                <button class="delete" aria-label="close" id="close-day-modal"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="atelier-cards" id="day-atelier-cards"></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Modal: add needs via calendar picker -->
+    <div class="modal" id="add-modal">
+        <div class="modal-background"></div>
+        <div class="modal-card" style="max-width:900px;width:95vw;">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Ajouter des besoins en bénévoles</p>
+                <button class="delete" aria-label="close" id="close-add-modal"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="editor-columns">
+                    <div class="editor-left">
+                        <input type="date" id="calendar-widget">
+                    </div>
+                    <div class="editor-right">
+                        <div id="add-edit-panel" style="display:none;">
+                            <h2 class="subtitle is-5 mb-3" id="add-panel-title">—</h2>
+                            <div class="atelier-cards" id="add-atelier-cards"></div>
+                        </div>
+                        <div id="add-no-selection" class="notification is-info is-light">
+                            <span class="icon"><i class="fas fa-hand-pointer"></i></span>
+                            Sélectionnez une date sur le calendrier.
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>"##,
         calendar_links = calendar_links,
-        week_html = week_html,
+        header1 = header1,
+        header2 = header2,
+        no_data_row = no_data_row,
+        body = body,
     );
 
     let scripts = format!(
@@ -4004,50 +4159,17 @@ pub fn calendar_editor(
         const prefix = "{p}";
         const ateliers = {ateliers_json};
         const editableAteliers = new Set({editable_json});
-        let needDaysSet = new Set(); // all days that have any need (for highlighting)
-        let dayNeedsMap = {{}}; // atelier_id -> need object for the selected day
-        let selectedDay = null;
-
-        // Init calendar
-        const calendars = bulmaCalendar.attach('#calendar-widget', {{
-            displayMode: 'inline',
-            type: 'date',
-            lang: 'fr',
-            dateFormat: 'YYYY-MM-DD',
-            showHeader: false,
-            showFooter: false,
-        }});
-        if (calendars.length > 0) {{
-            calendars[0].on('select', function(e) {{
-                const dt = e.data.date.start;
-                if (dt) {{
-                    const y = dt.getFullYear();
-                    const m = String(dt.getMonth() + 1).padStart(2, '0');
-                    const d = String(dt.getDate()).padStart(2, '0');
-                    selectedDay = `${{y}}-${{m}}-${{d}}`;
-                    fetchDayNeeds();
-                }}
-            }});
-        }}
-
-        // Observe calendar DOM changes (month navigation) to re-highlight
-        const calContainer = document.querySelector('.datetimepicker') || document.querySelector('#calendar-widget').parentElement;
-        if (calContainer) {{
-            const observer = new MutationObserver(function() {{ highlightDates(); }});
-            observer.observe(calContainer, {{ childList: true, subtree: true }});
-        }}
 
         function showNotification(message, type) {{
             const container = document.getElementById('notification-container');
             const notification = document.createElement('div');
-            notification.className = `notification is-${{type}} toast`;
-            notification.innerHTML = `<button class="delete"></button>${{message}}`;
+            notification.className = 'notification is-' + type + ' toast';
+            notification.innerHTML = '<button class="delete"></button>' + message;
             container.appendChild(notification);
-            notification.querySelector('.delete').addEventListener('click', () => notification.remove());
-            setTimeout(() => notification.remove(), 3000);
+            notification.querySelector('.delete').addEventListener('click', function() {{ notification.remove(); }});
+            setTimeout(function() {{ notification.remove(); }}, 3000);
         }}
 
-        // Format a date string as "Jeudi 15 février 2026"
         function formatDateTitle(dayStr) {{
             const parts = dayStr.split('-');
             const dt = new Date(parts[0], parts[1] - 1, parts[2]);
@@ -4056,19 +4178,14 @@ pub fn calendar_editor(
             return dayNames[dt.getDay()] + ' ' + dt.getDate() + ' ' + monthNames[dt.getMonth()] + ' ' + dt.getFullYear();
         }}
 
-        // Build the atelier cards for the selected day
-        function renderCards() {{
-            document.getElementById('no-selection').style.display = 'none';
-            document.getElementById('edit-panel').style.display = '';
-            document.getElementById('edit-panel-title').textContent = formatDateTitle(selectedDay);
-
-            const container = document.getElementById('atelier-cards');
+        // ========== Shared: render atelier cards into a container for a given day ==========
+        function renderCardsInto(container, targetDay, dayNeedsMap) {{
             container.innerHTML = '';
             for (const atelier of ateliers) {{
                 const existing = dayNeedsMap[atelier.id] || null;
                 const hasNeed = !!existing;
                 const qty = existing ? existing.quantity : 0;
-                const nightly = existing ? existing.nightly : false;
+                const nightly = existing ? existing.nightly : atelier.default_nightly;
 
                 const canEdit = editableAteliers.has(atelier.id);
                 const card = document.createElement('div');
@@ -4076,121 +4193,74 @@ pub fn calendar_editor(
                 card.dataset.atelierId = atelier.id;
 
                 if (canEdit) {{
-                    card.innerHTML = `
-                        <div class="card-title">${{atelier.name}}</div>
-                        <div class="field">
-                            <label class="label is-small">Bénévoles nécessaires</label>
-                            <div class="control">
-                                <input class="input is-small card-qty" type="number" min="0" value="${{qty}}">
-                            </div>
-                        </div>
-                        <div class="field">
-                            <div class="nightly-switch">
-                                <span class="switch-label ${{nightly ? '' : 'is-selected'}}" data-role="day">
-                                    <span class="icon is-small"><i class="fas fa-sun"></i></span>
-                                    M/AM
-                                </span>
-                                <div class="switch-track ${{nightly ? 'is-night' : ''}}">
-                                    <div class="switch-thumb"></div>
-                                </div>
-                                <span class="switch-label ${{nightly ? 'is-selected' : ''}}" data-role="night">
-                                    <span class="icon is-small"><i class="fas fa-moon"></i></span>
-                                    D/F nuit
-                                </span>
-                            </div>
-                        </div>
-                        <div class="card-actions">
-                            <button class="button is-primary is-small btn-card-save">
-                                <span class="icon is-small"><i class="fas fa-save"></i></span>
-                                <span>${{hasNeed ? 'Modifier' : 'Créer'}}</span>
-                            </button>
-                            ${{hasNeed ? '<button class="button is-danger is-small is-outlined btn-card-delete"><span class="icon is-small"><i class="fas fa-trash"></i></span><span>Supprimer</span></button>' : ''}}
-                        </div>
-                    `;
+                    card.innerHTML =
+                        '<div class="card-title">' + atelier.name + '</div>' +
+                        '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
+                        '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' + qty + '"></div></div>' +
+                        '<div class="field"><div class="nightly-switch">' +
+                        '<span class="side-label' + (nightly ? '' : ' is-active') + '" data-role="day"><i class="fas fa-sun"></i> Journée</span>' +
+                        '<label class="switch"><input type="checkbox" class="nightly-cb"' + (nightly ? ' checked' : '') + '><span class="check"></span></label>' +
+                        '<span class="side-label' + (nightly ? ' is-active' : '') + '" data-role="night"><i class="fas fa-moon"></i> Nocturne</span>' +
+                        '</div></div>' +
+                        '<div class="card-actions">' +
+                        '<button class="button is-primary is-small btn-card-save"><span class="icon is-small"><i class="fas fa-save"></i></span><span>' + (hasNeed ? 'Modifier' : 'Créer') + '</span></button>' +
+                        (hasNeed ? '<button class="button is-danger is-small is-outlined btn-card-delete"><span class="icon is-small"><i class="fas fa-trash"></i></span><span>Supprimer</span></button>' : '') +
+                        '</div>';
                 }} else {{
-                    card.innerHTML = `
-                        <div class="card-title">${{atelier.name}}</div>
-                        <div class="field">
-                            <label class="label is-small">Bénévoles nécessaires</label>
-                            <div class="control">
-                                <input class="input is-small card-qty" type="number" min="0" value="${{qty}}" disabled>
-                            </div>
-                        </div>
-                        <div class="field">
-                            <div class="nightly-switch" style="pointer-events:none;opacity:0.6;">
-                                <span class="switch-label ${{nightly ? '' : 'is-selected'}}" data-role="day">
-                                    <span class="icon is-small"><i class="fas fa-sun"></i></span>
-                                    M/AM
-                                </span>
-                                <div class="switch-track ${{nightly ? 'is-night' : ''}}">
-                                    <div class="switch-thumb"></div>
-                                </div>
-                                <span class="switch-label ${{nightly ? 'is-selected' : ''}}" data-role="night">
-                                    <span class="icon is-small"><i class="fas fa-moon"></i></span>
-                                    D/F nuit
-                                </span>
-                            </div>
-                        </div>
-                    `;
+                    card.innerHTML =
+                        '<div class="card-title">' + atelier.name + '</div>' +
+                        '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
+                        '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' + qty + '" disabled></div></div>' +
+                        '<div class="field"><div class="nightly-switch">' +
+                        '<span class="side-label' + (nightly ? '' : ' is-active') + '"><i class="fas fa-sun"></i> Journée</span>' +
+                        '<label class="switch"><input type="checkbox" class="nightly-cb"' + (nightly ? ' checked' : '') + ' disabled><span class="check"></span></label>' +
+                        '<span class="side-label' + (nightly ? ' is-active' : '') + '"><i class="fas fa-moon"></i> Nocturne</span>' +
+                        '</div></div>';
                 }}
 
                 if (canEdit) {{
-                    // Nightly toggle events
-                    const track = card.querySelector('.switch-track');
-                    const lblDay = card.querySelector('[data-role="day"]');
-                    const lblNight = card.querySelector('[data-role="night"]');
-                    function setN(val) {{
-                        track.classList.toggle('is-night', val);
-                        lblDay.classList.toggle('is-selected', !val);
-                        lblNight.classList.toggle('is-selected', val);
+                    var cb = card.querySelector('.nightly-cb');
+                    var lblDay = card.querySelector('[data-role="day"]');
+                    var lblNight = card.querySelector('[data-role="night"]');
+                    function syncLabels() {{
+                        lblDay.classList.toggle('is-active', !cb.checked);
+                        lblNight.classList.toggle('is-active', cb.checked);
                     }}
-                    track.addEventListener('click', () => setN(!track.classList.contains('is-night')));
-                    lblDay.addEventListener('click', () => setN(false));
-                    lblNight.addEventListener('click', () => setN(true));
+                    cb.addEventListener('change', syncLabels);
+                    lblDay.addEventListener('click', function() {{ cb.checked = false; syncLabels(); }});
+                    lblNight.addEventListener('click', function() {{ cb.checked = true; syncLabels(); }});
 
-                    // Save
-                    card.querySelector('.btn-card-save').addEventListener('click', async () => {{
+                    card.querySelector('.btn-card-save').addEventListener('click', async function() {{
                         const q = parseInt(card.querySelector('.card-qty').value);
-                        const n = track.classList.contains('is-night');
+                        const n = cb.checked;
                         if (!q || q < 1) {{ showNotification('Quantité invalide', 'warning'); return; }}
                         try {{
-                            const resp = await fetch(`${{prefix}}/api/calendar/needs`, {{
+                            const resp = await fetch(prefix + '/api/calendar/needs', {{
                                 method: 'POST',
                                 headers: {{ 'Content-Type': 'application/json' }},
-                                body: JSON.stringify({{ atelier_id: atelier.id, day: selectedDay, quantity: q, nightly: n }})
+                                body: JSON.stringify({{ atelier_id: atelier.id, day: targetDay, quantity: q, nightly: n }})
                             }});
                             if (!resp.ok) throw new Error(await resp.text());
-                            const need = await resp.json();
-                            dayNeedsMap[atelier.id] = need;
-                            needDaysSet.add(selectedDay);
-                            highlightDates();
-                            renderCards();
                             showNotification(atelier.name + ' enregistré', 'success');
+                            location.reload();
                         }} catch (err) {{
                             showNotification('Erreur: ' + err.message, 'danger');
                         }}
                     }});
 
-                    // Delete
                     const delBtn = card.querySelector('.btn-card-delete');
                     if (delBtn) {{
-                        delBtn.addEventListener('click', async () => {{
-                            if (!confirm('Supprimer le besoin pour ' + atelier.name + ' ? Les présences associées seront aussi supprimées.')) return;
+                        delBtn.addEventListener('click', async function() {{
+                            if (!confirm('Supprimer le besoin pour ' + atelier.name + '\u00a0? Les présences associées seront aussi supprimées.')) return;
                             try {{
-                                const resp = await fetch(`${{prefix}}/api/calendar/needs`, {{
+                                const resp = await fetch(prefix + '/api/calendar/needs', {{
                                     method: 'DELETE',
                                     headers: {{ 'Content-Type': 'application/json' }},
-                                    body: JSON.stringify({{ atelier_id: atelier.id, day: selectedDay }})
+                                    body: JSON.stringify({{ atelier_id: atelier.id, day: targetDay }})
                                 }});
                                 if (!resp.ok) throw new Error(await resp.text());
-                                delete dayNeedsMap[atelier.id];
-                                // Check if any need left for that day
-                                if (Object.keys(dayNeedsMap).length === 0) {{
-                                    needDaysSet.delete(selectedDay);
-                                }}
-                                highlightDates();
-                                renderCards();
                                 showNotification(atelier.name + ' supprimé', 'success');
+                                location.reload();
                             }} catch (err) {{
                                 showNotification('Erreur: ' + err.message, 'danger');
                             }}
@@ -4202,58 +4272,120 @@ pub fn calendar_editor(
             }}
         }}
 
-        // Fetch needs for the selected day (all ateliers)
-        async function fetchDayNeeds() {{
-            try {{
-                const resp = await fetch(`${{prefix}}/api/calendar/needs-by-day?day=${{selectedDay}}`);
-                if (!resp.ok) throw new Error(await resp.text());
-                const needs = await resp.json();
-                dayNeedsMap = {{}};
-                for (const n of needs) {{
-                    dayNeedsMap[n.atelier] = n;
-                }}
-                renderCards();
-            }} catch (err) {{
-                showNotification('Erreur: ' + err.message, 'danger');
+        // ========== 1. Table cell click → day-editor modal ==========
+        const dayModal = document.getElementById('day-modal');
+        document.querySelectorAll('.cal-table td.day-cell').forEach(function(cell) {{
+            cell.addEventListener('click', function() {{
+                const day = cell.dataset.day;
+                document.getElementById('day-modal-title').textContent = formatDateTitle(day);
+                dayModal.classList.add('is-active');
+                // Fetch needs for this day then render cards
+                fetch(prefix + '/api/calendar/needs-by-day?day=' + day)
+                    .then(function(r) {{ if (!r.ok) throw new Error(); return r.json(); }})
+                    .then(function(needs) {{
+                        var map = {{}};
+                        for (var i = 0; i < needs.length; i++) map[needs[i].atelier] = needs[i];
+                        renderCardsInto(document.getElementById('day-atelier-cards'), day, map);
+                    }})
+                    .catch(function(err) {{ showNotification('Erreur chargement', 'danger'); }});
+            }});
+        }});
+        document.getElementById('close-day-modal').addEventListener('click', function() {{ dayModal.classList.remove('is-active'); }});
+        dayModal.querySelector('.modal-background').addEventListener('click', function() {{ dayModal.classList.remove('is-active'); }});
+
+        // ========== 2. "Ajouter" button → calendar-picker modal ==========
+        const addModal = document.getElementById('add-modal');
+        let calendarInitialised = false;
+        let needDaysSet = new Set();
+        let addSelectedDay = null;
+
+        document.getElementById('open-add-modal').addEventListener('click', function() {{
+            addModal.classList.add('is-active');
+            if (!calendarInitialised) {{
+                calendarInitialised = true;
+                requestAnimationFrame(function() {{ initCalendar(); }});
+            }} else {{
+                fetchNeedDays();
             }}
+        }});
+        document.getElementById('close-add-modal').addEventListener('click', function() {{ addModal.classList.remove('is-active'); }});
+        addModal.querySelector('.modal-background').addEventListener('click', function() {{ addModal.classList.remove('is-active'); }});
+
+        function initCalendar() {{
+            const calendars = bulmaCalendar.attach('#calendar-widget', {{
+                displayMode: 'inline',
+                type: 'date',
+                lang: 'fr',
+                dateFormat: 'YYYY-MM-DD',
+                showHeader: false,
+                showFooter: false,
+            }});
+            if (calendars.length > 0) {{
+                calendars[0].on('select', function(e) {{
+                    const dt = e.data.date.start;
+                    if (dt) {{
+                        const y = dt.getFullYear();
+                        const m = String(dt.getMonth() + 1).padStart(2, '0');
+                        const d = String(dt.getDate()).padStart(2, '0');
+                        addSelectedDay = y + '-' + m + '-' + d;
+                        fetchAddDayNeeds();
+                    }}
+                }});
+            }}
+
+            const calContainer = addModal.querySelector('.datetimepicker') || document.querySelector('#calendar-widget').parentElement;
+            if (calContainer) {{
+                const observer = new MutationObserver(function() {{ highlightDates(); }});
+                observer.observe(calContainer, {{ childList: true, subtree: true }});
+            }}
+
+            fetchNeedDays();
         }}
 
-        // Fetch all days that have needs (for highlighting)
-        async function fetchNeedDays() {{
-            try {{
-                const resp = await fetch(`${{prefix}}/api/calendar/need-days`);
-                if (!resp.ok) throw new Error(await resp.text());
-                const days = await resp.json();
-                needDaysSet = new Set(days);
-                highlightDates();
-            }} catch (err) {{
-                console.error('Error fetching need days:', err);
-            }}
+        function fetchAddDayNeeds() {{
+            document.getElementById('add-no-selection').style.display = 'none';
+            document.getElementById('add-edit-panel').style.display = '';
+            document.getElementById('add-panel-title').textContent = formatDateTitle(addSelectedDay);
+            fetch(prefix + '/api/calendar/needs-by-day?day=' + addSelectedDay)
+                .then(function(r) {{ if (!r.ok) throw new Error(); return r.json(); }})
+                .then(function(needs) {{
+                    var map = {{}};
+                    for (var i = 0; i < needs.length; i++) map[needs[i].atelier] = needs[i];
+                    renderCardsInto(document.getElementById('add-atelier-cards'), addSelectedDay, map);
+                }})
+                .catch(function(err) {{ showNotification('Erreur chargement', 'danger'); }});
+        }}
+
+        function fetchNeedDays() {{
+            fetch(prefix + '/api/calendar/need-days')
+                .then(function(r) {{ if (!r.ok) throw new Error(); return r.json(); }})
+                .then(function(days) {{
+                    needDaysSet = new Set(days);
+                    highlightDates();
+                }})
+                .catch(function(err) {{ console.error('Error fetching need days:', err); }});
         }}
 
         function highlightDates() {{
-            document.querySelectorAll('.date-item.has-need').forEach(el => el.classList.remove('has-need'));
-            const monthEl = document.querySelector('.datepicker-nav-month');
-            const yearEl = document.querySelector('.datepicker-nav-year');
+            addModal.querySelectorAll('.date-item.has-need').forEach(function(el) {{ el.classList.remove('has-need'); }});
+            const monthEl = addModal.querySelector('.datepicker-nav-month');
+            const yearEl = addModal.querySelector('.datepicker-nav-year');
             if (!monthEl || !yearEl) return;
-            const frMonths = {{'janvier':0,'février':1,'fevrier':1,'mars':2,'avril':3,'mai':4,'juin':5,
+            var frMonths = {{'janvier':0,'février':1,'fevrier':1,'mars':2,'avril':3,'mai':4,'juin':5,
                              'juillet':6,'août':7,'aout':7,'septembre':8,'octobre':9,'novembre':10,'décembre':11,'decembre':11}};
             const month = frMonths[monthEl.textContent.trim().toLowerCase()];
             const year = parseInt(yearEl.textContent.trim());
             if (month === undefined || isNaN(year)) return;
-            document.querySelectorAll('.datepicker-body .datepicker-date').forEach(dc => {{
+            addModal.querySelectorAll('.datepicker-body .datepicker-date').forEach(function(dc) {{
                 if (dc.classList.contains('is-disabled') || !dc.classList.contains('is-current-month')) return;
                 const btn = dc.querySelector('.date-item');
                 if (!btn) return;
                 const dayNum = parseInt(btn.textContent);
                 if (!dayNum || isNaN(dayNum)) return;
-                const dateKey = `${{year}}-${{String(month + 1).padStart(2, '0')}}-${{String(dayNum).padStart(2, '0')}}`;
+                const dateKey = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
                 if (needDaysSet.has(dateKey)) btn.classList.add('has-need');
             }});
         }}
-
-        // Initial load
-        fetchNeedDays();
     }})();
     </script>"##,
         p = prefix,

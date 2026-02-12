@@ -152,6 +152,7 @@ pub struct Atelier {
     pub name: String,
     pub slug: String,
     pub needs_validation: bool,
+    pub default_nightly: bool,
 }
 
 impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
@@ -161,6 +162,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
             name: row.try_get("name")?,
             slug: row.try_get("slug")?,
             needs_validation: row.try_get("needs_validation")?,
+            default_nightly: row.try_get("default_nightly")?,
         })
     }
 }

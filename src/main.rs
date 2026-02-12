@@ -954,12 +954,11 @@ async fn calendar_editor_view(
     };
 
     let today = chrono::Local::now().date_naive();
-    let week_end = today + chrono::Duration::days(7);
-    let upcoming = database::get_upcoming_needs_deficit(&state.db, today, week_end)
+    let future_needs = database::get_all_future_needs_with_counts(&state.db, today)
         .await
         .unwrap_or_default();
 
-    Html(templates::calendar_editor(&ateliers, &editable_ids, &upcoming, &prefix))
+    Html(templates::calendar_editor(&ateliers, &editable_ids, &future_needs, &prefix))
 }
 
 #[derive(Debug, Deserialize)]
