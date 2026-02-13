@@ -30,8 +30,8 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn from_env() -> Result<Self> {
-        let database_url = env::var("DATABASE_URL")
-            .map_err(|_| anyhow::anyhow!("DATABASE_URL must be set"))?;
+        let database_url =
+            env::var("DATABASE_URL").map_err(|_| anyhow::anyhow!("DATABASE_URL must be set"))?;
 
         Ok(Self {
             database_url,
@@ -61,7 +61,8 @@ impl AppConfig {
             gmail_refresh_token: env::var("GMAIL_REFRESH_TOKEN").unwrap_or_default(),
             gmail_from: env::var("GMAIL_FROM").unwrap_or_default(),
             mail_method: env::var("MAIL_METHOD").unwrap_or_default(),
-            mail_destination_override: env::var("MAIL_DESTINATION_ADDRESS_OVERRIDE").unwrap_or_default(),
+            mail_destination_override: env::var("MAIL_DESTINATION_ADDRESS_OVERRIDE")
+                .unwrap_or_default(),
             cookie_secret: env::var("COOKIE_SECRET").unwrap_or_default(),
         })
     }

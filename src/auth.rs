@@ -1,13 +1,13 @@
 use axum::{
+    Json,
     extract::FromRequestParts,
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Redirect, Response},
-    Json,
 };
 use axum_extra::extract::cookie::{Key, SignedCookieJar};
 use tracing::error;
 
-use crate::{database, models::Staff, AppState};
+use crate::{AppState, database, models::Staff};
 
 // ---------------------------------------------------------------------------
 // Error types

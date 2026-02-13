@@ -89,8 +89,9 @@ impl HelloAssoClient {
         // Try to refresh token if we have a refresh token
         {
             let cache = self.token_cache.read().await;
-            if let Some(token_cache) = &*cache 
-                && let Some(refresh_token) = &token_cache.refresh_token {
+            if let Some(token_cache) = &*cache
+                && let Some(refresh_token) = &token_cache.refresh_token
+            {
                 match self.refresh_token(refresh_token).await {
                     Ok(new_token) => return Ok(new_token),
                     Err(e) => {
@@ -117,9 +118,7 @@ impl HelloAssoClient {
             .client
             .post("https://api.helloasso.com/oauth2/token")
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(
-                serde_urlencoded::to_string(&params).unwrap()
-            )
+            .body(serde_urlencoded::to_string(&params).unwrap())
             .send()
             .await?;
 
@@ -157,9 +156,7 @@ impl HelloAssoClient {
             .client
             .post("https://api.helloasso.com/oauth2/token")
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(
-                serde_urlencoded::to_string(&params).unwrap()
-            )
+            .body(serde_urlencoded::to_string(&params).unwrap())
             .send()
             .await?;
 
@@ -229,19 +226,34 @@ impl HelloAssoClient {
             let response_text = response.text().await?;
 
             if !status.is_success() {
-                warn!("Orders API returned error status {}: {}", status, response_text);
-                return Err(anyhow!("Failed to fetch orders (status {}): {}", status, response_text));
+                warn!(
+                    "Orders API returned error status {}: {}",
+                    status, response_text
+                );
+                return Err(anyhow!(
+                    "Failed to fetch orders (status {}): {}",
+                    status,
+                    response_text
+                ));
             }
 
-            debug!("Orders API response page {} (first 500 chars): {}", page_num, &response_text.chars().take(500).collect::<String>());
+            debug!(
+                "Orders API response page {} (first 500 chars): {}",
+                page_num,
+                &response_text.chars().take(500).collect::<String>()
+            );
 
-            let orders_response: HelloAssoOrdersResponse = match serde_json::from_str(&response_text) {
-                Ok(resp) => resp,
-                Err(e) => {
-                    warn!("Failed to parse orders response. Error: {}. Response body: {}", e, response_text);
-                    return Err(anyhow!("Failed to parse orders response: {}", e));
-                }
-            };
+            let orders_response: HelloAssoOrdersResponse =
+                match serde_json::from_str(&response_text) {
+                    Ok(resp) => resp,
+                    Err(e) => {
+                        warn!(
+                            "Failed to parse orders response. Error: {}. Response body: {}",
+                            e, response_text
+                        );
+                        return Err(anyhow!("Failed to parse orders response: {}", e));
+                    }
+                };
 
             let orders_count = orders_response.data.len();
 
@@ -327,7 +339,8 @@ impl HelloAssoClient {
         let forms_response: serde_json::Value = response.json().await?;
 
         if let Some(data) = forms_response.get("data")
-            && let Some(forms_array) = data.as_array() {
+            && let Some(forms_array) = data.as_array()
+        {
             return Ok(forms_array.clone());
         }
 
@@ -372,16 +385,29 @@ impl HelloAssoClient {
             let response_text = response.text().await?;
 
             if !status.is_success() {
-                warn!("Users API returned error status {}: {}", status, response_text);
-                return Err(anyhow!("Failed to fetch users (status {}): {}", status, response_text));
+                warn!(
+                    "Users API returned error status {}: {}",
+                    status, response_text
+                );
+                return Err(anyhow!(
+                    "Failed to fetch users (status {}): {}",
+                    status,
+                    response_text
+                ));
             }
 
-            debug!("Users API response (first 500 chars): {}", &response_text.chars().take(500).collect::<String>());
+            debug!(
+                "Users API response (first 500 chars): {}",
+                &response_text.chars().take(500).collect::<String>()
+            );
 
             let users_response: HelloAssoUserResponse = match serde_json::from_str(&response_text) {
                 Ok(resp) => resp,
                 Err(e) => {
-                    warn!("Failed to parse users response. Error: {}. Response body: {}", e, response_text);
+                    warn!(
+                        "Failed to parse users response. Error: {}. Response body: {}",
+                        e, response_text
+                    );
                     return Err(anyhow!("Failed to parse users response: {}", e));
                 }
             };
@@ -450,14 +476,22 @@ impl HelloAssoClient {
             if !response.status().is_success() {
                 let status = response.status();
                 let error_text = response.text().await?;
-                return Err(anyhow!("Failed to fetch events: HTTP {} - {}", status, error_text));
+                return Err(anyhow!(
+                    "Failed to fetch events: HTTP {} - {}",
+                    status,
+                    error_text
+                ));
             }
 
             let response_text = response.text().await?;
-            let events_response: HelloAssoEventResponse = match serde_json::from_str(&response_text) {
+            let events_response: HelloAssoEventResponse = match serde_json::from_str(&response_text)
+            {
                 Ok(resp) => resp,
                 Err(e) => {
-                    warn!("Failed to parse events response. Error: {}. Response body: {}", e, response_text);
+                    warn!(
+                        "Failed to parse events response. Error: {}. Response body: {}",
+                        e, response_text
+                    );
                     return Err(anyhow!("Failed to parse events response: {}", e));
                 }
             };
@@ -498,8 +532,7 @@ impl HelloAssoClient {
         loop {
             debug!(
                 "Fetching event {} registrations page {}",
-                event_id,
-                page_index
+                event_id, page_index
             );
 
             // Apply rate limiting

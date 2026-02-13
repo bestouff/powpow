@@ -15,7 +15,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::extract::cookie::{Key, SignedCookieJar};
-use chrono::Datelike;
+use chrono::{Datelike, TimeDelta};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -103,7 +103,9 @@ async fn main() -> anyhow::Result<()> {
         Key::from(app_config.cookie_secret.as_bytes())
     } else {
         if app_config.cookie_secret.is_empty() {
-            warn!("COOKIE_SECRET not configured - generating a random key (sessions won't survive restarts)");
+            warn!(
+                "COOKIE_SECRET not configured - generating a random key (sessions won't survive restarts)"
+            );
         } else {
             warn!("COOKIE_SECRET too short (need >= 64 chars) - generating a random key");
         }
@@ -147,7 +149,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/badge-counts", get(api_badge_counts))
         .route("/calendar", get(calendar_editor_view.clone()))
         .route("/calendar/", get(calendar_editor_view))
-        .route("/api/calendar/needs", get(api_get_needs).post(api_upsert_need).delete(api_delete_need))
+        .route(
+            "/api/calendar/needs",
+            get(api_get_needs)
+                .post(api_upsert_need)
+                .delete(api_delete_need),
+        )
         .route("/api/calendar/needs-by-day", get(api_get_needs_by_day))
         .route("/api/calendar/need-days", get(api_get_need_days))
         .route("/calendar/{slug}", get(calendar_view))
@@ -165,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
         .with_state(app_state);
 
     // Spawn daily morning email task
-    tokio::spawn(daily_morning_email_loop(state_for_daily));
+    tokio::spawn(weekly_morning_email_loop(state_for_daily));
 
     // Start server
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
@@ -188,7 +195,10 @@ async fn index(
         .and_then(|c| c.value().parse::<uuid::Uuid>().ok());
 
     let staff = match staff {
-        Some(id) => database::get_staff_by_id(&state.db, id).await.ok().flatten(),
+        Some(id) => database::get_staff_by_id(&state.db, id)
+            .await
+            .ok()
+            .flatten(),
         None => None,
     };
 
@@ -206,9 +216,13 @@ async fn index(
     let chief_ateliers = if let Some(ref s) = staff {
         if s.is_admin || s.is_god {
             // Admins/gods see all ateliers
-            database::get_all_ateliers(&state.db).await.unwrap_or_default()
+            database::get_all_ateliers(&state.db)
+                .await
+                .unwrap_or_default()
         } else {
-            database::get_chief_ateliers(&state.db, s.id).await.unwrap_or_default()
+            database::get_chief_ateliers(&state.db, s.id)
+                .await
+                .unwrap_or_default()
         }
     } else {
         Vec::new()
@@ -238,7 +252,10 @@ async fn list_users(
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
     let search = params.get("search").filter(|s| !s.is_empty());
-    let only_not_imported = params.get("filter").map(|f| f == "not_imported").unwrap_or(false);
+    let only_not_imported = params
+        .get("filter")
+        .map(|f| f == "not_imported")
+        .unwrap_or(false);
 
     match database::get_all_memberships_filtered(&state.db, search.map(String::as_str)).await {
         Ok(memberships_with_users) => {
@@ -287,8 +304,18 @@ async fn list_users(
                 if has_staff {
                     let normalized_name = format!(
                         "{} {}",
-                        membership.beneficiary_first_name.as_deref().unwrap_or("").trim().to_lowercase(),
-                        membership.beneficiary_last_name.as_deref().unwrap_or("").trim().to_lowercase()
+                        membership
+                            .beneficiary_first_name
+                            .as_deref()
+                            .unwrap_or("")
+                            .trim()
+                            .to_lowercase(),
+                        membership
+                            .beneficiary_last_name
+                            .as_deref()
+                            .unwrap_or("")
+                            .trim()
+                            .to_lowercase()
                     );
                     imported_by_name_season
                         .entry((normalized_name, season))
@@ -296,12 +323,15 @@ async fn list_users(
                         .push(idx);
                 }
 
-                memberships_with_status.push((user, models::MembershipWithStatus {
-                    membership,
-                    season,
-                    has_staff,
-                    is_double_subscription: false, // Will be updated below
-                }));
+                memberships_with_status.push((
+                    user,
+                    models::MembershipWithStatus {
+                        membership,
+                        season,
+                        has_staff,
+                        is_double_subscription: false, // Will be updated below
+                    },
+                ));
             }
 
             // Mark double subscriptions (same name+season imported multiple times)
@@ -352,8 +382,11 @@ async fn list_staff(
     let current_season = get_current_season();
 
     // Chiefs and admins can see contact info (email/phone)
-    let show_contact = viewer.is_admin || viewer.is_god
-        || database::is_chief(&state.db, viewer.id).await.unwrap_or(false);
+    let show_contact = viewer.is_admin
+        || viewer.is_god
+        || database::is_chief(&state.db, viewer.id)
+            .await
+            .unwrap_or(false);
 
     let staff_list = match database::get_all_staff_with_season(&state.db).await {
         Ok(list) => list,
@@ -391,7 +424,14 @@ async fn list_staff(
         }
     });
 
-    Html(templates::staff_list(staff_list, &ateliers, &roles, current_season, &prefix, show_contact))
+    Html(templates::staff_list(
+        staff_list,
+        &ateliers,
+        &roles,
+        current_season,
+        &prefix,
+        show_contact,
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -413,16 +453,18 @@ async fn view_person(
         match database::verify_and_clear_token(&state.db, id, token).await {
             Ok(Some(_staff)) => {
                 // Token valid: set session cookie and redirect to clean URL
-                let mut cookie = axum_extra::extract::cookie::Cookie::new(
-                    "aghil_session",
-                    id.to_string(),
-                );
+                let mut cookie =
+                    axum_extra::extract::cookie::Cookie::new("aghil_session", id.to_string());
                 cookie.set_path("/");
                 cookie.set_http_only(true);
                 cookie.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
                 cookie.set_max_age(time::Duration::days(30));
                 let updated_jar = jar.add(cookie);
-                return (updated_jar, Redirect::to(&format!("{}/person/{}", prefix, id))).into_response();
+                return (
+                    updated_jar,
+                    Redirect::to(&format!("{}/person/{}", prefix, id)),
+                )
+                    .into_response();
             }
             Ok(None) => {
                 // Token invalid: fall through to normal page render
@@ -435,7 +477,10 @@ async fn view_person(
     }
 
     // Require a valid session (Staff level) for viewing person pages
-    let viewer_id = match jar.get("aghil_session").and_then(|c| c.value().parse::<uuid::Uuid>().ok()) {
+    let viewer_id = match jar
+        .get("aghil_session")
+        .and_then(|c| c.value().parse::<uuid::Uuid>().ok())
+    {
         Some(vid) => vid,
         None => return Redirect::to(&format!("{}/login", prefix)).into_response(),
     };
@@ -446,21 +491,39 @@ async fn view_person(
     let staff = match database::get_staff_by_id(&state.db, id).await {
         Ok(Some(s)) => s,
         Ok(None) => {
-            return (StatusCode::NOT_FOUND, Html("<p>Staff not found</p>".to_string())).into_response();
+            return (
+                StatusCode::NOT_FOUND,
+                Html("<p>Staff not found</p>".to_string()),
+            )
+                .into_response();
         }
         Err(e) => {
             error!("Error fetching staff: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Error: {}</p>", e))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Error: {}</p>", e)),
+            )
+                .into_response();
         }
     };
 
     // Determine viewer permissions
     let is_self = viewer_id == id;
     let (is_viewer_admin, is_viewer_chief) = if is_self {
-        (staff.is_admin, database::is_chief(&state.db, viewer_id).await.unwrap_or(false))
+        (
+            staff.is_admin,
+            database::is_chief(&state.db, viewer_id)
+                .await
+                .unwrap_or(false),
+        )
     } else {
         match database::get_staff_by_id(&state.db, viewer_id).await {
-            Ok(Some(v)) => (v.is_admin || v.is_god, database::is_chief(&state.db, viewer_id).await.unwrap_or(false)),
+            Ok(Some(v)) => (
+                v.is_admin || v.is_god,
+                database::is_chief(&state.db, viewer_id)
+                    .await
+                    .unwrap_or(false),
+            ),
             _ => (false, false),
         }
     };
@@ -471,7 +534,11 @@ async fn view_person(
         Ok(a) => a,
         Err(e) => {
             error!("Error fetching ateliers: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Error: {}</p>", e))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Error: {}</p>", e)),
+            )
+                .into_response();
         }
     };
 
@@ -480,7 +547,11 @@ async fn view_person(
         Ok(r) => r,
         Err(e) => {
             error!("Error fetching roles: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Error: {}</p>", e))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Error: {}</p>", e)),
+            )
+                .into_response();
         }
     };
 
@@ -504,8 +575,12 @@ async fn view_person(
 
         // Admins: pending imports
         if staff.is_admin {
-            let unimported_ha = database::count_unimported_memberships(&state.db, current_season).await.unwrap_or(0);
-            let unimported_cash = database::count_unimported_cash(&state.db).await.unwrap_or(0);
+            let unimported_ha = database::count_unimported_memberships(&state.db, current_season)
+                .await
+                .unwrap_or(0);
+            let unimported_cash = database::count_unimported_cash(&state.db)
+                .await
+                .unwrap_or(0);
             if unimported_ha > 0 {
                 items.push(templates::TodoItem {
                     icon: "fa-ticket-alt",
@@ -561,7 +636,19 @@ async fn view_person(
         }
     };
 
-    Html(templates::person_detail(&staff, &ateliers, &roles, current_season, &prefix, is_self, is_viewer_admin, show_contact, &todos, &payment_history)).into_response()
+    Html(templates::person_detail(
+        &staff,
+        &ateliers,
+        &roles,
+        current_season,
+        &prefix,
+        is_self,
+        is_viewer_admin,
+        show_contact,
+        &todos,
+        &payment_history,
+    ))
+    .into_response()
 }
 
 #[derive(Debug, Deserialize)]
@@ -597,15 +684,28 @@ async fn toggle_role(
 
     // Authorization: validated changes require admin or chief of that atelier
     if payload.validated.is_some() && !is_admin && !is_chief_of_atelier {
-        return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "Seuls les admins ou chefs d'atelier peuvent modifier le statut de validation"})));
+        return (
+            StatusCode::FORBIDDEN,
+            Json(
+                serde_json::json!({"error": "Seuls les admins ou chefs d'atelier peuvent modifier le statut de validation"}),
+            ),
+        );
     }
     // Authorization: chief changes require admin
     if payload.chief.is_some() && !is_admin {
-        return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "Seuls les admins peuvent modifier le statut de chef"})));
+        return (
+            StatusCode::FORBIDDEN,
+            Json(
+                serde_json::json!({"error": "Seuls les admins peuvent modifier le statut de chef"}),
+            ),
+        );
     }
     // Authorization: add/remove requires self, admin, or chief of that atelier
     if payload.add.is_some() && !is_self && !is_admin && !is_chief_of_atelier {
-        return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "Vous ne pouvez modifier que vos propres ateliers"})));
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Vous ne pouvez modifier que vos propres ateliers"})),
+        );
     }
 
     // Handle add/remove role
@@ -615,11 +715,17 @@ async fn toggle_role(
             let atelier = match database::get_atelier_by_id(&state.db, payload.atelier_id).await {
                 Ok(Some(a)) => a,
                 Ok(None) => {
-                    return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Atelier not found"})));
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(serde_json::json!({"error": "Atelier not found"})),
+                    );
                 }
                 Err(e) => {
                     error!("Error fetching atelier: {}", e);
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})));
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": e.to_string()})),
+                    );
                 }
             };
 
@@ -629,11 +735,13 @@ async fn toggle_role(
             match database::add_role(&state.db, staff_id, payload.atelier_id, validated).await {
                 Ok(_) => {
                     let _ = database::insert_audit(
-                        &state.db, Some(me.id),
+                        &state.db,
+                        Some(me.id),
                         &format!("{} {}", me.first_name, me.last_name),
                         "Ajout rôle",
                         &format!("staff={} atelier={}", staff_id, atelier.name),
-                    ).await;
+                    )
+                    .await;
                     // Notify chiefs if this role needs validation
                     if !validated {
                         let state_clone = state.clone();
@@ -646,12 +754,17 @@ async fn toggle_role(
                                 .flatten()
                                 .map(|s| format!("{} {}", s.first_name, s.last_name))
                                 .unwrap_or_else(|| "Quelqu'un".to_string());
-                            let chiefs = database::get_chiefs_for_atelier(&state_clone.db, atelier_id)
-                                .await
-                                .unwrap_or_default();
-                            let chief_emails: Vec<String> = chiefs.iter().map(|c| c.email.clone()).collect();
+                            let chiefs =
+                                database::get_chiefs_for_atelier(&state_clone.db, atelier_id)
+                                    .await
+                                    .unwrap_or_default();
+                            let chief_emails: Vec<String> =
+                                chiefs.iter().map(|c| c.email.clone()).collect();
                             if !chief_emails.is_empty() {
-                                let subject = format!("AGHIL — {} demande à rejoindre {}", staff_name, atelier_name);
+                                let subject = format!(
+                                    "AGHIL — {} demande à rejoindre {}",
+                                    staff_name, atelier_name
+                                );
                                 let html_body = format!(
                                     r#"<p>Bonjour,</p>
 <p><strong>{staff}</strong> souhaite rejoindre l'atelier <strong>{atelier}</strong> et attend votre validation.</p>
@@ -660,33 +773,54 @@ async fn toggle_role(
                                     staff = staff_name,
                                     atelier = atelier_name,
                                 );
-                                send_notification_email(&state_clone, &chief_emails, &subject, &html_body).await;
+                                send_notification_email(
+                                    &state_clone,
+                                    &chief_emails,
+                                    &subject,
+                                    &html_body,
+                                )
+                                .await;
                             }
                         });
                     }
-                    return (StatusCode::OK, Json(serde_json::json!({"success": true, "validated": validated})));
+                    return (
+                        StatusCode::OK,
+                        Json(serde_json::json!({"success": true, "validated": validated})),
+                    );
                 }
                 Err(e) => {
                     error!("Error adding role: {}", e);
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})));
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": e.to_string()})),
+                    );
                 }
             }
         } else {
             match database::remove_role(&state.db, staff_id, payload.atelier_id).await {
                 Ok(_) => {
                     let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
-                        .await.ok().flatten().map(|a| a.name).unwrap_or_default();
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|a| a.name)
+                        .unwrap_or_default();
                     let _ = database::insert_audit(
-                        &state.db, Some(me.id),
+                        &state.db,
+                        Some(me.id),
                         &format!("{} {}", me.first_name, me.last_name),
                         "Suppression rôle",
                         &format!("staff={} atelier={}", staff_id, atelier_name),
-                    ).await;
+                    )
+                    .await;
                     return (StatusCode::OK, Json(serde_json::json!({"success": true})));
                 }
                 Err(e) => {
                     error!("Error removing role: {}", e);
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})));
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": e.to_string()})),
+                    );
                 }
             }
         }
@@ -694,20 +828,43 @@ async fn toggle_role(
 
     // Handle update validated/chief
     if payload.validated.is_some() || payload.chief.is_some() {
-        match database::update_role(&state.db, staff_id, payload.atelier_id, payload.validated, payload.chief).await {
+        match database::update_role(
+            &state.db,
+            staff_id,
+            payload.atelier_id,
+            payload.validated,
+            payload.chief,
+        )
+        .await
+        {
             Ok(_) => {
                 // Audit
                 let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
-                    .await.ok().flatten().map(|a| a.name).unwrap_or_default();
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|a| a.name)
+                    .unwrap_or_default();
                 let mut parts = Vec::new();
-                if let Some(v) = payload.validated { parts.push(format!("validated={}", v)); }
-                if let Some(c) = payload.chief { parts.push(format!("chief={}", c)); }
+                if let Some(v) = payload.validated {
+                    parts.push(format!("validated={}", v));
+                }
+                if let Some(c) = payload.chief {
+                    parts.push(format!("chief={}", c));
+                }
                 let _ = database::insert_audit(
-                    &state.db, Some(me.id),
+                    &state.db,
+                    Some(me.id),
                     &format!("{} {}", me.first_name, me.last_name),
                     "Modification rôle",
-                    &format!("staff={} atelier={} {}", staff_id, atelier_name, parts.join(" ")),
-                ).await;
+                    &format!(
+                        "staff={} atelier={} {}",
+                        staff_id,
+                        atelier_name,
+                        parts.join(" ")
+                    ),
+                )
+                .await;
 
                 // Send notification emails for validated / chief changes
                 let state_clone = state.clone();
@@ -728,14 +885,21 @@ async fn toggle_role(
 
                     // Notification: role validated
                     if validated == Some(true) {
-                        let subject = format!("AGHIL — Votre rôle dans {} a été validé", atelier_name);
+                        let subject =
+                            format!("AGHIL — Votre rôle dans {} a été validé", atelier_name);
                         let html_body = format!(
                             r#"<p>Bonjour {},</p>
 <p>Votre demande pour rejoindre l'atelier <strong>{}</strong> a été validée. Vous pouvez dès maintenant vous inscrire aux créneaux sur le calendrier.</p>
 <p><em>— PowPow pour AG'HIL</em></p>"#,
                             staff.first_name, atelier_name,
                         );
-                        send_notification_email(&state_clone, &[staff.email.clone()], &subject, &html_body).await;
+                        send_notification_email(
+                            &state_clone,
+                            &[staff.email.clone()],
+                            &subject,
+                            &html_body,
+                        )
+                        .await;
                     }
 
                     // Notification: chief status changed
@@ -762,7 +926,13 @@ async fn toggle_role(
                                 ),
                             )
                         };
-                        send_notification_email(&state_clone, &[staff.email.clone()], &subject, &html_body).await;
+                        send_notification_email(
+                            &state_clone,
+                            &[staff.email.clone()],
+                            &subject,
+                            &html_body,
+                        )
+                        .await;
                     }
                 });
 
@@ -770,11 +940,17 @@ async fn toggle_role(
             }
             Err(e) => {
                 error!("Error updating role: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": e.to_string()})),
+                )
             }
         }
     } else {
-        (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "No action specified"})))
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "No action specified"})),
+        )
     }
 }
 
@@ -792,16 +968,21 @@ async fn update_comment(
     match database::update_staff_comment(&state.db, staff_id, &payload.comment).await {
         Ok(_) => {
             let _ = database::insert_audit(
-                &state.db, Some(admin.id),
+                &state.db,
+                Some(admin.id),
                 &format!("{} {}", admin.first_name, admin.last_name),
                 "Modification commentaire",
                 &format!("staff={}", staff_id),
-            ).await;
+            )
+            .await;
             (StatusCode::OK, Json(serde_json::json!({"success": true})))
         }
         Err(e) => {
             error!("Error updating comment: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
         }
     }
 }
@@ -820,15 +1001,24 @@ async fn update_contact(
 ) -> impl IntoResponse {
     // Only allow editing own contact info, or if admin/god
     if me.id != staff_id && !me.is_admin && !me.is_god {
-        return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "Accès refusé"}))).into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Accès refusé"})),
+        )
+            .into_response();
     }
 
     let email = payload.email.trim().to_lowercase();
     if email.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Email requis"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Email requis"})),
+        )
+            .into_response();
     }
 
-    let phone = payload.phone
+    let phone = payload
+        .phone
         .as_deref()
         .map(|p| p.trim())
         .filter(|p| !p.is_empty())
@@ -837,16 +1027,27 @@ async fn update_contact(
     match database::update_staff_contact(&state.db, staff_id, &email, phone.as_deref()).await {
         Ok(_) => {
             let _ = database::insert_audit(
-                &state.db, Some(me.id),
+                &state.db,
+                Some(me.id),
                 &format!("{} {}", me.first_name, me.last_name),
                 "Modification contact",
-                &format!("staff={} email={} phone={}", staff_id, email, phone.as_deref().unwrap_or("")),
-            ).await;
+                &format!(
+                    "staff={} email={} phone={}",
+                    staff_id,
+                    email,
+                    phone.as_deref().unwrap_or("")
+                ),
+            )
+            .await;
             (StatusCode::OK, Json(serde_json::json!({"success": true}))).into_response()
         }
         Err(e) => {
             error!("Error updating contact: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
         }
     }
 }
@@ -863,21 +1064,36 @@ async fn calendar_view(
     let atelier = match database::get_atelier_by_slug(&state.db, &slug).await {
         Ok(Some(a)) => a,
         Ok(None) => {
-            return (StatusCode::NOT_FOUND, Html("<p>Atelier not found</p>".to_string())).into_response();
+            return (
+                StatusCode::NOT_FOUND,
+                Html("<p>Atelier not found</p>".to_string()),
+            )
+                .into_response();
         }
         Err(e) => {
             error!("Error fetching atelier: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Error: {}</p>", e))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Error: {}</p>", e)),
+            )
+                .into_response();
         }
     };
 
     // Fetch needs (only today and future), staff, all ateliers
     let today = chrono::Utc::now().date_naive();
     let needs = match database::get_needs_for_atelier(&state.db, atelier.id).await {
-        Ok(n) => n.into_iter().filter(|need| need.day >= today).collect::<Vec<_>>(),
+        Ok(n) => n
+            .into_iter()
+            .filter(|need| need.day >= today)
+            .collect::<Vec<_>>(),
         Err(e) => {
             error!("Error fetching needs: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Error: {}</p>", e))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Error: {}</p>", e)),
+            )
+                .into_response();
         }
     };
 
@@ -885,7 +1101,11 @@ async fn calendar_view(
         Ok(s) => s,
         Err(e) => {
             error!("Error fetching staff: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Error: {}</p>", e))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Error: {}</p>", e)),
+            )
+                .into_response();
         }
     };
 
@@ -893,7 +1113,11 @@ async fn calendar_view(
         Ok(a) => a,
         Err(e) => {
             error!("Error fetching ateliers: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Error: {}</p>", e))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Error: {}</p>", e)),
+            )
+                .into_response();
         }
     };
 
@@ -903,7 +1127,11 @@ async fn calendar_view(
         Ok(p) => p,
         Err(e) => {
             error!("Error fetching presence: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Error: {}</p>", e))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Error: {}</p>", e)),
+            )
+                .into_response();
         }
     };
 
@@ -913,7 +1141,17 @@ async fn calendar_view(
         presence_map.insert((need_id, staff_id), (first_half, second_half));
     }
 
-    Html(templates::calendar(&atelier, &needs, &staff_list, &presence_map, &all_ateliers, &prefix, me.id, me.is_admin)).into_response()
+    Html(templates::calendar(
+        &atelier,
+        &needs,
+        &staff_list,
+        &presence_map,
+        &all_ateliers,
+        &prefix,
+        me.id,
+        me.is_admin,
+    ))
+    .into_response()
 }
 
 #[derive(Debug, Deserialize)]
@@ -931,49 +1169,85 @@ async fn toggle_presence_api(
 ) -> impl IntoResponse {
     // Authorization: only the staff member themselves can toggle their own availability
     if payload.staff_id != me.id {
-        return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "Vous ne pouvez modifier que votre propre disponibilité"})));
+        return (
+            StatusCode::FORBIDDEN,
+            Json(
+                serde_json::json!({"error": "Vous ne pouvez modifier que votre propre disponibilité"}),
+            ),
+        );
     }
 
     // Fetch current presence
-    let (mut first_half, mut second_half) = match database::get_presence(&state.db, payload.needs_id, payload.staff_id).await {
-        Ok(Some((f, s))) => (f, s),
-        Ok(None) => (false, false),
-        Err(e) => {
-            error!("Error fetching presence: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})));
-        }
-    };
+    let (mut first_half, mut second_half) =
+        match database::get_presence(&state.db, payload.needs_id, payload.staff_id).await {
+            Ok(Some((f, s))) => (f, s),
+            Ok(None) => (false, false),
+            Err(e) => {
+                error!("Error fetching presence: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": e.to_string()})),
+                );
+            }
+        };
 
     // Apply the toggle
     match payload.half.as_str() {
         "first" => first_half = payload.value,
         "second" => second_half = payload.value,
         _ => {
-            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "half must be 'first' or 'second'"})));
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "half must be 'first' or 'second'"})),
+            );
         }
     }
 
     // Upsert (or delete if both false)
-    match database::upsert_presence(&state.db, payload.needs_id, payload.staff_id, first_half, second_half).await {
+    match database::upsert_presence(
+        &state.db,
+        payload.needs_id,
+        payload.staff_id,
+        first_half,
+        second_half,
+    )
+    .await
+    {
         Ok(_) => {
             let target_name = if payload.staff_id == me.id {
                 format!("{} {}", me.first_name, me.last_name)
             } else {
-                database::get_staff_by_id(&state.db, payload.staff_id).await.ok().flatten()
+                database::get_staff_by_id(&state.db, payload.staff_id)
+                    .await
+                    .ok()
+                    .flatten()
                     .map(|s| format!("{} {}", s.first_name, s.last_name))
                     .unwrap_or_else(|| payload.staff_id.to_string())
             };
             let _ = database::insert_audit(
-                &state.db, Some(me.id),
+                &state.db,
+                Some(me.id),
                 &format!("{} {}", me.first_name, me.last_name),
                 "Modification présence",
-                &format!("{} — {}={} (need={})", target_name, payload.half, payload.value, payload.needs_id),
-            ).await;
-            (StatusCode::OK, Json(serde_json::json!({"success": true, "first_half": first_half, "second_half": second_half})))
+                &format!(
+                    "{} — {}={} (need={})",
+                    target_name, payload.half, payload.value, payload.needs_id
+                ),
+            )
+            .await;
+            (
+                StatusCode::OK,
+                Json(
+                    serde_json::json!({"success": true, "first_half": first_half, "second_half": second_half}),
+                ),
+            )
         }
         Err(e) => {
             error!("Error upserting presence: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
         }
     }
 }
@@ -1012,7 +1286,12 @@ async fn calendar_editor_view(
         .await
         .unwrap_or_default();
 
-    Html(templates::calendar_editor(&ateliers, &editable_ids, &future_needs, &prefix))
+    Html(templates::calendar_editor(
+        &ateliers,
+        &editable_ids,
+        &future_needs,
+        &prefix,
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -1160,16 +1439,33 @@ async fn api_upsert_need(
         }
     };
 
-    match database::upsert_need(&state.db, payload.atelier_id, day, payload.quantity, payload.nightly).await {
+    match database::upsert_need(
+        &state.db,
+        payload.atelier_id,
+        day,
+        payload.quantity,
+        payload.nightly,
+    )
+    .await
+    {
         Ok(need) => {
             let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
-                .await.ok().flatten().map(|a| a.name).unwrap_or_default();
+                .await
+                .ok()
+                .flatten()
+                .map(|a| a.name)
+                .unwrap_or_default();
             let _ = database::insert_audit(
-                &state.db, Some(chief.id),
+                &state.db,
+                Some(chief.id),
                 &format!("{} {}", chief.first_name, chief.last_name),
                 "Création/modification besoin",
-                &format!("{} {} qty={} nightly={}", atelier_name, payload.day, payload.quantity, payload.nightly),
-            ).await;
+                &format!(
+                    "{} {} qty={} nightly={}",
+                    atelier_name, payload.day, payload.quantity, payload.nightly
+                ),
+            )
+            .await;
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -1229,13 +1525,19 @@ async fn api_delete_need(
         Ok(deleted) => {
             if deleted {
                 let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
-                    .await.ok().flatten().map(|a| a.name).unwrap_or_default();
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|a| a.name)
+                    .unwrap_or_default();
                 let _ = database::insert_audit(
-                    &state.db, Some(chief.id),
+                    &state.db,
+                    Some(chief.id),
                     &format!("{} {}", chief.first_name, chief.last_name),
                     "Suppression besoin",
                     &format!("{} {}", atelier_name, payload.day),
-                ).await;
+                )
+                .await;
             }
             (
                 StatusCode::OK,
@@ -1291,18 +1593,16 @@ async fn import_staff(
             };
 
             // Check if already imported
-            let already_imported = database::has_staff_for_membership(
-                &state.db,
-                item_id,
-                season,
-            )
-            .await
-            .unwrap_or(false);
+            let already_imported = database::has_staff_for_membership(&state.db, item_id, season)
+                .await
+                .unwrap_or(false);
 
             if already_imported {
                 return (
                     StatusCode::OK,
-                    Html(templates::already_imported_page(membership, season, &prefix)),
+                    Html(templates::already_imported_page(
+                        membership, season, &prefix,
+                    )),
                 );
             }
 
@@ -1328,7 +1628,14 @@ async fn import_staff(
             // Always allow creating a new staff (two people can have the same name)
             (
                 StatusCode::OK,
-                Html(templates::import_staff_form(membership, season, candidates, payer_email.as_deref(), false, &prefix)),
+                Html(templates::import_staff_form(
+                    membership,
+                    season,
+                    candidates,
+                    payer_email.as_deref(),
+                    false,
+                    &prefix,
+                )),
             )
         }
         Ok(None) => (
@@ -1406,7 +1713,11 @@ async fn do_import_staff(
             .await
         }
         "update" => {
-            let staff_id = match form.staff_id.as_ref().and_then(|s| s.parse::<uuid::Uuid>().ok()) {
+            let staff_id = match form
+                .staff_id
+                .as_ref()
+                .and_then(|s| s.parse::<uuid::Uuid>().ok())
+            {
                 Some(id) => id,
                 None => {
                     return (
@@ -1439,15 +1750,23 @@ async fn do_import_staff(
     match result {
         Ok(_staff) => {
             let _ = database::insert_audit(
-                &state.db, Some(admin.id),
+                &state.db,
+                Some(admin.id),
                 &format!("{} {}", admin.first_name, admin.last_name),
                 "Import adhésion HelloAsso",
-                &format!("{} {} (item_id={})", form.first_name, form.last_name, item_id),
-            ).await;
+                &format!(
+                    "{} {} (item_id={})",
+                    form.first_name, form.last_name, item_id
+                ),
+            )
+            .await;
             // Redirect back to users page with filter to show remaining not-imported memberships
             (
                 StatusCode::SEE_OTHER,
-                Html(format!(r#"<meta http-equiv="refresh" content="0;url={}/users?filter=not_imported"><p>Redirecting...</p>"#, prefix)),
+                Html(format!(
+                    r#"<meta http-equiv="refresh" content="0;url={}/users?filter=not_imported"><p>Redirecting...</p>"#,
+                    prefix
+                )),
             )
         }
         Err(e) => {
@@ -1513,14 +1832,16 @@ async fn list_cash(
             }
 
             // Sort: not-yet-imported first, then by date (most recent first)
-            payments_with_status.sort_by(|a, b| {
-                match a.1.cmp(&b.1) {
-                    std::cmp::Ordering::Equal => b.0.date.cmp(&a.0.date),
-                    other => other,
-                }
+            payments_with_status.sort_by(|a, b| match a.1.cmp(&b.1) {
+                std::cmp::Ordering::Equal => b.0.date.cmp(&a.0.date),
+                other => other,
             });
 
-            Html(templates::cash_list(payments_with_status, current_season, &prefix))
+            Html(templates::cash_list(
+                payments_with_status,
+                current_season,
+                &prefix,
+            ))
         }
         Err(e) => {
             error!("Error fetching cash payments: {}", e);
@@ -1580,11 +1901,13 @@ async fn create_cash(
     {
         Ok(_) => {
             let _ = database::insert_audit(
-                &state.db, Some(admin.id),
+                &state.db,
+                Some(admin.id),
                 &format!("{} {}", admin.first_name, admin.last_name),
                 "Création paiement espèces",
                 &format!("{} {} — {}€", form.first_name, form.last_name, form.amount),
-            ).await;
+            )
+            .await;
             // Notify admins about new cash payment
             let state_clone = state.clone();
             let first_name = form.first_name.clone();
@@ -1637,11 +1960,17 @@ async fn import_cash(
     let cash = match database::get_cash_by_id(&state.db, cash_id).await {
         Ok(Some(c)) => c,
         Ok(None) => {
-            return (StatusCode::NOT_FOUND, Html("<p>Paiement non trouvé</p>".to_string()));
+            return (
+                StatusCode::NOT_FOUND,
+                Html("<p>Paiement non trouvé</p>".to_string()),
+            );
         }
         Err(e) => {
             error!("Error fetching cash payment: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Erreur: {}</p>", e)));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Erreur: {}</p>", e)),
+            );
         }
     };
 
@@ -1649,7 +1978,11 @@ async fn import_cash(
     let season = {
         let year = cash.date.year();
         let month = cash.date.month();
-        if month >= 6 { (year + 1) as i16 } else { year as i16 }
+        if month >= 6 {
+            (year + 1) as i16
+        } else {
+            year as i16
+        }
     };
 
     // Check if already imported
@@ -1673,19 +2006,17 @@ async fn import_cash(
     let last_name = &cash.last_name;
 
     let candidates = database::find_staff_candidates(
-        &state.db,
-        cash_email,
-        "",  // no payer email for cash
-        first_name,
-        last_name,
-        season,
+        &state.db, cash_email, "", // no payer email for cash
+        first_name, last_name, season,
     )
     .await
     .unwrap_or_default();
 
     (
         StatusCode::OK,
-        Html(templates::cash_import_form(&cash, season, candidates, &prefix)),
+        Html(templates::cash_import_form(
+            &cash, season, candidates, &prefix,
+        )),
     )
 }
 
@@ -1713,18 +2044,28 @@ async fn do_import_cash(
     let cash = match database::get_cash_by_id(&state.db, cash_id).await {
         Ok(Some(c)) => c,
         Ok(None) => {
-            return (StatusCode::NOT_FOUND, Html("<p>Paiement non trouvé</p>".to_string()));
+            return (
+                StatusCode::NOT_FOUND,
+                Html("<p>Paiement non trouvé</p>".to_string()),
+            );
         }
         Err(e) => {
             error!("Error fetching cash payment: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Html(format!("<p>Erreur: {}</p>", e)));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<p>Erreur: {}</p>", e)),
+            );
         }
     };
 
     let season = {
         let year = cash.date.year();
         let month = cash.date.month();
-        if month >= 6 { (year + 1) as i16 } else { year as i16 }
+        if month >= 6 {
+            (year + 1) as i16
+        } else {
+            year as i16
+        }
     };
 
     // Check if already imported
@@ -1760,7 +2101,11 @@ async fn do_import_cash(
             .await
         }
         "update" => {
-            let staff_id = match form.staff_id.as_ref().and_then(|s| s.parse::<uuid::Uuid>().ok()) {
+            let staff_id = match form
+                .staff_id
+                .as_ref()
+                .and_then(|s| s.parse::<uuid::Uuid>().ok())
+            {
                 Some(id) => id,
                 None => {
                     return (
@@ -1793,11 +2138,16 @@ async fn do_import_cash(
     match result {
         Ok(_staff) => {
             let _ = database::insert_audit(
-                &state.db, Some(admin.id),
+                &state.db,
+                Some(admin.id),
                 &format!("{} {}", admin.first_name, admin.last_name),
                 "Import paiement espèces",
-                &format!("{} {} (cash_id={})", form.first_name, form.last_name, cash_id),
-            ).await;
+                &format!(
+                    "{} {} (cash_id={})",
+                    form.first_name, form.last_name, cash_id
+                ),
+            )
+            .await;
             (
                 StatusCode::SEE_OTHER,
                 Html(format!(
@@ -1832,15 +2182,23 @@ async fn do_import_cash(
     }
 }
 
-async fn sync_users(RequireAdmin(admin): RequireAdmin, State(state): State<AppState>) -> impl IntoResponse {
+async fn sync_users(
+    RequireAdmin(admin): RequireAdmin,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     match sync_users_from_helloasso(&state).await {
         Ok((user_count, membership_count)) => {
             let _ = database::insert_audit(
-                &state.db, Some(admin.id),
+                &state.db,
+                Some(admin.id),
                 &format!("{} {}", admin.first_name, admin.last_name),
                 "Synchronisation HelloAsso",
-                &format!("{} utilisateurs, {} adhésions", user_count, membership_count),
-            ).await;
+                &format!(
+                    "{} utilisateurs, {} adhésions",
+                    user_count, membership_count
+                ),
+            )
+            .await;
             Html(format!(
                 "<div class='alert alert-success'>Successfully synchronized {} users and {} memberships</div>",
                 user_count, membership_count
@@ -1900,15 +2258,23 @@ async fn api_list_users(
     }
 }
 
-async fn api_sync_users(RequireAdmin(admin): RequireAdmin, State(state): State<AppState>) -> impl IntoResponse {
+async fn api_sync_users(
+    RequireAdmin(admin): RequireAdmin,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     match sync_users_from_helloasso(&state).await {
         Ok((user_count, membership_count)) => {
             let _ = database::insert_audit(
-                &state.db, Some(admin.id),
+                &state.db,
+                Some(admin.id),
                 &format!("{} {}", admin.first_name, admin.last_name),
                 "Synchronisation HelloAsso (API)",
-                &format!("{} utilisateurs, {} adhésions", user_count, membership_count),
-            ).await;
+                &format!(
+                    "{} utilisateurs, {} adhésions",
+                    user_count, membership_count
+                ),
+            )
+            .await;
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -1936,7 +2302,10 @@ async fn api_sync_users(RequireAdmin(admin): RequireAdmin, State(state): State<A
     }
 }
 
-async fn debug_first_order(RequireGod(_staff): RequireGod, State(state): State<AppState>) -> impl IntoResponse {
+async fn debug_first_order(
+    RequireGod(_staff): RequireGod,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     match state.helloasso_client.get_orders().await {
         Ok(orders) => {
             if let Some(order) = orders.first() {
@@ -2001,18 +2370,30 @@ async fn api_update_admin_flags(
     let old_staff = match database::get_staff_by_id(&state.db, payload.staff_id).await {
         Ok(Some(s)) => s,
         Ok(None) => {
-            return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Staff not found"})));
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Staff not found"})),
+            );
         }
         Err(e) => {
             error!("Error fetching staff: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            );
         }
     };
 
     // Enforce: is_god implies is_admin
-    let is_admin = if payload.is_god { true } else { payload.is_admin };
+    let is_admin = if payload.is_god {
+        true
+    } else {
+        payload.is_admin
+    };
 
-    match database::update_staff_admin_flags(&state.db, payload.staff_id, is_admin, payload.is_god).await {
+    match database::update_staff_admin_flags(&state.db, payload.staff_id, is_admin, payload.is_god)
+        .await
+    {
         Ok(staff) => {
             // Send notification emails for flag changes
             if !staff.email.is_empty() {
@@ -2031,7 +2412,13 @@ async fn api_update_admin_flags(
 <p><em>— PowPow pour AG'HIL</em></p>"#,
                             new_staff.first_name,
                         );
-                        send_notification_email(&state_clone, &[new_staff.email.clone()], subject, &html_body).await;
+                        send_notification_email(
+                            &state_clone,
+                            &[new_staff.email.clone()],
+                            subject,
+                            &html_body,
+                        )
+                        .await;
                     } else if old_admin && !new_staff.is_admin {
                         let subject = "AGHIL — Vos droits administrateur ont été retirés";
                         let html_body = format!(
@@ -2040,7 +2427,13 @@ async fn api_update_admin_flags(
 <p><em>— PowPow pour AG'HIL</em></p>"#,
                             new_staff.first_name,
                         );
-                        send_notification_email(&state_clone, &[new_staff.email.clone()], subject, &html_body).await;
+                        send_notification_email(
+                            &state_clone,
+                            &[new_staff.email.clone()],
+                            subject,
+                            &html_body,
+                        )
+                        .await;
                     }
 
                     // God flag changed
@@ -2052,7 +2445,13 @@ async fn api_update_admin_flags(
 <p><em>— PowPow pour AG'HIL</em></p>"#,
                             new_staff.first_name,
                         );
-                        send_notification_email(&state_clone, &[new_staff.email.clone()], subject, &html_body).await;
+                        send_notification_email(
+                            &state_clone,
+                            &[new_staff.email.clone()],
+                            subject,
+                            &html_body,
+                        )
+                        .await;
                     } else if old_god && !new_staff.is_god {
                         let subject = "AGHIL — Vos droits God ont été retirés";
                         let html_body = format!(
@@ -2061,29 +2460,46 @@ async fn api_update_admin_flags(
 <p><em>— PowPow pour AG'HIL</em></p>"#,
                             new_staff.first_name,
                         );
-                        send_notification_email(&state_clone, &[new_staff.email.clone()], subject, &html_body).await;
+                        send_notification_email(
+                            &state_clone,
+                            &[new_staff.email.clone()],
+                            subject,
+                            &html_body,
+                        )
+                        .await;
                     }
                 });
             }
 
             let _ = database::insert_audit(
-                &state.db, Some(god.id),
+                &state.db,
+                Some(god.id),
                 &format!("{} {}", god.first_name, god.last_name),
                 "Modification droits admin",
-                &format!("{} {} — admin={} god={}", staff.first_name, staff.last_name, staff.is_admin, staff.is_god),
-            ).await;
+                &format!(
+                    "{} {} — admin={} god={}",
+                    staff.first_name, staff.last_name, staff.is_admin, staff.is_god
+                ),
+            )
+            .await;
 
-            (StatusCode::OK, Json(serde_json::json!({
-                "success": true,
-                "is_admin": staff.is_admin,
-                "is_god": staff.is_god,
-            })))
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "success": true,
+                    "is_admin": staff.is_admin,
+                    "is_god": staff.is_god,
+                })),
+            )
         }
         Err(e) => {
             error!("Error updating admin flags: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
-                "error": e.to_string(),
-            })))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": e.to_string(),
+                })),
+            )
         }
     }
 }
@@ -2112,7 +2528,12 @@ async fn audit_page_handler(
         .await
         .unwrap_or_default();
 
-    Html(templates::audit_page(&entries, current_page, total_pages.max(1), &prefix))
+    Html(templates::audit_page(
+        &entries,
+        current_page,
+        total_pages.max(1),
+        &prefix,
+    ))
 }
 
 async fn validation_page_handler(
@@ -2203,16 +2624,25 @@ async fn api_send_login_email(
     let staff = match database::get_staff_by_id(&state.db, payload.staff_id).await {
         Ok(Some(s)) => s,
         Ok(None) => {
-            return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Staff not found"})));
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Staff not found"})),
+            );
         }
         Err(e) => {
             error!("Error fetching staff: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            );
         }
     };
 
     if staff.email.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Staff has no email address"})));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Staff has no email address"})),
+        );
     }
 
     // Generate token
@@ -2220,7 +2650,10 @@ async fn api_send_login_email(
         Ok(t) => t,
         Err(e) => {
             error!("Error setting token: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to generate token"})));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to generate token"})),
+            );
         }
     };
 
@@ -2234,7 +2667,10 @@ async fn api_send_login_email(
         .or_else(|| headers.get("Host"))
         .and_then(|v| v.to_str().ok())
         .unwrap_or("localhost:3000");
-    let login_url = format!("{}://{}{}/person/{}?token={}", proto, host, prefix, staff.id, token);
+    let login_url = format!(
+        "{}://{}{}/person/{}?token={}",
+        proto, host, prefix, staff.id, token
+    );
 
     // Determine mail method: "gmail" or "smtp" (default)
     let mail_method = if state.config.mail_method.eq_ignore_ascii_case("gmail") {
@@ -2242,7 +2678,10 @@ async fn api_send_login_email(
     } else {
         "smtp"
     };
-    info!("Sending login email via {} (MAIL_METHOD={:?})", mail_method, state.config.mail_method);
+    info!(
+        "Sending login email via {} (MAIL_METHOD={:?})",
+        mail_method, state.config.mail_method
+    );
 
     match mail_method {
         "gmail" => send_login_email_gmail(&state, &staff, &login_url).await,
@@ -2257,7 +2696,12 @@ async fn send_login_email_smtp(
 ) -> (StatusCode, Json<serde_json::Value>) {
     if state.config.smtp_host.is_empty() {
         warn!("SMTP not configured - login URL: {}", login_url);
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "L'envoi d'email n'est pas configuré (SMTP). Contactez l'administrateur."})));
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(
+                serde_json::json!({"error": "L'envoi d'email n'est pas configuré (SMTP). Contactez l'administrateur."}),
+            ),
+        );
     }
 
     let html_body = format!(
@@ -2273,14 +2717,20 @@ async fn send_login_email_smtp(
         Ok(m) => m,
         Err(e) => {
             error!("Invalid SMTP_FROM address: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Invalid SMTP_FROM configuration"})));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Invalid SMTP_FROM configuration"})),
+            );
         }
     };
 
     let to_address = if state.config.mail_destination_override.is_empty() {
         &staff.email
     } else {
-        warn!("MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting email from {} to {}", staff.email, state.config.mail_destination_override);
+        warn!(
+            "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting email from {} to {}",
+            staff.email, state.config.mail_destination_override
+        );
         &state.config.mail_destination_override
     };
 
@@ -2288,7 +2738,10 @@ async fn send_login_email_smtp(
         Ok(m) => m,
         Err(e) => {
             error!("Invalid destination email address: {}", e);
-            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Invalid email address"})));
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "Invalid email address"})),
+            );
         }
     };
 
@@ -2302,7 +2755,10 @@ async fn send_login_email_smtp(
         Ok(m) => m,
         Err(e) => {
             error!("Error building email: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to build email"})));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to build email"})),
+            );
         }
     };
 
@@ -2318,7 +2774,10 @@ async fn send_login_email_smtp(
             .build(),
         Err(e) => {
             error!("Error creating SMTP transport: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "SMTP configuration error"})));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "SMTP configuration error"})),
+            );
         }
     };
 
@@ -2330,7 +2789,10 @@ async fn send_login_email_smtp(
         }
         Err(e) => {
             error!("Error sending email via SMTP: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Échec de l'envoi de l'email"})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Échec de l'envoi de l'email"})),
+            )
         }
     }
 }
@@ -2342,18 +2804,21 @@ async fn send_login_email_gmail(
 ) -> (StatusCode, Json<serde_json::Value>) {
     if state.config.gmail_access_token.is_empty() || state.config.gmail_refresh_token.is_empty() {
         warn!("Gmail not configured - login URL: {}", login_url);
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "L'envoi d'email n'est pas configuré (Gmail). Contactez l'administrateur."})));
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(
+                serde_json::json!({"error": "L'envoi d'email n'est pas configuré (Gmail). Contactez l'administrateur."}),
+            ),
+        );
     }
 
     // Initialize the OAuth2 flow (uses GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REDIRECT_URI env vars)
     // and create the client with the stored tokens
-    let client = gmail::GmailClient::with_auth(
-        gmail::GmailAuth::oauth2(
-            &state.config.gmail_access_token,
-            &state.config.gmail_refresh_token,
-            None,
-        ),
-    );
+    let client = gmail::GmailClient::with_auth(gmail::GmailAuth::oauth2(
+        &state.config.gmail_access_token,
+        &state.config.gmail_refresh_token,
+        None,
+    ));
 
     let from = if state.config.gmail_from.is_empty() {
         "me".to_string()
@@ -2364,7 +2829,10 @@ async fn send_login_email_gmail(
     let to_address = if state.config.mail_destination_override.is_empty() {
         &staff.email
     } else {
-        warn!("MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting email from {} to {}", staff.email, state.config.mail_destination_override);
+        warn!(
+            "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting email from {} to {}",
+            staff.email, state.config.mail_destination_override
+        );
         &state.config.mail_destination_override
     };
 
@@ -2392,43 +2860,59 @@ async fn send_login_email_gmail(
         }
         Err(e) => {
             error!("Error sending email via Gmail: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Échec de l'envoi de l'email"})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Échec de l'envoi de l'email"})),
+            )
         }
     }
 }
 
-async fn api_me(
-    State(state): State<AppState>,
-    jar: SignedCookieJar,
-) -> impl IntoResponse {
+async fn api_me(State(state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
     let staff_id = match jar.get("aghil_session") {
         Some(cookie) => match cookie.value().parse::<uuid::Uuid>() {
             Ok(id) => id,
-            Err(_) => return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "Invalid session"}))),
+            Err(_) => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(serde_json::json!({"error": "Invalid session"})),
+                );
+            }
         },
-        None => return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "Not logged in"}))),
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "Not logged in"})),
+            );
+        }
     };
 
     match database::get_staff_by_id(&state.db, staff_id).await {
-        Ok(Some(staff)) => (StatusCode::OK, Json(serde_json::json!({
-            "id": staff.id,
-            "first_name": staff.first_name,
-            "last_name": staff.last_name,
-            "is_admin": staff.is_admin,
-            "is_god": staff.is_god,
-        }))),
-        Ok(None) => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "Staff not found"}))),
+        Ok(Some(staff)) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "id": staff.id,
+                "first_name": staff.first_name,
+                "last_name": staff.last_name,
+                "is_admin": staff.is_admin,
+                "is_god": staff.is_god,
+            })),
+        ),
+        Ok(None) => (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Staff not found"})),
+        ),
         Err(e) => {
             error!("Error fetching staff for session: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Server error"})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Server error"})),
+            )
         }
     }
 }
 
-async fn logout(
-    headers: HeaderMap,
-    jar: SignedCookieJar,
-) -> impl IntoResponse {
+async fn logout(headers: HeaderMap, jar: SignedCookieJar) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
     let mut cookie = axum_extra::extract::cookie::Cookie::new("aghil_session", "");
     cookie.set_path("/");
@@ -2482,7 +2966,10 @@ async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-async fn api_get_stats(RequireAdmin(_staff): RequireAdmin, State(state): State<AppState>) -> impl IntoResponse {
+async fn api_get_stats(
+    RequireAdmin(_staff): RequireAdmin,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     let total_users = database::count_users(&state.db).await.unwrap_or(0);
     let last_sync_users = database::get_recently_synced_users(&state.db, 24)
         .await
@@ -2514,32 +3001,41 @@ fn get_custom_field_value(
 /// Send a notification email to a list of recipients.
 /// Uses the configured mail method (SMTP or Gmail).
 /// Background loop that sends a daily summary email to admins at 8:00 AM local time.
-async fn daily_morning_email_loop(state: AppState) {
+async fn weekly_morning_email_loop(state: AppState) {
     loop {
         // Calculate duration until next 8:00 AM local time
         let now = chrono::Local::now();
-        let today_8am = now
-            .date_naive()
-            .and_hms_opt(8, 0, 0)
-            .unwrap();
-        let today_8am_local = match chrono::TimeZone::from_local_datetime(&now.timezone(), &today_8am).single() {
-            Some(t) => t,
-            None => {
-                // Fallback: sleep 1 hour and retry
-                tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
-                continue;
-            }
-        };
+        let today = now.date_naive();
+        let days_ahead = 8 - today.weekday().number_from_monday() as i64;
+        let monday_8am =
+            now.date_naive().and_hms_opt(8, 0, 0).unwrap() + TimeDelta::days(days_ahead);
+        let monday_8am_local =
+            match chrono::TimeZone::from_local_datetime(&now.timezone(), &monday_8am).single() {
+                Some(t) => t,
+                None => {
+                    // Fallback: sleep 1 hour and retry
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+                    continue;
+                }
+            };
 
-        let target = if now >= today_8am_local {
-            // Already past 8 AM today, schedule for tomorrow
-            today_8am_local + chrono::Duration::days(1)
+        let target = if now >= monday_8am_local {
+            // Already past 8 AM today, schedule for next week
+            monday_8am_local + TimeDelta::days(7)
+        } else if now < monday_8am_local - TimeDelta::days(7) {
+            // Next Monday 8 AM is too far away
+            monday_8am_local - TimeDelta::days(7)
         } else {
-            today_8am_local
+            monday_8am_local
         };
 
-        let sleep_duration = (target - now).to_std().unwrap_or(tokio::time::Duration::from_secs(3600));
-        info!("Daily email: next run in {} seconds", sleep_duration.as_secs());
+        let sleep_duration = (target - now)
+            .to_std()
+            .unwrap_or(tokio::time::Duration::from_secs(3600));
+        info!(
+            "Daily email: next run in {} seconds",
+            sleep_duration.as_secs()
+        );
         tokio::time::sleep(sleep_duration).await;
 
         // Gather data
@@ -2556,7 +3052,7 @@ async fn daily_morning_email_loop(state: AppState) {
 
         // Only send if there is content
         if unimported.is_empty() && upcoming.is_empty() {
-            info!("Daily email: nothing to report, skipping");
+            info!("Weekly email: nothing to report, skipping");
             // Sleep 60s to avoid double-send on the same minute
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
             continue;
@@ -2566,13 +3062,14 @@ async fn daily_morning_email_loop(state: AppState) {
             .await
             .unwrap_or_default();
         if admin_emails.is_empty() {
-            info!("Daily email: no admin emails configured, skipping");
+            info!("Weekly email: no admin emails configured, skipping");
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
             continue;
         }
 
         // Build email body
-        let mut body = String::from("<p>Bonjour,</p>\n<p>Voici le récapitulatif du matin :</p>\n");
+        let mut body =
+            String::from("<p>Bonjour,</p>\n<p>Voici le récapitulatif du lundi matin :</p>\n");
 
         if !unimported.is_empty() {
             body.push_str("<h3>Adhésions à importer</h3>\n<ul>\n");
@@ -2592,16 +3089,21 @@ async fn daily_morning_email_loop(state: AppState) {
 
         body.push_str("<p><em>— PowPow pour AG'HIL</em></p>");
 
-        let subject = "AGHIL — Récapitulatif du matin";
+        let subject = "AGHIL — Récapitulatif du lundi matin";
         send_notification_email(&state, &admin_emails, subject, &body).await;
-        info!("Daily email: sent to {} admins", admin_emails.len());
+        info!("Weekly email: sent to {} admins", admin_emails.len());
 
         // Sleep 60s to avoid double-send on the same minute
         tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
     }
 }
 
-async fn send_notification_email(state: &AppState, to_addresses: &[String], subject: &str, html_body: &str) {
+async fn send_notification_email(
+    state: &AppState,
+    to_addresses: &[String],
+    subject: &str,
+    html_body: &str,
+) {
     if to_addresses.is_empty() {
         return;
     }
@@ -2615,17 +3117,20 @@ async fn send_notification_email(state: &AppState, to_addresses: &[String], subj
     for to_addr in to_addresses {
         match mail_method {
             "gmail" => {
-                if state.config.gmail_access_token.is_empty() || state.config.gmail_refresh_token.is_empty() {
-                    warn!("Gmail not configured, cannot send notification to {}", to_addr);
+                if state.config.gmail_access_token.is_empty()
+                    || state.config.gmail_refresh_token.is_empty()
+                {
+                    warn!(
+                        "Gmail not configured, cannot send notification to {}",
+                        to_addr
+                    );
                     continue;
                 }
-                let client = gmail::GmailClient::with_auth(
-                    gmail::GmailAuth::oauth2(
-                        &state.config.gmail_access_token,
-                        &state.config.gmail_refresh_token,
-                        None,
-                    ),
-                );
+                let client = gmail::GmailClient::with_auth(gmail::GmailAuth::oauth2(
+                    &state.config.gmail_access_token,
+                    &state.config.gmail_refresh_token,
+                    None,
+                ));
                 let from = if state.config.gmail_from.is_empty() {
                     "me".to_string()
                 } else {
@@ -2634,12 +3139,18 @@ async fn send_notification_email(state: &AppState, to_addresses: &[String], subj
                 let dest = if state.config.mail_destination_override.is_empty() {
                     to_addr.as_str()
                 } else {
-                    warn!("MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}", to_addr, state.config.mail_destination_override);
+                    warn!(
+                        "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}",
+                        to_addr, state.config.mail_destination_override
+                    );
                     &state.config.mail_destination_override
                 };
                 let encoded_subject = format!(
                     "=?UTF-8?B?{}?=",
-                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, subject.as_bytes())
+                    base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        subject.as_bytes()
+                    )
                 );
                 let raw_message = format!(
                     "From: {}\r\nTo: {}\r\nSubject: {}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",
@@ -2648,12 +3159,18 @@ async fn send_notification_email(state: &AppState, to_addresses: &[String], subj
                 let message_body = httpclient::InMemoryBody::Text(raw_message);
                 match client.messages_send("me", message_body, None).await {
                     Ok(_) => info!("Notification email sent via Gmail to {}", to_addr),
-                    Err(e) => error!("Failed to send notification via Gmail to {}: {}", to_addr, e),
+                    Err(e) => error!(
+                        "Failed to send notification via Gmail to {}: {}",
+                        to_addr, e
+                    ),
                 }
             }
             _ => {
                 if state.config.smtp_host.is_empty() {
-                    warn!("SMTP not configured, cannot send notification to {}", to_addr);
+                    warn!(
+                        "SMTP not configured, cannot send notification to {}",
+                        to_addr
+                    );
                     continue;
                 }
                 let from = match state.config.smtp_from.parse::<lettre::message::Mailbox>() {
@@ -2666,7 +3183,10 @@ async fn send_notification_email(state: &AppState, to_addresses: &[String], subj
                 let dest = if state.config.mail_destination_override.is_empty() {
                     to_addr.as_str()
                 } else {
-                    warn!("MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}", to_addr, state.config.mail_destination_override);
+                    warn!(
+                        "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}",
+                        to_addr, state.config.mail_destination_override
+                    );
                     &state.config.mail_destination_override
                 };
                 let to = match dest.parse::<lettre::message::Mailbox>() {
@@ -3077,12 +3597,18 @@ async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usize, u
         .unwrap_or(0);
     let new_unimported = unimported_after - unimported_before;
     if new_unimported > 0 {
-        info!("{} new memberships to import, notifying admins", new_unimported);
+        info!(
+            "{} new memberships to import, notifying admins",
+            new_unimported
+        );
         let admin_emails = database::get_admin_emails(&state.db)
             .await
             .unwrap_or_default();
         if !admin_emails.is_empty() {
-            let subject = format!("AGHIL — {} nouvelle(s) adhésion(s) à importer", new_unimported);
+            let subject = format!(
+                "AGHIL — {} nouvelle(s) adhésion(s) à importer",
+                new_unimported
+            );
             let html_body = format!(
                 r#"<p>Bonjour,</p>
 <p><strong>{count}</strong> nouvelle(s) adhésion(s) HelloAsso sont en attente d'import ({total} au total).</p>
@@ -3099,28 +3625,31 @@ async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usize, u
 }
 
 // Database backup endpoint - pure Rust using COPY protocol
-async fn backup_database(RequireGod(god): RequireGod, State(state): State<AppState>) -> impl IntoResponse {
+async fn backup_database(
+    RequireGod(god): RequireGod,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     let _ = database::insert_audit(
-        &state.db, Some(god.id),
+        &state.db,
+        Some(god.id),
         &format!("{} {}", god.first_name, god.last_name),
         "Sauvegarde base de données",
         "",
-    ).await;
+    )
+    .await;
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let filename = format!("aghil_backup_{}.sql", timestamp);
 
     match database::backup_all_tables(&state.db).await {
-        Ok(sql) => {
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "application/sql")
-                .header(
-                    header::CONTENT_DISPOSITION,
-                    format!("attachment; filename=\"{}\"", filename),
-                )
-                .body(Body::from(sql))
-                .unwrap()
-        }
+        Ok(sql) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/sql")
+            .header(
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{}\"", filename),
+            )
+            .body(Body::from(sql))
+            .unwrap(),
         Err(e) => {
             error!("Failed to create backup: {}", e);
             Response::builder()
@@ -3136,10 +3665,14 @@ async fn backup_database(RequireGod(god): RequireGod, State(state): State<AppSta
 }
 
 // Mailchimp-compatible CSV export of all staff
-async fn export_mailchimp(RequireAdmin(_staff): RequireAdmin, State(state): State<AppState>) -> impl IntoResponse {
+async fn export_mailchimp(
+    RequireAdmin(_staff): RequireAdmin,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     match database::get_all_staff_with_ateliers(&state.db).await {
         Ok(staff_list) => {
-            let mut csv = String::from("Email Address,First Name,Last Name,Address,Phone,Tags,Birthday\n");
+            let mut csv =
+                String::from("Email Address,First Name,Last Name,Address,Phone,Tags,Birthday\n");
             for (staff, atelier_names) in &staff_list {
                 let phone = staff.phone.as_deref().unwrap_or("");
                 let tags = atelier_names.join(", ");
@@ -3184,7 +3717,11 @@ fn csv_escape(field: &str) -> String {
 }
 
 // Restore page - shows the upload form
-async fn restore_page(RequireGod(_staff): RequireGod, headers: HeaderMap, State(_state): State<AppState>) -> impl IntoResponse {
+async fn restore_page(
+    RequireGod(_staff): RequireGod,
+    headers: HeaderMap,
+    State(_state): State<AppState>,
+) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
     Html(templates::restore_page(&prefix))
 }
@@ -3198,11 +3735,13 @@ async fn restore_database(
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
     let _ = database::insert_audit(
-        &state.db, Some(god.id),
+        &state.db,
+        Some(god.id),
         &format!("{} {}", god.first_name, god.last_name),
         "Restauration base de données",
         "",
-    ).await;
+    )
+    .await;
 
     // Extract the uploaded file
     let mut sql_content = Vec::new();
@@ -3214,34 +3753,57 @@ async fn restore_database(
                 }
                 Err(e) => {
                     error!("Failed to read uploaded file: {}", e);
-                    return Html(templates::restore_result(&prefix, false, &format!("Erreur de lecture du fichier: {}", e)));
+                    return Html(templates::restore_result(
+                        &prefix,
+                        false,
+                        &format!("Erreur de lecture du fichier: {}", e),
+                    ));
                 }
             }
         }
     }
 
     if sql_content.is_empty() {
-        return Html(templates::restore_result(&prefix, false, "Aucun fichier reçu"));
+        return Html(templates::restore_result(
+            &prefix,
+            false,
+            "Aucun fichier reçu",
+        ));
     }
 
-    info!("Restoring database from uploaded file ({} bytes)", sql_content.len());
+    info!(
+        "Restoring database from uploaded file ({} bytes)",
+        sql_content.len()
+    );
 
     let sql_str = match std::str::from_utf8(&sql_content) {
         Ok(s) => s,
         Err(e) => {
             error!("Uploaded file is not valid UTF-8: {}", e);
-            return Html(templates::restore_result(&prefix, false, "Le fichier n'est pas un fichier SQL valide (encodage UTF-8 invalide)"));
+            return Html(templates::restore_result(
+                &prefix,
+                false,
+                "Le fichier n'est pas un fichier SQL valide (encodage UTF-8 invalide)",
+            ));
         }
     };
 
     match database::restore_from_sql(&state.db, sql_str).await {
         Ok(()) => {
             info!("Database restore completed successfully");
-            Html(templates::restore_result(&prefix, true, "Base de données restaurée avec succès!"))
+            Html(templates::restore_result(
+                &prefix,
+                true,
+                "Base de données restaurée avec succès!",
+            ))
         }
         Err(e) => {
             error!("Database restore failed: {}", e);
-            Html(templates::restore_result(&prefix, false, &format!("Erreur de restauration: {}", e)))
+            Html(templates::restore_result(
+                &prefix,
+                false,
+                &format!("Erreur de restauration: {}", e),
+            ))
         }
     }
 }
