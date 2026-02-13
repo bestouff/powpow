@@ -277,11 +277,12 @@ pub fn index(
             for a in chief_ateliers {
                 links.push_str(&format!(
                     r#"<a class="button is-link is-light mr-2 mb-2" href="{p}/calendar/{slug}">
-                        <span class="icon"><i class="fas fa-calendar-day"></i></span>
+                        <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
                         <span>{name}</span>
                     </a>"#,
                     p = prefix,
                     slug = a.slug,
+                    icon = a.icon,
                     name = a.name,
                 ));
             }
@@ -2046,11 +2047,12 @@ pub fn person_detail(
         if has_role && !atelier.slug.is_empty() {
             plannings_html.push_str(&format!(
                 r#"<a href="{p}/calendar/{slug}" class="button is-link is-outlined mr-2 mb-2">
-                    <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+                    <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
                     <span>{name}</span>
                 </a>"#,
                 p = prefix,
                 slug = atelier.slug,
+                icon = atelier.icon,
                 name = atelier.name,
             ));
         }
@@ -2229,26 +2231,42 @@ pub fn person_detail(
         let mut items_html = String::new();
         for entry in payment_history {
             let icon = match entry.source.as_str() {
-                "helloasso" => r#"<span class="icon has-text-link"><i class="fas fa-ticket-alt"></i></span>"#,
-                "check" => r#"<span class="icon has-text-success"><i class="fas fa-money-check"></i></span>"#,
+                "helloasso" => {
+                    r#"<span class="icon has-text-link"><i class="fas fa-ticket-alt"></i></span>"#
+                }
+                "check" => {
+                    r#"<span class="icon has-text-success"><i class="fas fa-money-check"></i></span>"#
+                }
                 _ => r#"<span class="icon has-text-warning"><i class="fas fa-coins"></i></span>"#,
             };
             let date_display = entry.date.as_deref().unwrap_or("—");
-            let amount_display = entry.amount.map(|a| {
-                if entry.source == "helloasso" {
-                    format!("{:.2}€", a as f32 / 100.0)
-                } else {
-                    format!("{}€", a)
-                }
-            }).unwrap_or_else(|| "—".to_string());
-            let name = format!("{} {}", capitalize_words(&entry.first_name), capitalize_words(&entry.last_name));
+            let amount_display = entry
+                .amount
+                .map(|a| {
+                    if entry.source == "helloasso" {
+                        format!("{:.2}€", a as f32 / 100.0)
+                    } else {
+                        format!("{}€", a)
+                    }
+                })
+                .unwrap_or_else(|| "—".to_string());
+            let name = format!(
+                "{} {}",
+                capitalize_words(&entry.first_name),
+                capitalize_words(&entry.last_name)
+            );
             let email_display = entry.email.as_deref().unwrap_or("—");
-            let phone_display = entry.phone.as_deref()
+            let phone_display = entry
+                .phone
+                .as_deref()
                 .map(|p| format_phone_international(p))
                 .unwrap_or_else(|| "—".to_string());
             let payer_line = if let Some(ref payer) = entry.payer_email {
                 if entry.email.as_deref() != Some(payer.as_str()) {
-                    format!(r#"<span class="is-size-7 has-text-grey">Payeur: {}</span><br>"#, payer)
+                    format!(
+                        r#"<span class="is-size-7 has-text-grey">Payeur: {}</span><br>"#,
+                        payer
+                    )
                 } else {
                     String::new()
                 }
@@ -2275,11 +2293,15 @@ pub fn person_detail(
                     </div>
                 </div>"#,
                 icon = icon,
-                item_type = format!("{} {}", entry.item_type, match entry.source.as_str() {
-                    "helloasso" => "HelloAsso",
-                    "check" => "Chèque",
-                    _ => "Liquide",
-                }),
+                item_type = format!(
+                    "{} {}",
+                    entry.item_type,
+                    match entry.source.as_str() {
+                        "helloasso" => "HelloAsso",
+                        "check" => "Chèque",
+                        _ => "Liquide",
+                    }
+                ),
                 season = entry.season,
                 date = date_display,
                 amount = amount_display,
@@ -3430,10 +3452,13 @@ pub fn calendar(
     for a in all_ateliers {
         let active = if a.id == atelier.id { " is-active" } else { "" };
         atelier_nav.push_str(&format!(
-            r#"<a class="navbar-item{active}" href="{p}/calendar/{slug}">{name}</a>"#,
+            r#"<a class="navbar-item{active}" href="{p}/calendar/{slug}">
+            <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
+            {name}</a>"#,
             active = active,
             p = prefix,
             slug = a.slug,
+            icon = a.icon,
             name = a.name,
         ));
     }
@@ -4027,7 +4052,9 @@ pub fn calendar_editor(
     for d in &days {
         let (has_day, has_night) = day_types.get(d).copied().unwrap_or((false, false));
         if has_day && has_night {
-            header2.push_str(r#"<th class="day-start">matin</th><th>a-m</th><th>soir</th><th>nuit</th>"#);
+            header2.push_str(
+                r#"<th class="day-start">matin</th><th>a-m</th><th>soir</th><th>nuit</th>"#,
+            );
         } else if has_night {
             header2.push_str(r#"<th class="day-start">soir</th><th>nuit</th>"#);
         } else {
@@ -4053,7 +4080,12 @@ pub fn calendar_editor(
 
             // Helper: class string for a cell, adding day-start on the first one
             let mut cell_class = |extra: &str| -> String {
-                let ds = if first { first = false; " day-start" } else { "" };
+                let ds = if first {
+                    first = false;
+                    " day-start"
+                } else {
+                    ""
+                };
                 if extra.is_empty() {
                     format!("day-cell{}", ds)
                 } else {
@@ -4067,7 +4099,8 @@ pub fn calendar_editor(
                         let cls = cell_class("");
                         body.push_str(&format!(
                             r#"<td class="{cls}" data-day="{day}"></td>"#,
-                            cls = cls, day = day_str,
+                            cls = cls,
+                            day = day_str,
                         ));
                     }
                 }
@@ -4080,30 +4113,46 @@ pub fn calendar_editor(
                         let cls = cell_class("");
                         body.push_str(&format!(
                             r#"<td class="{cls}" data-day="{day}"></td>"#,
-                            cls = cls, day = day_str,
+                            cls = cls,
+                            day = day_str,
                         ));
                     }
 
                     // First half cell
-                    let css1 = if *h1 >= qty { "cell-ok" } else { "cell-deficit" };
+                    let css1 = if *h1 >= qty {
+                        "cell-ok"
+                    } else {
+                        "cell-deficit"
+                    };
                     let cls1 = cell_class(css1);
                     body.push_str(&format!(
                         r#"<td class="{cls}" data-day="{day}">{h}/{q}</td>"#,
-                        cls = cls1, day = day_str, h = h1, q = qty,
+                        cls = cls1,
+                        day = day_str,
+                        h = h1,
+                        q = qty,
                     ));
                     // Second half cell
-                    let css2 = if *h2 >= qty { "cell-ok" } else { "cell-deficit" };
+                    let css2 = if *h2 >= qty {
+                        "cell-ok"
+                    } else {
+                        "cell-deficit"
+                    };
                     let cls2 = cell_class(css2);
                     body.push_str(&format!(
                         r#"<td class="{cls}" data-day="{day}">{h}/{q}</td>"#,
-                        cls = cls2, day = day_str, h = h2, q = qty,
+                        cls = cls2,
+                        day = day_str,
+                        h = h2,
+                        q = qty,
                     ));
 
                     for _ in 0..pad_after {
                         let cls = cell_class("");
                         body.push_str(&format!(
                             r#"<td class="{cls}" data-day="{day}"></td>"#,
-                            cls = cls, day = day_str,
+                            cls = cls,
+                            day = day_str,
                         ));
                     }
                 }
@@ -4116,9 +4165,12 @@ pub fn calendar_editor(
     let mut calendar_links = String::new();
     for a in all_ateliers {
         calendar_links.push_str(&format!(
-            r#"<a class="tag is-medium is-link is-light" href="{p}/calendar/{slug}">{name}</a>"#,
+            r#"<a class="tag is-medium is-link is-light" href="{p}/calendar/{slug}">
+            <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
+            {name}</a>"#,
             p = prefix,
             slug = a.slug,
+            icon = a.icon,
             name = a.name,
         ));
     }
@@ -4140,8 +4192,8 @@ pub fn calendar_editor(
             ateliers_json.push(',');
         }
         ateliers_json.push_str(&format!(
-            r#"{{"id":"{}","name":"{}","slug":"{}","default_nightly":{}}}"#,
-            a.id, a.name, a.slug, a.default_nightly
+            r#"{{"id":"{}","name":"{}","slug":"{}","icon":"{}","default_nightly":{}}}"#,
+            a.id, a.name, a.slug, a.icon, a.default_nightly
         ));
     }
     ateliers_json.push(']');

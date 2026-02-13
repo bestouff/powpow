@@ -136,13 +136,13 @@ pub struct StaffWithSeason {
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum StaffMatchType {
-    ExactBoth,           // Both email and name match exactly (highest priority)
-    DoubleSubscription,  // Exact name match but already paid for this season (likely double subscription)
-    ExactName,           // Name matches exactly (different email, no payment yet)
-    ExactEmail,          // Beneficiary email matches exactly but name differs
-    PayerEmailMatch,     // Payer email matches (but beneficiary email differs) - lower priority
-    SimilarEmail,        // Fuzzy email match
-    SimilarName,         // Fuzzy name match (lowest priority)
+    ExactBoth,          // Both email and name match exactly (highest priority)
+    DoubleSubscription, // Exact name match but already paid for this season (likely double subscription)
+    ExactName,          // Name matches exactly (different email, no payment yet)
+    ExactEmail,         // Beneficiary email matches exactly but name differs
+    PayerEmailMatch,    // Payer email matches (but beneficiary email differs) - lower priority
+    SimilarEmail,       // Fuzzy email match
+    SimilarName,        // Fuzzy name match (lowest priority)
 }
 
 // Atelier model
@@ -153,6 +153,7 @@ pub struct Atelier {
     pub slug: String,
     pub needs_validation: bool,
     pub default_nightly: bool,
+    pub icon: String,
 }
 
 impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
@@ -163,6 +164,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
             slug: row.try_get("slug")?,
             needs_validation: row.try_get("needs_validation")?,
             default_nightly: row.try_get("default_nightly")?,
+            icon: row.try_get("icon")?,
         })
     }
 }
@@ -243,10 +245,10 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Cash {
 #[derive(Debug, Clone, Serialize)]
 pub struct PaymentHistoryEntry {
     pub season: i16,
-    pub source: String,              // "helloasso", "cash", "check"
-    pub date: Option<String>,        // formatted DD/MM/YYYY
-    pub amount: Option<i32>,         // in euros
-    pub item_type: String,           // "Don", "Adhésion"
+    pub source: String,       // "helloasso", "cash", "check"
+    pub date: Option<String>, // formatted DD/MM/YYYY
+    pub amount: Option<i32>,  // in euros
+    pub item_type: String,    // "Don", "Adhésion"
     pub first_name: String,
     pub last_name: String,
     pub email: Option<String>,

@@ -1,0 +1,1 @@
+ALTER TABLE ateliers ADD COLUMN IF NOT EXISTS default_nightly BOOL NOT NULL DEFAULT false;

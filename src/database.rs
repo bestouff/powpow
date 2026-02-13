@@ -1,4 +1,7 @@
-use crate::models::{Atelier, Cash, Membership, Need, PaymentHistoryEntry, Role, Staff, StaffMatchType, StaffWithSeason, User};
+use crate::models::{
+    Atelier, Cash, Membership, Need, PaymentHistoryEntry, Role, Staff, StaffMatchType,
+    StaffWithSeason, User,
+};
 use anyhow::Result;
 use futures_util::StreamExt;
 use sqlx::PgPool;
@@ -388,7 +391,10 @@ pub async fn find_staff_candidates(
         .await?;
 
         for staff in exact_both_matches {
-            if candidates.iter().any(|c: &StaffWithSeason| c.staff.id == staff.id) {
+            if candidates
+                .iter()
+                .any(|c: &StaffWithSeason| c.staff.id == staff.id)
+            {
                 continue;
             }
             let latest_season = get_staff_latest_season(pool, staff.id).await?;
@@ -691,12 +697,11 @@ pub async fn create_staff_with_payment(
     let mut tx = pool.begin().await?;
 
     // Check if already imported (within transaction for consistency)
-    let already_imported: bool = sqlx::query_scalar(
-        r"SELECT EXISTS(SELECT 1 FROM payments WHERE helloasso_item_id = $1)"
-    )
-    .bind(helloasso_item_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let already_imported: bool =
+        sqlx::query_scalar(r"SELECT EXISTS(SELECT 1 FROM payments WHERE helloasso_item_id = $1)")
+            .bind(helloasso_item_id)
+            .fetch_one(&mut *tx)
+            .await?;
 
     if already_imported {
         return Err(anyhow::anyhow!("ALREADY_IMPORTED"));
@@ -752,12 +757,11 @@ pub async fn update_staff_with_payment(
     let mut tx = pool.begin().await?;
 
     // Check if already imported (within transaction for consistency)
-    let already_imported: bool = sqlx::query_scalar(
-        r"SELECT EXISTS(SELECT 1 FROM payments WHERE helloasso_item_id = $1)"
-    )
-    .bind(helloasso_item_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let already_imported: bool =
+        sqlx::query_scalar(r"SELECT EXISTS(SELECT 1 FROM payments WHERE helloasso_item_id = $1)")
+            .bind(helloasso_item_id)
+            .fetch_one(&mut *tx)
+            .await?;
 
     if already_imported {
         return Err(anyhow::anyhow!("ALREADY_IMPORTED"));
@@ -820,7 +824,7 @@ pub async fn get_staff_by_id(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Opti
 /// Check if a staff member is chief of any atelier
 pub async fn is_chief(pool: &PgPool, staff_id: uuid::Uuid) -> Result<bool> {
     let row = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM roles WHERE staff = $1 AND chief = true)"
+        "SELECT EXISTS(SELECT 1 FROM roles WHERE staff = $1 AND chief = true)",
     )
     .bind(staff_id)
     .fetch_one(pool)
@@ -829,9 +833,13 @@ pub async fn is_chief(pool: &PgPool, staff_id: uuid::Uuid) -> Result<bool> {
 }
 
 /// Check if a staff member has paid for a given season
-pub async fn has_staff_paid_season(pool: &PgPool, staff_id: uuid::Uuid, season: i16) -> Result<bool> {
+pub async fn has_staff_paid_season(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    season: i16,
+) -> Result<bool> {
     let row = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM payments WHERE staff = $1 AND season = $2)"
+        "SELECT EXISTS(SELECT 1 FROM payments WHERE staff = $1 AND season = $2)",
     )
     .bind(staff_id)
     .bind(season)
@@ -843,7 +851,7 @@ pub async fn has_staff_paid_season(pool: &PgPool, staff_id: uuid::Uuid, season: 
 /// Get email addresses of all admin staff members
 pub async fn get_admin_emails(pool: &PgPool) -> Result<Vec<String>> {
     let emails = sqlx::query_scalar::<_, String>(
-        "SELECT email FROM staff WHERE is_admin = true AND email != ''"
+        "SELECT email FROM staff WHERE is_admin = true AND email != ''",
     )
     .fetch_all(pool)
     .await?;
@@ -940,7 +948,9 @@ pub async fn get_all_memberships_filtered(
     let mut result = Vec::new();
     for row in rows {
         let user = User {
-            email: row.try_get::<Option<String>, _>("user_email")?.unwrap_or_default(),
+            email: row
+                .try_get::<Option<String>, _>("user_email")?
+                .unwrap_or_default(),
             first_name: row.try_get("user_first_name")?,
             last_name: row.try_get("user_last_name")?,
             phone: row.try_get("user_phone")?,
@@ -949,8 +959,12 @@ pub async fn get_all_memberships_filtered(
             zip_code: row.try_get("user_zip_code")?,
             country: row.try_get("user_country")?,
             birth_date: row.try_get("user_birth_date")?,
-            created_at: row.try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("user_created_at")?.unwrap_or_else(chrono::Utc::now),
-            updated_at: row.try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("user_updated_at")?.unwrap_or_else(chrono::Utc::now),
+            created_at: row
+                .try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("user_created_at")?
+                .unwrap_or_else(chrono::Utc::now),
+            updated_at: row
+                .try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("user_updated_at")?
+                .unwrap_or_else(chrono::Utc::now),
             last_sync_at: row.try_get("user_last_sync_at")?,
         };
 
@@ -1018,23 +1032,19 @@ pub async fn get_all_staff_with_season(pool: &PgPool) -> Result<Vec<(Staff, Opti
 
 /// Get all ateliers
 pub async fn get_all_ateliers(pool: &PgPool) -> Result<Vec<Atelier>> {
-    let ateliers = sqlx::query_as::<_, Atelier>(
-        r"SELECT * FROM ateliers ORDER BY name",
-    )
-    .fetch_all(pool)
-    .await?;
+    let ateliers = sqlx::query_as::<_, Atelier>(r"SELECT * FROM ateliers ORDER BY name")
+        .fetch_all(pool)
+        .await?;
 
     Ok(ateliers)
 }
 
 /// Get roles for a staff member
 pub async fn get_staff_roles(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<Role>> {
-    let roles = sqlx::query_as::<_, Role>(
-        r"SELECT * FROM roles WHERE staff = $1",
-    )
-    .bind(staff_id)
-    .fetch_all(pool)
-    .await?;
+    let roles = sqlx::query_as::<_, Role>(r"SELECT * FROM roles WHERE staff = $1")
+        .bind(staff_id)
+        .fetch_all(pool)
+        .await?;
 
     Ok(roles)
 }
@@ -1068,13 +1078,11 @@ pub async fn remove_role(
     staff_id: uuid::Uuid,
     atelier_id: uuid::Uuid,
 ) -> Result<()> {
-    sqlx::query(
-        r"DELETE FROM roles WHERE staff = $1 AND atelier = $2",
-    )
-    .bind(staff_id)
-    .bind(atelier_id)
-    .execute(pool)
-    .await?;
+    sqlx::query(r"DELETE FROM roles WHERE staff = $1 AND atelier = $2")
+        .bind(staff_id)
+        .bind(atelier_id)
+        .execute(pool)
+        .await?;
 
     Ok(())
 }
@@ -1089,14 +1097,12 @@ pub async fn update_role(
     chief: Option<bool>,
 ) -> Result<()> {
     if let Some(v) = validated {
-        sqlx::query(
-            r"UPDATE roles SET validated = $3 WHERE staff = $1 AND atelier = $2",
-        )
-        .bind(staff_id)
-        .bind(atelier_id)
-        .bind(v)
-        .execute(pool)
-        .await?;
+        sqlx::query(r"UPDATE roles SET validated = $3 WHERE staff = $1 AND atelier = $2")
+            .bind(staff_id)
+            .bind(atelier_id)
+            .bind(v)
+            .execute(pool)
+            .await?;
     }
 
     if let Some(c) = chief {
@@ -1111,14 +1117,12 @@ pub async fn update_role(
             .execute(pool)
             .await?;
         } else {
-            sqlx::query(
-                r"UPDATE roles SET chief = $3 WHERE staff = $1 AND atelier = $2",
-            )
-            .bind(staff_id)
-            .bind(atelier_id)
-            .bind(c)
-            .execute(pool)
-            .await?;
+            sqlx::query(r"UPDATE roles SET chief = $3 WHERE staff = $1 AND atelier = $2")
+                .bind(staff_id)
+                .bind(atelier_id)
+                .bind(c)
+                .execute(pool)
+                .await?;
         }
     }
 
@@ -1127,56 +1131,60 @@ pub async fn update_role(
 
 /// Get an atelier by ID
 pub async fn get_atelier_by_id(pool: &PgPool, atelier_id: uuid::Uuid) -> Result<Option<Atelier>> {
-    let atelier = sqlx::query_as::<_, Atelier>(
-        r"SELECT * FROM ateliers WHERE id = $1",
-    )
-    .bind(atelier_id)
-    .fetch_optional(pool)
-    .await?;
+    let atelier = sqlx::query_as::<_, Atelier>(r"SELECT * FROM ateliers WHERE id = $1")
+        .bind(atelier_id)
+        .fetch_optional(pool)
+        .await?;
 
     Ok(atelier)
 }
 
 /// Get all roles
 pub async fn get_all_roles(pool: &PgPool) -> Result<Vec<Role>> {
-    let roles = sqlx::query_as::<_, Role>(
-        r"SELECT * FROM roles",
-    )
-    .fetch_all(pool)
-    .await?;
+    let roles = sqlx::query_as::<_, Role>(r"SELECT * FROM roles")
+        .fetch_all(pool)
+        .await?;
 
     Ok(roles)
 }
 
 /// Update a staff member's comment
-pub async fn update_staff_comment(pool: &PgPool, staff_id: uuid::Uuid, comment: &str) -> Result<()> {
-    sqlx::query(
-        r"UPDATE staff SET comment = $2, updated_at = NOW() WHERE id = $1",
-    )
-    .bind(staff_id)
-    .bind(comment)
-    .execute(pool)
-    .await?;
+pub async fn update_staff_comment(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    comment: &str,
+) -> Result<()> {
+    sqlx::query(r"UPDATE staff SET comment = $2, updated_at = NOW() WHERE id = $1")
+        .bind(staff_id)
+        .bind(comment)
+        .execute(pool)
+        .await?;
 
     Ok(())
 }
 
 /// Update a staff member's email and phone
-pub async fn update_staff_contact(pool: &PgPool, staff_id: uuid::Uuid, email: &str, phone: Option<&str>) -> Result<()> {
-    sqlx::query(
-        r"UPDATE staff SET email = $2, phone = $3, updated_at = NOW() WHERE id = $1",
-    )
-    .bind(staff_id)
-    .bind(email)
-    .bind(phone)
-    .execute(pool)
-    .await?;
+pub async fn update_staff_contact(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    email: &str,
+    phone: Option<&str>,
+) -> Result<()> {
+    sqlx::query(r"UPDATE staff SET email = $2, phone = $3, updated_at = NOW() WHERE id = $1")
+        .bind(staff_id)
+        .bind(email)
+        .bind(phone)
+        .execute(pool)
+        .await?;
 
     Ok(())
 }
 
 /// Get payment history for a staff member (both HelloAsso and cash payments)
-pub async fn get_staff_payment_history(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<PaymentHistoryEntry>> {
+pub async fn get_staff_payment_history(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+) -> Result<Vec<PaymentHistoryEntry>> {
     let rows = sqlx::query(
         r"SELECT
             p.season,
@@ -1224,7 +1232,11 @@ pub async fn get_staff_payment_history(pool: &PgPool, staff_id: uuid::Uuid) -> R
             }
         } else {
             let is_membership: Option<bool> = row.get("cash_is_membership");
-            if is_membership.unwrap_or(true) { "Adhésion".to_string() } else { "Don".to_string() }
+            if is_membership.unwrap_or(true) {
+                "Adhésion".to_string()
+            } else {
+                "Don".to_string()
+            }
         };
 
         let first_name = if is_helloasso {
@@ -1320,11 +1332,9 @@ pub async fn link_cash_to_staff(
 
 /// Get all cash payments
 pub async fn get_all_cash_payments(pool: &PgPool) -> Result<Vec<Cash>> {
-    let payments = sqlx::query_as::<_, Cash>(
-        r"SELECT * FROM cash ORDER BY date DESC",
-    )
-    .fetch_all(pool)
-    .await?;
+    let payments = sqlx::query_as::<_, Cash>(r"SELECT * FROM cash ORDER BY date DESC")
+        .fetch_all(pool)
+        .await?;
 
     Ok(payments)
 }
@@ -1360,12 +1370,11 @@ pub async fn create_staff_with_cash_payment(
     let mut tx = pool.begin().await?;
 
     // Check if already imported
-    let already_imported: bool = sqlx::query_scalar(
-        r"SELECT EXISTS(SELECT 1 FROM payments WHERE cash_id = $1)"
-    )
-    .bind(cash_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let already_imported: bool =
+        sqlx::query_scalar(r"SELECT EXISTS(SELECT 1 FROM payments WHERE cash_id = $1)")
+            .bind(cash_id)
+            .fetch_one(&mut *tx)
+            .await?;
 
     if already_imported {
         return Err(anyhow::anyhow!("ALREADY_IMPORTED"));
@@ -1417,12 +1426,11 @@ pub async fn update_staff_with_cash_payment(
     let mut tx = pool.begin().await?;
 
     // Check if already imported
-    let already_imported: bool = sqlx::query_scalar(
-        r"SELECT EXISTS(SELECT 1 FROM payments WHERE cash_id = $1)"
-    )
-    .bind(cash_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let already_imported: bool =
+        sqlx::query_scalar(r"SELECT EXISTS(SELECT 1 FROM payments WHERE cash_id = $1)")
+            .bind(cash_id)
+            .fetch_one(&mut *tx)
+            .await?;
 
     if already_imported {
         return Err(anyhow::anyhow!("ALREADY_IMPORTED"));
@@ -1466,12 +1474,10 @@ pub async fn update_staff_with_cash_payment(
 
 /// Get a cash payment by ID
 pub async fn get_cash_by_id(pool: &PgPool, cash_id: uuid::Uuid) -> Result<Option<Cash>> {
-    let cash = sqlx::query_as::<_, Cash>(
-        r"SELECT * FROM cash WHERE id = $1",
-    )
-    .bind(cash_id)
-    .fetch_optional(pool)
-    .await?;
+    let cash = sqlx::query_as::<_, Cash>(r"SELECT * FROM cash WHERE id = $1")
+        .bind(cash_id)
+        .fetch_optional(pool)
+        .await?;
 
     Ok(cash)
 }
@@ -1524,24 +1530,20 @@ pub async fn count_unimported_cash(pool: &PgPool) -> Result<i64> {
 
 /// Get an atelier by slug
 pub async fn get_atelier_by_slug(pool: &PgPool, slug: &str) -> Result<Option<Atelier>> {
-    let atelier = sqlx::query_as::<_, Atelier>(
-        r"SELECT * FROM ateliers WHERE slug = $1",
-    )
-    .bind(slug)
-    .fetch_optional(pool)
-    .await?;
+    let atelier = sqlx::query_as::<_, Atelier>(r"SELECT * FROM ateliers WHERE slug = $1")
+        .bind(slug)
+        .fetch_optional(pool)
+        .await?;
 
     Ok(atelier)
 }
 
 /// Get all needs for an atelier, ordered by day
 pub async fn get_needs_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Result<Vec<Need>> {
-    let needs = sqlx::query_as::<_, Need>(
-        r"SELECT * FROM needs WHERE atelier = $1 ORDER BY day",
-    )
-    .bind(atelier_id)
-    .fetch_all(pool)
-    .await?;
+    let needs = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE atelier = $1 ORDER BY day")
+        .bind(atelier_id)
+        .fetch_all(pool)
+        .await?;
 
     Ok(needs)
 }
@@ -1628,11 +1630,9 @@ pub async fn get_upcoming_needs_deficit(
 
 /// Get all distinct days that have at least one need (for calendar highlighting)
 pub async fn get_all_need_days(pool: &PgPool) -> Result<Vec<chrono::NaiveDate>> {
-    let rows = sqlx::query(
-        r"SELECT DISTINCT day FROM needs ORDER BY day",
-    )
-    .fetch_all(pool)
-    .await?;
+    let rows = sqlx::query(r"SELECT DISTINCT day FROM needs ORDER BY day")
+        .fetch_all(pool)
+        .await?;
 
     let mut result = Vec::new();
     for row in rows {
@@ -1643,12 +1643,10 @@ pub async fn get_all_need_days(pool: &PgPool) -> Result<Vec<chrono::NaiveDate>> 
 
 /// Get all needs for a given day (across all ateliers)
 pub async fn get_needs_for_day(pool: &PgPool, day: chrono::NaiveDate) -> Result<Vec<Need>> {
-    let needs = sqlx::query_as::<_, Need>(
-        r"SELECT * FROM needs WHERE day = $1 ORDER BY atelier",
-    )
-    .bind(day)
-    .fetch_all(pool)
-    .await?;
+    let needs = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE day = $1 ORDER BY atelier")
+        .bind(day)
+        .fetch_all(pool)
+        .await?;
 
     Ok(needs)
 }
@@ -1724,13 +1722,11 @@ pub async fn delete_need(
     atelier_id: uuid::Uuid,
     day: chrono::NaiveDate,
 ) -> Result<bool> {
-    let result = sqlx::query(
-        r"DELETE FROM needs WHERE atelier = $1 AND day = $2",
-    )
-    .bind(atelier_id)
-    .bind(day)
-    .execute(pool)
-    .await?;
+    let result = sqlx::query(r"DELETE FROM needs WHERE atelier = $1 AND day = $2")
+        .bind(atelier_id)
+        .bind(day)
+        .execute(pool)
+        .await?;
 
     Ok(result.rows_affected() > 0)
 }
@@ -1839,13 +1835,11 @@ pub async fn search_staff_by_name(pool: &PgPool, query: &str) -> Result<Vec<Staf
 /// Generate a UUID v4 token for a staff member and store it in the token column
 pub async fn set_staff_token(pool: &PgPool, staff_id: uuid::Uuid) -> Result<uuid::Uuid> {
     let token = uuid::Uuid::new_v4();
-    sqlx::query(
-        r"UPDATE staff SET token = $2 WHERE id = $1",
-    )
-    .bind(staff_id)
-    .bind(token)
-    .execute(pool)
-    .await?;
+    sqlx::query(r"UPDATE staff SET token = $2 WHERE id = $1")
+        .bind(staff_id)
+        .bind(token)
+        .execute(pool)
+        .await?;
 
     Ok(token)
 }
@@ -1911,7 +1905,10 @@ pub async fn get_all_staff_with_ateliers(pool: &PgPool) -> Result<Vec<(Staff, Ve
 
 /// List names of unimported memberships + cash payments (for daily summary email).
 /// Returns (first_name, last_name, source) where source is "HelloAsso" or "Espèces/Chèque".
-pub async fn list_unimported_names(pool: &PgPool, current_season: i16) -> Result<Vec<(String, String, String)>> {
+pub async fn list_unimported_names(
+    pool: &PgPool,
+    current_season: i16,
+) -> Result<Vec<(String, String, String)>> {
     let rows = sqlx::query(
         r"
         SELECT beneficiary_first_name AS first_name, beneficiary_last_name AS last_name, 'HelloAsso' AS source
@@ -2056,7 +2053,7 @@ pub async fn get_pending_validations(
     let rows = if let Some(atelier_ids) = chief_of_ateliers {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -2070,7 +2067,7 @@ pub async fn get_pending_validations(
     } else {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -2103,6 +2100,7 @@ pub async fn get_pending_validations(
             slug: row.try_get("a_slug")?,
             needs_validation: row.try_get("a_needs_validation")?,
             default_nightly: row.try_get("a_default_nightly")?,
+            icon: row.try_get("a_icon")?,
         };
         result.push((staff, atelier));
     }
@@ -2131,12 +2129,30 @@ pub async fn has_upcoming_presence(pool: &PgPool, staff_id: uuid::Uuid) -> Resul
 
 /// Tables in dependency order (parents first). Used for COPY data output.
 const TABLES_PARENT_FIRST: &[&str] = &[
-    "users", "staff", "cash", "ateliers", "memberships", "payments", "roles", "needs", "presence", "audit",
+    "users",
+    "staff",
+    "cash",
+    "ateliers",
+    "memberships",
+    "payments",
+    "roles",
+    "needs",
+    "presence",
+    "audit",
 ];
 
 /// Tables in reverse dependency order (children first). Used for TRUNCATE.
 const TABLES_CHILD_FIRST: &[&str] = &[
-    "presence", "audit", "roles", "needs", "payments", "memberships", "cash", "ateliers", "staff", "users",
+    "presence",
+    "audit",
+    "roles",
+    "needs",
+    "payments",
+    "memberships",
+    "cash",
+    "ateliers",
+    "staff",
+    "users",
 ];
 
 /// Produce a full database backup as a SQL string using COPY protocol.
@@ -2147,7 +2163,10 @@ pub async fn backup_all_tables(pool: &PgPool) -> Result<String> {
 
     // Header
     sql.push_str("-- AGHIL database backup\n");
-    sql.push_str(&format!("-- Generated at {}\n\n", chrono::Utc::now().to_rfc3339()));
+    sql.push_str(&format!(
+        "-- Generated at {}\n\n",
+        chrono::Utc::now().to_rfc3339()
+    ));
 
     // TRUNCATE statements (children first to respect FK constraints)
     for table in TABLES_CHILD_FIRST {
@@ -2219,7 +2238,10 @@ pub async fn restore_from_sql(pool: &PgPool, sql: &str) -> Result<()> {
     }
 }
 
-async fn restore_inner(conn: &mut sqlx::pool::PoolConnection<sqlx::Postgres>, sql: &str) -> Result<()> {
+async fn restore_inner(
+    conn: &mut sqlx::pool::PoolConnection<sqlx::Postgres>,
+    sql: &str,
+) -> Result<()> {
     let lines: Vec<&str> = sql.lines().collect();
     let mut i = 0;
 
