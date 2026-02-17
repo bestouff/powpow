@@ -1,10 +1,37 @@
 use crate::models::{
-    Atelier, Cash, Membership, MembershipWithStatus, Need, Role, Staff, StaffMatchType,
+    Atelier, Cash, Membership, MembershipWithStatus, Need, Photo, Role, Staff, StaffMatchType,
     StaffWithSeason, User,
 };
 use chrono::Datelike;
 use phonenumber::Mode;
 use std::collections::HashMap;
+use std::sync::RwLock;
+
+/// Global photo-of-the-day URL + photographer name, updated when photos change.
+static PHOTO_BG_URL: RwLock<Option<String>> = RwLock::new(None);
+static PHOTO_BG_AUTHOR: RwLock<Option<String>> = RwLock::new(None);
+
+pub fn set_photo_bg(url: String, photographer: String) {
+    if let Ok(mut w) = PHOTO_BG_URL.write() {
+        *w = Some(url);
+    }
+    if let Ok(mut w) = PHOTO_BG_AUTHOR.write() {
+        *w = Some(photographer);
+    }
+}
+
+/// Simple HTML escaping for minimal security
+pub fn escape_html_public(s: &str) -> String {
+    escape_html(s)
+}
+
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
 
 pub struct TodoItem {
     pub icon: &'static str,
@@ -54,6 +81,7 @@ enum NavKind {
     Full,      // Adhésions, Cash, Staff, API, Login
     Standard,  // Adhésions, Cash, Staff, Login
     LoginOnly, // Only Login button
+    StaffOnly, // Only Staff-related items
 }
 
 fn navbar(prefix: &str, kind: &NavKind, active: &str) -> String {
@@ -157,6 +185,35 @@ fn page(
         "<script>fetch('{p}/api/me').then(r=>{{if(r.ok)return r.json();throw 0;}}).then(d=>{{const b=document.getElementById('login-btn');if(b){{b.innerHTML='<i class=\"fas fa-user\"></i>&nbsp;'+d.first_name+' '+d.last_name;b.href='{p}/person/'+d.id;const lo=document.createElement('a');lo.className='navbar-item';lo.href='{p}/logout';lo.innerHTML='<i class=\"fas fa-sign-out-alt\"></i>';b.parentNode.insertBefore(lo,b.nextSibling);}}if(d.is_admin){{document.querySelectorAll('.navbar-admin').forEach(el=>el.style.display='');}}}}).catch(()=>{{}});</script>",
         p = p,
     );
+
+    let photo_credit = PHOTO_BG_AUTHOR
+        .read()
+        .ok()
+        .and_then(|r| r.clone())
+        .map(|name| {
+            format!(
+                r#"<p class="is-size-7 has-text-grey">photo &copy; {}</p>"#,
+                escape_html(&name)
+            )
+        })
+        .unwrap_or_default();
+
+    let photo_bg_css = PHOTO_BG_URL.read().ok().and_then(|r| r.clone()).map(|url| format!(
+        r#"<style>
+        body {{
+            background-image: linear-gradient(rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.15)), url('{}{}');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+        }}
+        .section, .box, .footer {{
+            background-color: rgba(255, 255, 255, 0.65);
+        }}
+        </style>"#,
+        p, url
+    )).unwrap_or_default();
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="fr">
@@ -167,6 +224,7 @@ fn page(
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/fontawesome.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/solid.min.css">
+    {photo_bg_css}
     {extra_head}
 </head>
 <body>
@@ -178,11 +236,12 @@ fn page(
 {badge_css}
 {badge_script}
 {me_script}
-    <footer class="footer py-4"><div class="content has-text-centered"><p class="is-size-7 has-text-grey">PowPow v{version} pour AG'HIL, &copy;2026 Xavier Bestel &lt;xav@bes.tel&gt;</p></div></footer>
+    <footer class="footer py-4"><div class="content has-text-centered"><p class="is-size-7 has-text-grey">PowPow v{version} pour AG'HIL, &copy;2026 Xavier Bestel &lt;xav@bes.tel&gt; — <a href="{p}/privacy">Confidentialité</a> · <a href="{p}/tos">CGU</a></p>{photo_credit}</div></footer>
 </body>
 </html>"#,
         title = title,
         extra_head = extra_head,
+        photo_bg_css = photo_bg_css,
         nav = nav,
         content = content,
         extra_scripts = extra_scripts,
@@ -202,8 +261,8 @@ pub fn index(
     upcoming: &[(chrono::NaiveDate, String, i16, i64)],
 ) -> String {
     let extra_head = r#"<style>
-        .week-day { padding: 0.5rem 0; border-bottom: 1px solid var(--bulma-border-weak); display: flex; align-items: center; gap: 0.4rem; }
-    </style>"#;
+            .week-day { padding: 0.5rem 0; border-bottom: 1px solid var(--bulma-border-weak); display: flex; align-items: center; gap: 0.4rem; }
+        </style>"#;
 
     let mut sections = String::new();
 
@@ -412,7 +471,7 @@ pub fn index(
         prefix,
         &NavKind::LoginOnly,
         "",
-        extra_head,
+        &extra_head,
         &sections,
         "",
     )
@@ -4950,5 +5009,492 @@ async function doValidate(staffId, atelierId, accept) {{
         "",
         &content,
         &script,
+    )
+}
+
+pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> String {
+    // Generate admin upload form (only shown to admins)
+    let admin_upload_form = if is_admin {
+        format!(
+            r##"<div class="box">
+                <form id="photo-upload-form" action="{prefix}/photos/upload" method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="photographer_id" id="photographer_id">
+                    <div class="field">
+                        <label class="label">Photographe</label>
+                        <div class="control has-icons-left">
+                            <input class="input" type="text" id="photographer-search" placeholder="Rechercher un bénévole (4 car. min)" autocomplete="off">
+                            <span class="icon is-left"><i class="fas fa-user"></i></span>
+                        </div>
+                        <nav class="panel" id="photographer-results" style="display:none;max-height:200px;overflow-y:auto;margin-top:0"></nav>
+                        <p class="help" id="photographer-selected" style="display:none">
+                            <span class="tag is-success is-medium" id="photographer-selected-tag"></span>
+                            <a id="photographer-clear" class="ml-2" style="cursor:pointer">Changer</a>
+                        </p>
+                    </div>
+                    <div id="create-staff-box" style="display:none" class="notification is-light mt-2 mb-4">
+                        <p class="mb-2"><strong>Créer un nouveau bénévole</strong></p>
+                        <div class="field is-horizontal">
+                            <div class="field-body">
+                                <div class="field">
+                                    <div class="control">
+                                        <input class="input" type="text" id="new-staff-first" placeholder="Prénom">
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <div class="control">
+                                        <input class="input" type="text" id="new-staff-last" placeholder="Nom">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field is-horizontal mt-2">
+                            <div class="field-body">
+                                <div class="field">
+                                    <div class="control has-icons-left">
+                                        <input class="input" type="email" id="new-staff-email" placeholder="Email">
+                                        <span class="icon is-left"><i class="fas fa-envelope"></i></span>
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <div class="control has-icons-left">
+                                        <input class="input" type="tel" id="new-staff-phone" placeholder="Téléphone">
+                                        <span class="icon is-left"><i class="fas fa-phone"></i></span>
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <div class="control">
+                                        <button type="button" class="button is-info" id="create-staff-btn">Créer</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="help is-danger" id="create-staff-error" style="display:none"></p>
+                    </div>
+                    <div class="field">
+                        <label class="label">Photo</label>
+                        <div class="control">
+                            <div class="file has-name is-primary">
+                                <label class="file-label">
+                                    <input class="file-input" type="file" name="photo" accept="image/*" required>
+                                    <span class="file-cta">
+                                        <span class="file-icon">
+                                            <i class="fas fa-upload"></i>
+                                        </span>
+                                        <span class="file-label">
+                                            Choisir un fichier...
+                                        </span>
+                                    </span>
+                                    <span class="file-name">Aucun fichier sélectionné</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <div class="control">
+                            <button type="submit" class="button is-primary" id="upload-btn" disabled>
+                                <span class="icon"><i class="fas fa-cloud-upload-alt"></i></span>
+                                <span>Télécharger</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>"##,
+            prefix = prefix
+        )
+    } else {
+        String::new()
+    };
+
+    let mut photo_thumbnails = String::new();
+
+    for (photo, photographer_name) in photos {
+        let photo_url = format!("{}/photos/{}", prefix, photo.id);
+        let delete_url = format!("{}/photos/{}/delete", prefix, photo.id);
+
+        // Determine icon based on mime type
+        let icon = if photo.mime_type.starts_with("image/") {
+            "fa-image"
+        } else if photo.mime_type.starts_with("video/") {
+            "fa-video"
+        } else {
+            "fa-file"
+        };
+
+        let delete_footer = if is_admin {
+            format!(
+                r##"<footer class="card-footer">
+                    <form action="{url}" method="post" style="width:100%" onsubmit="return confirm('Supprimer cette photo ?')">
+                        <button type="submit" class="card-footer-item has-text-danger" style="border:none;background:none;cursor:pointer;width:100%">
+                            <span class="icon"><i class="fas fa-trash"></i></span>
+                            <span>Supprimer</span>
+                        </button>
+                    </form>
+                </footer>"##,
+                url = delete_url
+            )
+        } else {
+            String::new()
+        };
+
+        let image_html = if photo.mime_type.starts_with("image/") {
+            format!(
+                r#"<img src="{photo_url}" alt="Photo par {photographer}" style="object-fit:cover;width:100%;height:100%">"#,
+                photo_url = photo_url,
+                photographer = escape_html(photographer_name),
+            )
+        } else {
+            format!(
+                r#"<span class="icon is-large has-text-link"><i class="fas {icon} fa-4x"></i></span>"#,
+                icon = icon,
+            )
+        };
+
+        photo_thumbnails.push_str(&format!(
+            r##"
+            <div class="column is-one-quarter">
+                <div class="card">
+                    <div class="card-image">
+                        <figure class="image is-4by3">
+                            <a href="{photo_url}" target="_blank">
+                                {image_html}
+                            </a>
+                        </figure>
+                    </div>
+                    <div class="card-content">
+                        <div class="media">
+                            <div class="media-content">
+                                <p class="title is-6">{photographer}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {delete_footer}
+                </div>
+            </div>
+            "##,
+            photo_url = photo_url,
+            image_html = image_html,
+            photographer = escape_html(photographer_name),
+        ));
+    }
+
+    if photo_thumbnails.is_empty() {
+        photo_thumbnails = r##"<div class="column"><div class="notification is-info">Aucune photo disponible</div></div>"##.to_string();
+    }
+
+    let content = format!(
+        r##"
+    <section class="section">
+        <div class="container is-fluid">
+            <nav class="breadcrumb" aria-label="breadcrumbs">
+                <ul>
+                    <li><a href="{prefix}/">Accueil</a></li>
+                    <li class="is-active"><a href="#" aria-current="page">Photos</a></li>
+                </ul>
+            </nav>
+
+            <h1 class="title is-4">
+                <span class="icon mr-2"><i class="fas fa-images"></i></span>
+                Gestion des photos
+            </h1>
+
+            {admin_upload_form}
+
+            <h2 class="title is-5 mt-6">Photos disponibles</h2>
+            <div class="columns is-multiline">
+                {photo_thumbnails}
+            </div>
+        </div>
+    </section>
+
+    "##,
+        prefix = prefix,
+        admin_upload_form = admin_upload_form,
+        photo_thumbnails = photo_thumbnails,
+    );
+
+    let script = format!(
+        r##"<script>
+    document.querySelectorAll('input[type="file"]').forEach(input => {{
+        input.addEventListener('change', function(e) {{
+            const fileName = e.target.files[0] ? e.target.files[0].name : 'Aucun fichier sélectionné';
+            const fileNameSpan = e.target.closest('.file').querySelector('.file-name');
+            if (fileNameSpan) fileNameSpan.textContent = fileName;
+        }});
+    }});
+
+    (function() {{
+        const prefix = '{prefix}';
+        const searchInput = document.getElementById('photographer-search');
+        if (!searchInput) return;
+
+        const resultsPanel = document.getElementById('photographer-results');
+        const hiddenInput = document.getElementById('photographer_id');
+        const selectedBox = document.getElementById('photographer-selected');
+        const selectedTag = document.getElementById('photographer-selected-tag');
+        const clearBtn = document.getElementById('photographer-clear');
+        const createBox = document.getElementById('create-staff-box');
+        const createBtn = document.getElementById('create-staff-btn');
+        const createError = document.getElementById('create-staff-error');
+        const uploadBtn = document.getElementById('upload-btn');
+        let debounceTimer = null;
+
+        function selectStaff(id, name) {{
+            hiddenInput.value = id;
+            selectedTag.textContent = name;
+            selectedBox.style.display = 'block';
+            searchInput.style.display = 'none';
+            resultsPanel.style.display = 'none';
+            createBox.style.display = 'none';
+            uploadBtn.disabled = false;
+        }}
+
+        if (clearBtn) clearBtn.addEventListener('click', function() {{
+            hiddenInput.value = '';
+            selectedBox.style.display = 'none';
+            searchInput.style.display = '';
+            searchInput.value = '';
+            searchInput.focus();
+            uploadBtn.disabled = true;
+        }});
+
+        searchInput.addEventListener('input', function() {{
+            clearTimeout(debounceTimer);
+            resultsPanel.style.display = 'none';
+            resultsPanel.innerHTML = '';
+            createBox.style.display = 'none';
+            const q = searchInput.value.trim();
+            if (q.length < 4) return;
+
+            debounceTimer = setTimeout(function() {{
+                fetch(prefix + '/api/staff/search?q=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(data => {{
+                        resultsPanel.innerHTML = '';
+                        if (data.length === 0) {{
+                            resultsPanel.innerHTML = '<p class="panel-block">Aucun résultat</p>';
+                        }} else {{
+                            data.forEach(function(s) {{
+                                const a = document.createElement('a');
+                                a.className = 'panel-block';
+                                a.textContent = s.first_name + ' ' + s.last_name;
+                                a.href = '#';
+                                a.addEventListener('click', function(e) {{
+                                    e.preventDefault();
+                                    selectStaff(s.id, s.first_name + ' ' + s.last_name);
+                                }});
+                                resultsPanel.appendChild(a);
+                            }});
+                        }}
+                        // Always show "create new" button at end
+                        const createLink = document.createElement('a');
+                        createLink.className = 'panel-block has-text-info';
+                        createLink.href = '#';
+                        createLink.innerHTML = '<span class="icon"><i class="fas fa-plus"></i></span> Créer un nouveau bénévole';
+                        createLink.addEventListener('click', function(e) {{
+                            e.preventDefault();
+                            createBox.style.display = 'block';
+                            createError.style.display = 'none';
+                        }});
+                        resultsPanel.appendChild(createLink);
+                        resultsPanel.style.display = 'block';
+                    }})
+                    .catch(function() {{
+                        resultsPanel.innerHTML = '<p class="panel-block">Erreur de recherche</p>';
+                        resultsPanel.style.display = 'block';
+                    }});
+            }}, 300);
+        }});
+
+        if (createBtn) createBtn.addEventListener('click', function() {{
+            const first = document.getElementById('new-staff-first').value.trim();
+            const last = document.getElementById('new-staff-last').value.trim();
+            const email = document.getElementById('new-staff-email').value.trim();
+            const phone = document.getElementById('new-staff-phone').value.trim();
+            if (!first || !last) {{
+                createError.textContent = 'Prénom et nom requis';
+                createError.style.display = 'block';
+                return;
+            }}
+            createBtn.disabled = true;
+            createError.style.display = 'none';
+            fetch(prefix + '/api/staff/create-minimal', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{first_name: first, last_name: last, email: email || undefined, phone: phone || undefined}})
+            }})
+            .then(r => {{
+                if (r.status === 409) return r.json().then(d => {{ throw new Error(d.error); }});
+                if (!r.ok) return r.json().then(d => {{ throw new Error(d.error || 'Erreur serveur'); }});
+                return r.json();
+            }})
+            .then(s => {{
+                selectStaff(s.id, s.first_name + ' ' + s.last_name);
+                createBtn.disabled = false;
+            }})
+            .catch(function(err) {{
+                createError.textContent = err.message;
+                createError.style.display = 'block';
+                createBtn.disabled = false;
+            }});
+        }});
+
+        // Handle form submit via fetch for proper error reporting
+        const form = document.getElementById('photo-upload-form');
+        if (form) form.addEventListener('submit', function(e) {{
+            e.preventDefault();
+            if (!hiddenInput.value) {{
+                alert('Veuillez sélectionner un photographe');
+                return;
+            }}
+            const fileInput = form.querySelector('input[type="file"]');
+            if (!fileInput.files.length) {{
+                alert('Veuillez sélectionner une photo');
+                return;
+            }}
+            uploadBtn.disabled = true;
+            uploadBtn.querySelector('span:last-child').textContent = 'Envoi en cours...';
+            const formData = new FormData(form);
+            fetch(form.action, {{
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            }}).then(function(r) {{
+                if (r.redirected) {{
+                    window.location.href = r.url;
+                    return;
+                }}
+                if (!r.ok) {{
+                    return r.text().then(function(t) {{ throw new Error('Erreur ' + r.status + ': ' + t.substring(0, 200)); }});
+                }}
+                window.location.href = prefix + '/photos';
+            }}).catch(function(err) {{
+                alert('Échec upload: ' + err.message);
+                uploadBtn.disabled = false;
+                uploadBtn.querySelector('span:last-child').textContent = 'Télécharger';
+            }});
+        }});
+    }})();
+    </script>"##,
+        prefix = prefix
+    );
+
+    page(
+        "Photos - AGHIL",
+        prefix,
+        &NavKind::StaffOnly,
+        "",
+        "",
+        &content,
+        &script,
+    )
+}
+
+fn simple_md_to_html(md: &str) -> String {
+    let mut html = String::new();
+    let mut in_list = false;
+
+    for line in md.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            continue;
+        }
+
+        // Headings
+        if let Some(rest) = trimmed.strip_prefix("## ") {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            html.push_str(&format!(
+                "<h2 class=\"title is-5 mt-5\">{}</h2>\n",
+                escape_html(rest)
+            ));
+        } else if let Some(rest) = trimmed.strip_prefix("# ") {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            html.push_str(&format!(
+                "<h1 class=\"title is-4\">{}</h1>\n",
+                escape_html(rest)
+            ));
+        } else if trimmed.starts_with("    ") || trimmed.starts_with("- ") {
+            // List items
+            let item = trimmed
+                .strip_prefix("    ")
+                .or_else(|| trimmed.strip_prefix("- "))
+                .unwrap_or(trimmed);
+            if !in_list {
+                html.push_str("<ul class=\"ml-5 mb-3\">\n");
+                in_list = true;
+            }
+            html.push_str(&format!("<li>{}</li>\n", escape_html(item)));
+        } else {
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            // Inline email links: Text <email> → clickable mailto
+            let text = if let (Some(start), Some(end)) = (trimmed.find('<'), trimmed.find('>')) {
+                let email_addr = &trimmed[start + 1..end];
+                if email_addr.contains('@') {
+                    let before = escape_html(&trimmed[..start]);
+                    let after = escape_html(&trimmed[end + 1..]);
+                    format!(
+                        "{}<a href=\"mailto:{}\">{}</a>{}",
+                        before,
+                        escape_html(email_addr),
+                        escape_html(email_addr),
+                        after
+                    )
+                } else {
+                    escape_html(trimmed)
+                }
+            } else {
+                escape_html(trimmed)
+            };
+            html.push_str(&format!("<p class=\"mb-3\">{}</p>\n", text));
+        }
+    }
+    if in_list {
+        html.push_str("</ul>\n");
+    }
+    html
+}
+
+pub fn static_page(prefix: &str, title: &str, markdown: &str) -> String {
+    let body = simple_md_to_html(markdown);
+    let content = format!(
+        r##"
+    <section class="section">
+        <div class="container" style="max-width:800px">
+            <nav class="breadcrumb" aria-label="breadcrumbs">
+                <ul>
+                    <li><a href="{p}/">Accueil</a></li>
+                    <li class="is-active"><a href="#" aria-current="page">{title}</a></li>
+                </ul>
+            </nav>
+            <div class="box content">
+                {body}
+            </div>
+        </div>
+    </section>"##,
+        p = prefix,
+        title = title,
+        body = body,
+    );
+
+    page(
+        &format!("{} - AGHIL", title),
+        prefix,
+        &NavKind::LoginOnly,
+        "",
+        "",
+        &content,
+        "",
     )
 }

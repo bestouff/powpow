@@ -52,6 +52,7 @@ pub struct AppState {
     pub mailchimp_client: MailchimpClient,
     pub config: AppConfig,
     pub cookie_key: Key,
+    pub gmail_client: Option<std::sync::Arc<gmail::GmailClient>>,
 }
 
 impl axum::extract::FromRef<AppState> for Key {
@@ -112,13 +113,41 @@ async fn main() -> anyhow::Result<()> {
         Key::generate()
     };
 
+    let gmail_client = if !app_config.gmail_access_token.is_empty()
+        && !app_config.gmail_refresh_token.is_empty()
+    {
+        let client = gmail::GmailClient::with_auth(gmail::GmailAuth::oauth2(
+            &app_config.gmail_access_token,
+            &app_config.gmail_refresh_token,
+            Some(Box::new(|data: httpclient::oauth2::RefreshData| {
+                info!(
+                    "Gmail OAuth token refreshed (expires_in={}s, new_refresh_token={})",
+                    data.expires_in,
+                    data.refresh_token.is_some()
+                );
+            })),
+        ));
+        info!("Gmail client initialized with OAuth2");
+        Some(std::sync::Arc::new(client))
+    } else {
+        warn!("Gmail client not configured (missing GMAIL_ACCESS_TOKEN or GMAIL_REFRESH_TOKEN)");
+        None
+    };
+
     let app_state = AppState {
         db,
         helloasso_client,
         mailchimp_client,
         config: app_config,
         cookie_key,
+        gmail_client,
     };
+
+    // Set photo-of-the-day background for all pages
+    if let Ok(Some((photo, name))) = database::get_photo_of_the_day(&app_state.db).await {
+        templates::set_photo_bg(format!("/photos/{}", photo.id), name);
+        info!("Photo of the day: {}", photo.id);
+    }
 
     // Clone state for background task before it moves into the router
     let state_for_daily = app_state.clone();
@@ -164,10 +193,18 @@ async fn main() -> anyhow::Result<()> {
         .route("/validation", get(validation_page_handler))
         .route("/login", get(login_page))
         .route("/api/staff/search", get(api_search_staff))
+        .route("/api/staff/create-minimal", post(api_create_staff_minimal))
         .route("/api/login/send", post(api_send_login_email))
         .route("/api/me", get(api_me))
         .route("/logout", get(logout))
         .route("/health", get(health_check))
+        .route("/privacy", get(privacy_page))
+        .route("/tos", get(tos_page))
+        .route("/photos", get(photo_page))
+        .route("/photos/upload", post(upload_photo))
+        .route("/photos/{id}", get(display_photo))
+        .route("/photos/{id}/delete", post(delete_photo))
+        .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
@@ -2609,6 +2646,62 @@ async fn api_search_staff(
 }
 
 #[derive(Debug, Deserialize)]
+struct CreateStaffMinimalRequest {
+    first_name: String,
+    last_name: String,
+    email: Option<String>,
+    phone: Option<String>,
+}
+
+async fn api_create_staff_minimal(
+    RequireAdmin(_staff): RequireAdmin,
+    State(state): State<AppState>,
+    Json(payload): Json<CreateStaffMinimalRequest>,
+) -> impl IntoResponse {
+    let email = payload
+        .email
+        .as_deref()
+        .map(|e| e.trim().to_lowercase())
+        .unwrap_or_default();
+    let phone = payload
+        .phone
+        .as_deref()
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .map(|p| templates::format_phone_international(p));
+
+    match database::create_staff_minimal(
+        &state.db,
+        &payload.first_name,
+        &payload.last_name,
+        &email,
+        phone.as_deref(),
+    )
+    .await
+    {
+        Ok(staff) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "id": staff.id,
+                "first_name": staff.first_name,
+                "last_name": staff.last_name,
+            })),
+        ),
+        Err(e) if e.to_string() == "DUPLICATE_NAME" => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error": "Un bénévole avec ce nom existe déjà"})),
+        ),
+        Err(e) => {
+            error!("Error creating staff: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
 struct SendLoginRequest {
     staff_id: uuid::Uuid,
 }
@@ -2802,23 +2895,18 @@ async fn send_login_email_gmail(
     staff: &crate::models::Staff,
     login_url: &str,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    if state.config.gmail_access_token.is_empty() || state.config.gmail_refresh_token.is_empty() {
-        warn!("Gmail not configured - login URL: {}", login_url);
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(
-                serde_json::json!({"error": "L'envoi d'email n'est pas configuré (Gmail). Contactez l'administrateur."}),
-            ),
-        );
-    }
-
-    // Initialize the OAuth2 flow (uses GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REDIRECT_URI env vars)
-    // and create the client with the stored tokens
-    let client = gmail::GmailClient::with_auth(gmail::GmailAuth::oauth2(
-        &state.config.gmail_access_token,
-        &state.config.gmail_refresh_token,
-        None,
-    ));
+    let client = match &state.gmail_client {
+        Some(c) => c.clone(),
+        None => {
+            warn!("Gmail not configured - login URL: {}", login_url);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(
+                    serde_json::json!({"error": "L'envoi d'email n'est pas configuré (Gmail). Contactez l'administrateur."}),
+                ),
+            );
+        }
+    };
 
     let from = if state.config.gmail_from.is_empty() {
         "me".to_string()
@@ -2964,6 +3052,24 @@ async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
                 .into_response()
         }
     }
+}
+
+async fn privacy_page(headers: HeaderMap) -> impl IntoResponse {
+    let prefix = get_prefix(&headers);
+    Html(templates::static_page(
+        &prefix,
+        "Politique de Confidentialité",
+        include_str!("../privacy.md"),
+    ))
+}
+
+async fn tos_page(headers: HeaderMap) -> impl IntoResponse {
+    let prefix = get_prefix(&headers);
+    Html(templates::static_page(
+        &prefix,
+        "Conditions d'Utilisation",
+        include_str!("../tos.md"),
+    ))
 }
 
 async fn api_get_stats(
@@ -3117,20 +3223,16 @@ async fn send_notification_email(
     for to_addr in to_addresses {
         match mail_method {
             "gmail" => {
-                if state.config.gmail_access_token.is_empty()
-                    || state.config.gmail_refresh_token.is_empty()
-                {
-                    warn!(
-                        "Gmail not configured, cannot send notification to {}",
-                        to_addr
-                    );
-                    continue;
-                }
-                let client = gmail::GmailClient::with_auth(gmail::GmailAuth::oauth2(
-                    &state.config.gmail_access_token,
-                    &state.config.gmail_refresh_token,
-                    None,
-                ));
+                let client = match &state.gmail_client {
+                    Some(c) => c.clone(),
+                    None => {
+                        warn!(
+                            "Gmail not configured, cannot send notification to {}",
+                            to_addr
+                        );
+                        continue;
+                    }
+                };
                 let from = if state.config.gmail_from.is_empty() {
                     "me".to_string()
                 } else {
@@ -3832,5 +3934,162 @@ pub fn get_season_for(date: chrono::DateTime<chrono::Utc>) -> Season {
         (year + 1) as Season
     } else {
         year as Season
+    }
+}
+
+// Photo handlers
+async fn photo_page(
+    RequireStaff(staff): RequireStaff,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let prefix = get_prefix(&headers);
+
+    match database::get_all_photos(&state.db).await {
+        Ok(photos) => Html(templates::photo_page(&prefix, &photos, staff.is_admin)),
+        Err(e) => {
+            error!("Failed to get photos: {}", e);
+            Html(templates::photo_page(&prefix, &[], false))
+        }
+    }
+}
+
+async fn display_photo(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> impl IntoResponse {
+    match database::get_photo_by_id(&state.db, id).await {
+        Ok(Some(photo)) => {
+            let mut response = Response::new(Body::from(photo.photo_data));
+            response.headers_mut().insert(
+                header::CONTENT_TYPE,
+                header::HeaderValue::from_str(&photo.mime_type).unwrap(),
+            );
+            response
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            error!("Failed to get photo: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+async fn upload_photo(
+    RequireAdmin(_staff): RequireAdmin,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> impl IntoResponse {
+    info!("upload_photo handler entered");
+    let prefix = get_prefix(&headers);
+    let mut photographer_id: Option<uuid::Uuid> = None;
+    let mut photo_data: Option<(Vec<u8>, String)> = None;
+    let mut multipart_error: Option<String> = None;
+
+    loop {
+        match multipart.next_field().await {
+            Ok(Some(field)) => {
+                let name = field.name().unwrap_or("").to_string();
+                match name.as_str() {
+                    "photographer_id" => {
+                        let text = field.text().await.unwrap_or_default();
+                        photographer_id = uuid::Uuid::parse_str(text.trim()).ok();
+                    }
+                    "photo" => {
+                        let content_type = field
+                            .content_type()
+                            .unwrap_or("application/octet-stream")
+                            .to_string();
+                        match field.bytes().await {
+                            Ok(data) => {
+                                info!("Photo upload: received {} bytes", data.len());
+                                photo_data = Some((data.to_vec(), content_type));
+                            }
+                            Err(e) => {
+                                error!("Failed to read photo data: {}", e);
+                                multipart_error = Some(format!("Erreur lecture fichier: {}", e));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(None) => break,
+            Err(e) => {
+                error!("Multipart stream error: {}", e);
+                multipart_error = Some(format!("Erreur upload: {}", e));
+                break;
+            }
+        }
+    }
+
+    if let Some(err) = multipart_error {
+        return (StatusCode::BAD_REQUEST, Html(format!(
+            r#"<html><body><h2>Erreur</h2><p>{}</p><a href="{}/photos">Retour</a></body></html>"#,
+            templates::escape_html_public(&err), prefix
+        ))).into_response();
+    }
+
+    match (photo_data, photographer_id) {
+        (Some((data, content_type)), Some(pid)) => {
+            match database::create_photo(&state.db, data, content_type, pid).await {
+                Ok(_) => {
+                    // Refresh photo-of-the-day background
+                    if let Ok(Some((photo, name))) = database::get_photo_of_the_day(&state.db).await
+                    {
+                        templates::set_photo_bg(format!("/photos/{}", photo.id), name);
+                    }
+                    Redirect::to(&format!("{}/photos", prefix)).into_response()
+                }
+                Err(e) => {
+                    error!("Failed to upload photo: {}", e);
+                    (StatusCode::INTERNAL_SERVER_ERROR, Html(format!(
+                        r#"<html><body><h2>Erreur</h2><p>Échec de l'enregistrement: {}</p><a href="{}/photos">Retour</a></body></html>"#,
+                        templates::escape_html_public(&e.to_string()), prefix
+                    ))).into_response()
+                }
+            }
+        }
+        (None, _) => {
+            error!("Photo upload: no photo data received");
+            (StatusCode::BAD_REQUEST, Html(format!(
+                r#"<html><body><h2>Erreur</h2><p>Aucune photo reçue</p><a href="{}/photos">Retour</a></body></html>"#,
+                prefix
+            ))).into_response()
+        }
+        (_, None) => {
+            error!("Photo upload: no photographer selected");
+            (StatusCode::BAD_REQUEST, Html(format!(
+                r#"<html><body><h2>Erreur</h2><p>Aucun photographe sélectionné</p><a href="{}/photos">Retour</a></body></html>"#,
+                prefix
+            ))).into_response()
+        }
+    }
+}
+
+async fn delete_photo(
+    RequireAdmin(_staff): RequireAdmin,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> impl IntoResponse {
+    let prefix = get_prefix(&headers);
+    match database::delete_photo(&state.db, id).await {
+        Ok(success) => {
+            if success {
+                // Refresh photo-of-the-day background
+                if let Ok(Some((photo, name))) = database::get_photo_of_the_day(&state.db).await {
+                    templates::set_photo_bg(format!("/photos/{}", photo.id), name);
+                }
+                Redirect::to(&format!("{}/photos", prefix)).into_response()
+            } else {
+                StatusCode::NOT_FOUND.into_response()
+            }
+        }
+        Err(e) => {
+            error!("Failed to delete photo: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     }
 }

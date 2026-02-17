@@ -2,6 +2,29 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Photo {
+    pub id: uuid::Uuid,
+    pub photo_data: Vec<u8>,
+    pub mime_type: String,
+    pub photographer_id: uuid::Uuid,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for Photo {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(Photo {
+            id: row.try_get("id")?,
+            photo_data: row.try_get("photo_data")?,
+            mime_type: row.try_get("mime_type")?,
+            photographer_id: row.try_get("photographer_id")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "user_type")]
 pub struct User {

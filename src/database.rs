@@ -1,8 +1,9 @@
 use crate::models::{
-    Atelier, Cash, Membership, Need, PaymentHistoryEntry, Role, Staff, StaffMatchType,
+    Atelier, Cash, Membership, Need, PaymentHistoryEntry, Photo, Role, Staff, StaffMatchType,
     StaffWithSeason, User,
 };
 use anyhow::Result;
+use chrono::Datelike;
 use futures_util::StreamExt;
 use sqlx::PgPool;
 use sqlx::Row;
@@ -2291,4 +2292,131 @@ async fn restore_inner(
     }
 
     Ok(())
+}
+
+// Photo functions
+pub async fn create_photo(
+    pool: &PgPool,
+    photo_data: Vec<u8>,
+    mime_type: String,
+    photographer_id: uuid::Uuid,
+) -> Result<Photo> {
+    let result = sqlx::query_as::<_, Photo>(
+        r"
+        INSERT INTO photos (photo_data, mime_type, photographer_id)
+        VALUES ($1, $2, $3)
+        RETURNING *
+        ",
+    )
+    .bind(photo_data)
+    .bind(mime_type)
+    .bind(photographer_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(result)
+}
+
+pub async fn get_photo_by_id(pool: &PgPool, id: uuid::Uuid) -> Result<Option<Photo>> {
+    let result = sqlx::query_as::<_, Photo>(
+        r"
+        SELECT * FROM photos WHERE id = $1
+        ",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result)
+}
+
+pub async fn get_all_photos(pool: &PgPool) -> Result<Vec<(Photo, String)>> {
+    let rows = sqlx::query(
+        r"
+        SELECT p.*, s.first_name AS staff_first_name, s.last_name AS staff_last_name
+        FROM photos p
+        JOIN staff s ON p.photographer_id = s.id
+        ORDER BY p.created_at DESC
+        ",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        use sqlx::FromRow;
+        use sqlx::Row;
+        let photo = Photo::from_row(&row)?;
+        let first: String = row.try_get("staff_first_name")?;
+        let last: String = row.try_get("staff_last_name")?;
+        result.push((photo, format!("{} {}", first, last)));
+    }
+
+    Ok(result)
+}
+
+pub async fn delete_photo(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
+    let result = sqlx::query(
+        r"
+        DELETE FROM photos WHERE id = $1
+        ",
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+/// Get a pseudo-random photo of the day based on current date
+/// Uses a deterministic algorithm to select the same photo for the same day
+pub async fn get_photo_of_the_day(pool: &PgPool) -> Result<Option<(Photo, String)>> {
+    // Get all photos first
+    let all_photos = get_all_photos(pool).await?;
+
+    if all_photos.is_empty() {
+        return Ok(None);
+    }
+
+    // Use current date to seed the pseudo-random selection
+    let today = chrono::Local::now().date_naive();
+    let day_of_year = today.ordinal(); // 1-366
+
+    // Simple deterministic algorithm: use day_of_year modulo number of photos
+    // This ensures the same photo is selected for the same day
+    let index = (day_of_year - 1) as usize % all_photos.len();
+
+    let (photo, name) = all_photos[index].clone();
+    Ok(Some((photo, name)))
+}
+
+pub async fn create_staff_minimal(
+    pool: &PgPool,
+    first_name: &str,
+    last_name: &str,
+    email: &str,
+    phone: Option<&str>,
+) -> Result<Staff> {
+    // Check for exact name duplicate (unaccent)
+    let existing = sqlx::query_scalar::<_, bool>(
+        r"SELECT EXISTS(SELECT 1 FROM staff WHERE unaccent(LOWER(TRIM(first_name))) = unaccent($1) AND unaccent(LOWER(TRIM(last_name))) = unaccent($2))"
+    )
+    .bind(first_name.trim().to_lowercase())
+    .bind(last_name.trim().to_lowercase())
+    .fetch_one(pool).await?;
+
+    if existing {
+        return Err(anyhow::anyhow!("DUPLICATE_NAME"));
+    }
+
+    let staff = sqlx::query_as::<_, Staff>(
+        r"INSERT INTO staff (first_name, last_name, email, phone, comment) VALUES ($1, $2, $3, $4, '') RETURNING *"
+    )
+    .bind(first_name.trim())
+    .bind(last_name.trim())
+    .bind(email)
+    .bind(phone)
+    .fetch_one(pool).await?;
+
+    Ok(staff)
 }
