@@ -83,17 +83,10 @@ async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<Staff, Auth
     let prefix = get_prefix(parts);
     let is_api = is_api_path(parts);
 
-    // Extract signed cookie jar
-    let jar = match SignedCookieJar::<Key>::from_request_parts(parts, state).await {
-        Ok(jar) => jar,
-        Err(_) => {
-            return Err(AuthError {
-                kind: AuthErrorKind::InternalError,
-                prefix,
-                is_api,
-            });
-        }
-    };
+    // Extract signed cookie jar (infallible for SignedCookieJar)
+    let jar = SignedCookieJar::<Key>::from_request_parts(parts, state)
+        .await
+        .expect("SignedCookieJar extraction is infallible");
 
     let staff_id = match jar.get("aghil_session") {
         Some(cookie) => match cookie.value().parse::<uuid::Uuid>() {

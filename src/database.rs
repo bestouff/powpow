@@ -13,22 +13,14 @@ use tracing::info;
 fn strip_accents(s: &str) -> String {
     s.chars()
         .map(|c| match c {
-            'à' | 'â' | 'ä' | 'á' => 'a',
-            'é' | 'è' | 'ê' | 'ë' => 'e',
-            'î' | 'ï' | 'í' | 'ì' => 'i',
-            'ô' | 'ö' | 'ó' | 'ò' => 'o',
-            'ù' | 'û' | 'ü' | 'ú' => 'u',
-            'ÿ' | 'ý' => 'y',
-            'ç' => 'c',
-            'ñ' => 'n',
-            'À' | 'Â' | 'Ä' | 'Á' => 'a',
-            'É' | 'È' | 'Ê' | 'Ë' => 'e',
-            'Î' | 'Ï' | 'Í' | 'Ì' => 'i',
-            'Ô' | 'Ö' | 'Ó' | 'Ò' => 'o',
-            'Ù' | 'Û' | 'Ü' | 'Ú' => 'u',
-            'Ÿ' | 'Ý' => 'y',
-            'Ç' => 'c',
-            'Ñ' => 'n',
+            'à' | 'â' | 'ä' | 'á' | 'À' | 'Â' | 'Ä' | 'Á' => 'a',
+            'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
+            'î' | 'ï' | 'í' | 'ì' | 'Î' | 'Ï' | 'Í' | 'Ì' => 'i',
+            'ô' | 'ö' | 'ó' | 'ò' | 'Ô' | 'Ö' | 'Ó' | 'Ò' => 'o',
+            'ù' | 'û' | 'ü' | 'ú' | 'Ù' | 'Û' | 'Ü' | 'Ú' => 'u',
+            'ÿ' | 'ý' | 'Ÿ' | 'Ý' => 'y',
+            'ç' | 'Ç' => 'c',
+            'ñ' | 'Ñ' => 'n',
             _ => c,
         })
         .collect()
@@ -636,7 +628,8 @@ pub async fn find_staff_candidates(
                 score += 100;
             } else if staff_last.contains(&search_last) || search_last.contains(&staff_last) {
                 // Partial match on last name - score by length similarity
-                let len_diff = (staff_last.len() as i32 - search_last.len() as i32).abs();
+                let len_diff =
+                    i32::try_from(staff_last.len().abs_diff(search_last.len())).unwrap_or(i32::MAX);
                 score += 50 - len_diff.min(50);
             }
 
@@ -645,7 +638,8 @@ pub async fn find_staff_candidates(
                 score += 100;
             } else if staff_first.contains(&search_first) || search_first.contains(&staff_first) {
                 // Partial match on first name - score by length similarity
-                let len_diff = (staff_first.len() as i32 - search_first.len() as i32).abs();
+                let len_diff = i32::try_from(staff_first.len().abs_diff(search_first.len()))
+                    .unwrap_or(i32::MAX);
                 score += 50 - len_diff.min(50);
             }
 
@@ -685,6 +679,7 @@ async fn get_staff_latest_season(pool: &PgPool, staff_id: uuid::Uuid) -> Result<
 
 /// Create a new staff member and link it with a payment
 /// Uses a transaction to ensure atomicity and prevent race conditions
+#[allow(clippy::too_many_arguments)]
 pub async fn create_staff_with_payment(
     pool: &PgPool,
     first_name: &str,
@@ -744,6 +739,7 @@ pub async fn create_staff_with_payment(
 
 /// Update an existing staff member and link it with a payment for a new season
 /// Uses a transaction to ensure atomicity and prevent race conditions
+#[allow(clippy::too_many_arguments)]
 pub async fn update_staff_with_payment(
     pool: &PgPool,
     staff_id: uuid::Uuid,
@@ -1181,7 +1177,7 @@ pub async fn update_staff_contact(
     Ok(())
 }
 
-/// Get payment history for a staff member (both HelloAsso and cash payments)
+/// Get payment history for a staff member (both `HelloAsso` and cash payments)
 pub async fn get_staff_payment_history(
     pool: &PgPool,
     staff_id: uuid::Uuid,
@@ -1276,6 +1272,7 @@ pub async fn get_staff_payment_history(
 // Cash payment functions
 
 /// Create a new cash/check payment record
+#[allow(clippy::too_many_arguments)]
 pub async fn create_cash_payment(
     pool: &PgPool,
     first_name: &str,
@@ -1358,6 +1355,7 @@ pub async fn has_staff_for_cash(pool: &PgPool, cash_id: uuid::Uuid) -> Result<bo
 }
 
 /// Create a new staff member and link it with a cash payment
+#[allow(clippy::too_many_arguments)]
 pub async fn create_staff_with_cash_payment(
     pool: &PgPool,
     first_name: &str,
@@ -1413,6 +1411,7 @@ pub async fn create_staff_with_cash_payment(
 }
 
 /// Update an existing staff member and link it with a cash payment
+#[allow(clippy::too_many_arguments)]
 pub async fn update_staff_with_cash_payment(
     pool: &PgPool,
     staff_id: uuid::Uuid,
@@ -1550,7 +1549,7 @@ pub async fn get_needs_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Res
 }
 
 /// Batch fetch presence records for a set of need IDs
-/// Returns (needs_id, staff_id, first_half, second_half)
+/// Returns (`needs_id`, `staff_id`, `first_half`, `second_half`)
 pub async fn get_presence_for_needs(
     pool: &PgPool,
     need_ids: &[uuid::Uuid],
@@ -1593,7 +1592,7 @@ pub async fn get_staff_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Res
 }
 
 /// Get upcoming needs with their deficit (quantity - filled) for the next N days.
-/// Returns (day, atelier_name, quantity, filled_count) rows, ordered by day then atelier name.
+/// Returns (day, `atelier_name`, quantity, `filled_count`) rows, ordered by day then atelier name.
 pub async fn get_upcoming_needs_deficit(
     pool: &PgPool,
     from: chrono::NaiveDate,
@@ -1653,7 +1652,7 @@ pub async fn get_needs_for_day(pool: &PgPool, day: chrono::NaiveDate) -> Result<
 }
 
 /// Fetch all future needs together with per-half presence counts.
-/// Returns (Need, first_half_count, second_half_count).
+/// Returns (Need, `first_half_count`, `second_half_count`).
 pub async fn get_all_future_needs_with_counts(
     pool: &PgPool,
     from: chrono::NaiveDate,
@@ -1789,7 +1788,7 @@ pub async fn get_presence(
 }
 
 /// Update admin flags for a staff member
-/// Enforces: is_god implies is_admin
+/// Enforces: `is_god` implies `is_admin`
 pub async fn update_staff_admin_flags(
     pool: &PgPool,
     staff_id: uuid::Uuid,
@@ -1797,7 +1796,7 @@ pub async fn update_staff_admin_flags(
     is_god: bool,
 ) -> Result<Staff> {
     // Enforce constraint: is_god implies is_admin
-    let is_admin = if is_god { true } else { is_admin };
+    let is_admin = is_god || is_admin;
 
     let staff = sqlx::query_as::<_, Staff>(
         r"
@@ -1815,7 +1814,7 @@ pub async fn update_staff_admin_flags(
     Ok(staff)
 }
 
-/// Search staff by name (first_name + last_name) using unaccent for accent-insensitive matching
+/// Search staff by name (`first_name` + `last_name`) using unaccent for accent-insensitive matching
 pub async fn search_staff_by_name(pool: &PgPool, query: &str) -> Result<Vec<Staff>> {
     let pattern = format!("%{}%", query.trim().to_lowercase());
     let staff = sqlx::query_as::<_, Staff>(
@@ -1905,7 +1904,7 @@ pub async fn get_all_staff_with_ateliers(pool: &PgPool) -> Result<Vec<(Staff, Ve
 }
 
 /// List names of unimported memberships + cash payments (for daily summary email).
-/// Returns (first_name, last_name, source) where source is "HelloAsso" or "Espèces/Chèque".
+/// Returns (`first_name`, `last_name`, source) where source is "`HelloAsso`" or "Espèces/Chèque".
 pub async fn list_unimported_names(
     pool: &PgPool,
     current_season: i16,
@@ -2017,7 +2016,7 @@ pub async fn count_audit(pool: &PgPool) -> Result<i64> {
 }
 
 /// Count pending (unvalidated) role requests for ateliers where a given staff is chief.
-/// Returns Vec<(atelier_name, count)>.
+/// Returns `Vec<(atelier_name, count)>`.
 pub async fn count_pending_validations_for_chief(
     pool: &PgPool,
     staff_id: uuid::Uuid,
@@ -2217,7 +2216,7 @@ pub async fn backup_all_tables(pool: &PgPool) -> Result<String> {
     Ok(sql)
 }
 
-/// Restore database from a SQL backup string produced by backup_all_tables.
+/// Restore database from a SQL backup string produced by `backup_all_tables`.
 /// Parses TRUNCATE statements and COPY FROM stdin blocks, executes in a transaction.
 pub async fn restore_from_sql(pool: &PgPool, sql: &str) -> Result<()> {
     let mut conn = pool.acquire().await?;

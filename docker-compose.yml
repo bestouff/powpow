@@ -22,6 +22,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      LISTEN_ADDRESS: ${LISTEN_ADDRESS}
       DATABASE_URL: postgresql://postgres:password@postgres:5432/aghil
       HELLOASSO_CLIENT_ID: ${HELLOASSO_CLIENT_ID}
       HELLOASSO_CLIENT_SECRET: ${HELLOASSO_CLIENT_SECRET}

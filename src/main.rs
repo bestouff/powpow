@@ -134,6 +134,8 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    let listen_address = app_config.listen_address.clone();
+
     let app_state = AppState {
         db,
         helloasso_client,
@@ -176,8 +178,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/stats", get(api_get_stats))
         .route("/api/debug/order", get(debug_first_order))
         .route("/api/badge-counts", get(api_badge_counts))
-        .route("/calendar", get(calendar_editor_view.clone()))
-        .route("/calendar/", get(calendar_editor_view))
+        .route("/calendar", get(calendar_landing))
+        .route("/calendar/", get(calendar_landing))
         .route(
             "/api/calendar/needs",
             get(api_get_needs)
@@ -212,8 +214,8 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(weekly_morning_email_loop(state_for_daily));
 
     // Start server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    info!("Server running on http://0.0.0.0:3000");
+    let listener = tokio::net::TcpListener::bind(&listen_address).await?;
+    info!("Server running on {listen_address}");
 
     axum::serve(listener, app).await?;
     Ok(())
@@ -289,10 +291,7 @@ async fn list_users(
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
     let search = params.get("search").filter(|s| !s.is_empty());
-    let only_not_imported = params
-        .get("filter")
-        .map(|f| f == "not_imported")
-        .unwrap_or(false);
+    let only_not_imported = params.get("filter").is_some_and(|f| f == "not_imported");
 
     match database::get_all_memberships_filtered(&state.db, search.map(String::as_str)).await {
         Ok(memberships_with_users) => {
@@ -514,12 +513,11 @@ async fn view_person(
     }
 
     // Require a valid session (Staff level) for viewing person pages
-    let viewer_id = match jar
+    let Some(viewer_id) = jar
         .get("aghil_session")
         .and_then(|c| c.value().parse::<uuid::Uuid>().ok())
-    {
-        Some(vid) => vid,
-        None => return Redirect::to(&format!("{}/login", prefix)).into_response(),
+    else {
+        return Redirect::to(&format!("{}/login", prefix)).into_response();
     };
 
     let current_season = get_current_season();
@@ -650,14 +648,17 @@ async fn view_person(
         }
 
         // Has roles but no upcoming presence
-        if !roles.is_empty() {
-            if let Ok(false) = database::has_upcoming_presence(&state.db, id).await {
-                items.push(templates::TodoItem {
-                    icon: "fa-calendar-alt",
-                    color: "info",
-                    html: "Vous n'avez pas encore indiqué vos disponibilités. Pensez à consulter les plannings ci-dessous pour indiquer quand vous êtes disponible\u{a0}!".to_string(),
-                });
-            }
+        if !roles.is_empty()
+            && matches!(
+                database::has_upcoming_presence(&state.db, id).await,
+                Ok(false)
+            )
+        {
+            items.push(templates::TodoItem {
+                icon: "fa-calendar-alt",
+                color: "info",
+                html: "Vous n'avez pas encore indiqué vos disponibilités. Pensez à consulter les plannings ci-dessous pour indiquer quand vous êtes disponible\u{a0}!".to_string(),
+            });
         }
 
         items
@@ -709,14 +710,14 @@ async fn toggle_role(
     let is_admin = me.is_admin;
 
     // Check if caller is chief of the target atelier
-    let is_chief_of_atelier = if !is_admin {
+    let is_chief_of_atelier = if is_admin {
+        false
+    } else {
         database::get_chief_ateliers(&state.db, me.id)
             .await
             .unwrap_or_default()
             .iter()
             .any(|a| a.id == payload.atelier_id)
-    } else {
-        false
     };
 
     // Authorization: validated changes require admin or chief of that atelier
@@ -770,7 +771,7 @@ async fn toggle_role(
             let validated = !atelier.needs_validation;
 
             match database::add_role(&state.db, staff_id, payload.atelier_id, validated).await {
-                Ok(_) => {
+                Ok(()) => {
                     let _ = database::insert_audit(
                         &state.db,
                         Some(me.id),
@@ -789,8 +790,10 @@ async fn toggle_role(
                                 .await
                                 .ok()
                                 .flatten()
-                                .map(|s| format!("{} {}", s.first_name, s.last_name))
-                                .unwrap_or_else(|| "Quelqu'un".to_string());
+                                .map_or_else(
+                                    || "Quelqu'un".to_string(),
+                                    |s| format!("{} {}", s.first_name, s.last_name),
+                                );
                             let chiefs =
                                 database::get_chiefs_for_atelier(&state_clone.db, atelier_id)
                                     .await
@@ -803,10 +806,10 @@ async fn toggle_role(
                                     staff_name, atelier_name
                                 );
                                 let html_body = format!(
-                                    r#"<p>Bonjour,</p>
+                                    r"<p>Bonjour,</p>
 <p><strong>{staff}</strong> souhaite rejoindre l'atelier <strong>{atelier}</strong> et attend votre validation.</p>
 <p>Connectez-vous à AGHIL pour valider ou refuser cette demande.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                                     staff = staff_name,
                                     atelier = atelier_name,
                                 );
@@ -833,32 +836,31 @@ async fn toggle_role(
                     );
                 }
             }
-        } else {
-            match database::remove_role(&state.db, staff_id, payload.atelier_id).await {
-                Ok(_) => {
-                    let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(|a| a.name)
-                        .unwrap_or_default();
-                    let _ = database::insert_audit(
-                        &state.db,
-                        Some(me.id),
-                        &format!("{} {}", me.first_name, me.last_name),
-                        "Suppression rôle",
-                        &format!("staff={} atelier={}", staff_id, atelier_name),
-                    )
-                    .await;
-                    return (StatusCode::OK, Json(serde_json::json!({"success": true})));
-                }
-                Err(e) => {
-                    error!("Error removing role: {}", e);
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({"error": e.to_string()})),
-                    );
-                }
+        }
+        match database::remove_role(&state.db, staff_id, payload.atelier_id).await {
+            Ok(()) => {
+                let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|a| a.name)
+                    .unwrap_or_default();
+                let _ = database::insert_audit(
+                    &state.db,
+                    Some(me.id),
+                    &format!("{} {}", me.first_name, me.last_name),
+                    "Suppression rôle",
+                    &format!("staff={} atelier={}", staff_id, atelier_name),
+                )
+                .await;
+                return (StatusCode::OK, Json(serde_json::json!({"success": true})));
+            }
+            Err(e) => {
+                error!("Error removing role: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": e.to_string()})),
+                );
             }
         }
     }
@@ -874,7 +876,7 @@ async fn toggle_role(
         )
         .await
         {
-            Ok(_) => {
+            Ok(()) => {
                 // Audit
                 let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
                     .await
@@ -917,22 +919,21 @@ async fn toggle_role(
                         .await
                         .ok()
                         .flatten()
-                        .map(|a| a.name)
-                        .unwrap_or_else(|| "atelier inconnu".to_string());
+                        .map_or_else(|| "atelier inconnu".to_string(), |a| a.name);
 
                     // Notification: role validated
                     if validated == Some(true) {
                         let subject =
                             format!("AGHIL — Votre rôle dans {} a été validé", atelier_name);
                         let html_body = format!(
-                            r#"<p>Bonjour {},</p>
+                            r"<p>Bonjour {},</p>
 <p>Votre demande pour rejoindre l'atelier <strong>{}</strong> a été validée. Vous pouvez dès maintenant vous inscrire aux créneaux sur le calendrier.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                             staff.first_name, atelier_name,
                         );
                         send_notification_email(
                             &state_clone,
-                            &[staff.email.clone()],
+                            std::slice::from_ref(&staff.email),
                             &subject,
                             &html_body,
                         )
@@ -945,10 +946,10 @@ async fn toggle_role(
                             (
                                 format!("AGHIL — Vous êtes maintenant chef de {}", atelier_name),
                                 format!(
-                                    r#"<p>Bonjour {},</p>
+                                    r"<p>Bonjour {},</p>
 <p>Vous avez été nommé(e) <strong>chef</strong> de l'atelier <strong>{}</strong>.</p>
 <p>Vous recevrez désormais les notifications liées à cet atelier.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                                     staff.first_name, atelier_name,
                                 ),
                             )
@@ -956,16 +957,16 @@ async fn toggle_role(
                             (
                                 format!("AGHIL — Vous n'êtes plus chef de {}", atelier_name),
                                 format!(
-                                    r#"<p>Bonjour {},</p>
+                                    r"<p>Bonjour {},</p>
 <p>Vous n'êtes plus chef de l'atelier <strong>{}</strong>.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                                     staff.first_name, atelier_name,
                                 ),
                             )
                         };
                         send_notification_email(
                             &state_clone,
-                            &[staff.email.clone()],
+                            std::slice::from_ref(&staff.email),
                             &subject,
                             &html_body,
                         )
@@ -1003,7 +1004,7 @@ async fn update_comment(
     Json(payload): Json<UpdateCommentPayload>,
 ) -> impl IntoResponse {
     match database::update_staff_comment(&state.db, staff_id, &payload.comment).await {
-        Ok(_) => {
+        Ok(()) => {
             let _ = database::insert_audit(
                 &state.db,
                 Some(admin.id),
@@ -1057,12 +1058,12 @@ async fn update_contact(
     let phone = payload
         .phone
         .as_deref()
-        .map(|p| p.trim())
+        .map(str::trim)
         .filter(|p| !p.is_empty())
-        .map(|p| templates::format_phone_international(p));
+        .map(templates::format_phone_international);
 
     match database::update_staff_contact(&state.db, staff_id, &email, phone.as_deref()).await {
-        Ok(_) => {
+        Ok(()) => {
             let _ = database::insert_audit(
                 &state.db,
                 Some(me.id),
@@ -1090,12 +1091,13 @@ async fn update_contact(
 }
 
 async fn calendar_view(
-    RequireStaff(me): RequireStaff,
+    auth::RequireStaff(me_staff): auth::RequireStaff,
     headers: HeaderMap,
     State(state): State<AppState>,
     axum::extract::Path(slug): axum::extract::Path<String>,
 ) -> Response {
     let prefix = get_prefix(&headers);
+    let me = Some(me_staff);
 
     // Lookup atelier by slug
     let atelier = match database::get_atelier_by_slug(&state.db, &slug).await {
@@ -1185,8 +1187,8 @@ async fn calendar_view(
         &presence_map,
         &all_ateliers,
         &prefix,
-        me.id,
-        me.is_admin,
+        me.as_ref().map(|s| s.id),
+        me.as_ref().is_some_and(|s| s.is_admin),
     ))
     .into_response()
 }
@@ -1250,7 +1252,7 @@ async fn toggle_presence_api(
     )
     .await
     {
-        Ok(_) => {
+        Ok(()) => {
             let target_name = if payload.staff_id == me.id {
                 format!("{} {}", me.first_name, me.last_name)
             } else {
@@ -1258,8 +1260,10 @@ async fn toggle_presence_api(
                     .await
                     .ok()
                     .flatten()
-                    .map(|s| format!("{} {}", s.first_name, s.last_name))
-                    .unwrap_or_else(|| payload.staff_id.to_string())
+                    .map_or_else(
+                        || payload.staff_id.to_string(),
+                        |s| format!("{} {}", s.first_name, s.last_name),
+                    )
             };
             let _ = database::insert_audit(
                 &state.db,
@@ -1289,33 +1293,51 @@ async fn toggle_presence_api(
     }
 }
 
-// --- Calendar editor (needs management) ---
+// --- Calendar landing (public: redirect to first atelier, or editor for chiefs) ---
 
-async fn calendar_editor_view(
-    RequireChief(me): RequireChief,
+async fn calendar_landing(
+    jar: SignedCookieJar,
     headers: HeaderMap,
     State(state): State<AppState>,
-) -> impl IntoResponse {
+) -> Response {
     let prefix = get_prefix(&headers);
 
+    // Check if logged-in user is a chief/admin — if so, show the editor
+    let staff = if let Some(id) = jar
+        .get("aghil_session")
+        .and_then(|c| c.value().parse::<uuid::Uuid>().ok())
+    {
+        database::get_staff_by_id(&state.db, id)
+            .await
+            .ok()
+            .flatten()
+    } else {
+        None
+    };
+
+    // Fetch ateliers
     let ateliers = match database::get_all_ateliers(&state.db).await {
         Ok(a) => a,
         Err(e) => {
             error!("Error fetching ateliers: {}", e);
-            return Html(format!("<p>Error: {}</p>", e));
+            return Html(format!("<p>Error: {}</p>", e)).into_response();
         }
     };
 
-    // Determine which ateliers this user can edit
-    let editable_ids: Vec<uuid::Uuid> = if me.is_admin || me.is_god {
-        ateliers.iter().map(|a| a.id).collect()
+    // Determine which ateliers this user can edit (empty = read-only)
+    let editable_ids: Vec<uuid::Uuid> = if let Some(ref s) = staff {
+        if s.is_admin || s.is_god {
+            ateliers.iter().map(|a| a.id).collect()
+        } else {
+            database::get_chief_ateliers(&state.db, s.id)
+                .await
+                .unwrap_or_default()
+                .iter()
+                .map(|a| a.id)
+                .collect()
+        }
     } else {
-        database::get_chief_ateliers(&state.db, me.id)
-            .await
-            .unwrap_or_default()
-            .iter()
-            .map(|a| a.id)
-            .collect()
+        vec![]
     };
 
     let today = chrono::Local::now().date_naive();
@@ -1328,8 +1350,12 @@ async fn calendar_editor_view(
         &editable_ids,
         &future_needs,
         &prefix,
+        staff.is_some(),
     ))
+    .into_response()
 }
+
+// --- Calendar editor (needs management) ---
 
 #[derive(Debug, Deserialize)]
 struct NeedsQuery {
@@ -1750,18 +1776,15 @@ async fn do_import_staff(
             .await
         }
         "update" => {
-            let staff_id = match form
+            let Some(staff_id) = form
                 .staff_id
                 .as_ref()
                 .and_then(|s| s.parse::<uuid::Uuid>().ok())
-            {
-                Some(id) => id,
-                None => {
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Html("<p>Invalid staff ID</p>".to_string()),
-                    );
-                }
+            else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Html("<p>Invalid staff ID</p>".to_string()),
+                );
             };
             database::update_staff_with_payment(
                 &state.db,
@@ -1850,7 +1873,7 @@ async fn list_cash(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-    let show_form = params.get("form").map(|f| f == "1").unwrap_or(false);
+    let show_form = params.get("form").is_some_and(|f| f == "1");
 
     if show_form {
         return Html(templates::cash_form(&prefix));
@@ -1957,11 +1980,11 @@ async fn create_cash(
                 if !admin_emails.is_empty() {
                     let subject = "AGHIL — Nouveau paiement espèces à importer";
                     let html_body = format!(
-                        r#"<p>Bonjour,</p>
+                        r"<p>Bonjour,</p>
 <p>Un nouveau paiement espèces/chèque a été enregistré :</p>
 <p><strong>{} {}</strong> — {}€</p>
 <p>Connectez-vous à AGHIL pour l'importer.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                         first_name, last_name, amount,
                     );
                     send_notification_email(&state_clone, &admin_emails, subject, &html_body).await;
@@ -2138,18 +2161,15 @@ async fn do_import_cash(
             .await
         }
         "update" => {
-            let staff_id = match form
+            let Some(staff_id) = form
                 .staff_id
                 .as_ref()
                 .and_then(|s| s.parse::<uuid::Uuid>().ok())
-            {
-                Some(id) => id,
-                None => {
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Html("<p>Invalid staff ID</p>".to_string()),
-                    );
-                }
+            else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Html("<p>Invalid staff ID</p>".to_string()),
+                );
             };
             database::update_staff_with_cash_payment(
                 &state.db,
@@ -2443,15 +2463,15 @@ async fn api_update_admin_flags(
                     if !old_admin && new_staff.is_admin {
                         let subject = "AGHIL — Vous avez maintenant les droits administrateur";
                         let html_body = format!(
-                            r#"<p>Bonjour {},</p>
+                            r"<p>Bonjour {},</p>
 <p>Vous avez maintenant les <strong>droits administrateur</strong> sur AGHIL.</p>
 <p>Vous pouvez gérer les adhésions, le staff et les paiements espèces.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                             new_staff.first_name,
                         );
                         send_notification_email(
                             &state_clone,
-                            &[new_staff.email.clone()],
+                            std::slice::from_ref(&new_staff.email),
                             subject,
                             &html_body,
                         )
@@ -2459,14 +2479,14 @@ async fn api_update_admin_flags(
                     } else if old_admin && !new_staff.is_admin {
                         let subject = "AGHIL — Vos droits administrateur ont été retirés";
                         let html_body = format!(
-                            r#"<p>Bonjour {},</p>
+                            r"<p>Bonjour {},</p>
 <p>Vos <strong>droits administrateur</strong> sur AGHIL ont été retirés.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                             new_staff.first_name,
                         );
                         send_notification_email(
                             &state_clone,
-                            &[new_staff.email.clone()],
+                            std::slice::from_ref(&new_staff.email),
                             subject,
                             &html_body,
                         )
@@ -2477,14 +2497,14 @@ async fn api_update_admin_flags(
                     if !old_god && new_staff.is_god {
                         let subject = "AGHIL — Vous avez maintenant les droits God";
                         let html_body = format!(
-                            r#"<p>Bonjour {},</p>
+                            r"<p>Bonjour {},</p>
 <p>Vous avez maintenant les <strong>droits God</strong> sur AGHIL.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                             new_staff.first_name,
                         );
                         send_notification_email(
                             &state_clone,
-                            &[new_staff.email.clone()],
+                            std::slice::from_ref(&new_staff.email),
                             subject,
                             &html_body,
                         )
@@ -2492,14 +2512,14 @@ async fn api_update_admin_flags(
                     } else if old_god && !new_staff.is_god {
                         let subject = "AGHIL — Vos droits God ont été retirés";
                         let html_body = format!(
-                            r#"<p>Bonjour {},</p>
+                            r"<p>Bonjour {},</p>
 <p>Vos <strong>droits God</strong> sur AGHIL ont été retirés.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                             new_staff.first_name,
                         );
                         send_notification_email(
                             &state_clone,
-                            &[new_staff.email.clone()],
+                            std::slice::from_ref(&new_staff.email),
                             subject,
                             &html_body,
                         )
@@ -2666,9 +2686,9 @@ async fn api_create_staff_minimal(
     let phone = payload
         .phone
         .as_deref()
-        .map(|p| p.trim())
+        .map(str::trim)
         .filter(|p| !p.is_empty())
-        .map(|p| templates::format_phone_international(p));
+        .map(templates::format_phone_international);
 
     match database::create_staff_minimal(
         &state.db,
@@ -2782,11 +2802,13 @@ async fn api_send_login_email(
     }
 }
 
+#[allow(clippy::unused_async)]
 async fn send_login_email_smtp(
     state: &AppState,
     staff: &crate::models::Staff,
     login_url: &str,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    use lettre::Transport;
     if state.config.smtp_host.is_empty() {
         warn!("SMTP not configured - login URL: {}", login_url);
         return (
@@ -2874,7 +2896,6 @@ async fn send_login_email_smtp(
         }
     };
 
-    use lettre::Transport;
     match mailer.send(&email) {
         Ok(_) => {
             info!("Login email sent via SMTP to {}", staff.email);
@@ -2895,18 +2916,16 @@ async fn send_login_email_gmail(
     staff: &crate::models::Staff,
     login_url: &str,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let client = match &state.gmail_client {
-        Some(c) => c.clone(),
-        None => {
-            warn!("Gmail not configured - login URL: {}", login_url);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(
-                    serde_json::json!({"error": "L'envoi d'email n'est pas configuré (Gmail). Contactez l'administrateur."}),
-                ),
-            );
-        }
+    let Some(client) = &state.gmail_client else {
+        warn!("Gmail not configured - login URL: {}", login_url);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(
+                serde_json::json!({"error": "L'envoi d'email n'est pas configuré (Gmail). Contactez l'administrateur."}),
+            ),
+        );
     };
+    let client = client.clone();
 
     let from = if state.config.gmail_from.is_empty() {
         "me".to_string()
@@ -2926,17 +2945,9 @@ async fn send_login_email_gmail(
 
     // Build RFC 2822 message with HTML content
     let raw_message = format!(
-        "From: {}\r\nTo: {}\r\nSubject: Connexion AGHIL\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",
-        from,
-        to_address,
-        format!(
-            r#"<p>Bonjour {},</p>
-<p>Cliquez sur le lien ci-dessous pour vous connecter à AGHIL :</p>
-<p><a href="{}" style="display:inline-block;padding:12px 24px;background:#3273dc;color:white;text-decoration:none;border-radius:4px;">Se connecter</a></p>
-<p>Ou copiez ce lien : {}</p>
-<p><em>Ce lien est à usage unique.</em></p>"#,
-            staff.first_name, login_url, login_url
-        )
+        "From: {from}\r\nTo: {to_address}\r\nSubject: Connexion AGHIL\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>Bonjour {first_name},</p>\n<p>Cliquez sur le lien ci-dessous pour vous connecter à AGHIL :</p>\n<p><a href=\"{url}\" style=\"display:inline-block;padding:12px 24px;background:#3273dc;color:white;text-decoration:none;border-radius:4px;\">Se connecter</a></p>\n<p>Ou copiez ce lien : {url}</p>\n<p><em>Ce lien est à usage unique.</em></p>",
+        first_name = staff.first_name,
+        url = login_url,
     );
 
     let message_body = httpclient::InMemoryBody::Text(raw_message);
@@ -3112,18 +3123,16 @@ async fn weekly_morning_email_loop(state: AppState) {
         // Calculate duration until next 8:00 AM local time
         let now = chrono::Local::now();
         let today = now.date_naive();
-        let days_ahead = 8 - today.weekday().number_from_monday() as i64;
+        let days_ahead = 8 - i64::from(today.weekday().number_from_monday());
         let monday_8am =
             now.date_naive().and_hms_opt(8, 0, 0).unwrap() + TimeDelta::days(days_ahead);
-        let monday_8am_local =
-            match chrono::TimeZone::from_local_datetime(&now.timezone(), &monday_8am).single() {
-                Some(t) => t,
-                None => {
-                    // Fallback: sleep 1 hour and retry
-                    tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
-                    continue;
-                }
-            };
+        let Some(monday_8am_local) =
+            chrono::TimeZone::from_local_datetime(&now.timezone(), &monday_8am).single()
+        else {
+            // Fallback: sleep 1 hour and retry
+            tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+            continue;
+        };
 
         let target = if now >= monday_8am_local {
             // Already past 8 AM today, schedule for next week
@@ -3210,6 +3219,7 @@ async fn send_notification_email(
     subject: &str,
     html_body: &str,
 ) {
+    use lettre::Transport;
     if to_addresses.is_empty() {
         return;
     }
@@ -3221,115 +3231,109 @@ async fn send_notification_email(
     };
 
     for to_addr in to_addresses {
-        match mail_method {
-            "gmail" => {
-                let client = match &state.gmail_client {
-                    Some(c) => c.clone(),
-                    None => {
-                        warn!(
-                            "Gmail not configured, cannot send notification to {}",
-                            to_addr
-                        );
-                        continue;
-                    }
-                };
-                let from = if state.config.gmail_from.is_empty() {
-                    "me".to_string()
-                } else {
-                    state.config.gmail_from.clone()
-                };
-                let dest = if state.config.mail_destination_override.is_empty() {
-                    to_addr.as_str()
-                } else {
-                    warn!(
-                        "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}",
-                        to_addr, state.config.mail_destination_override
-                    );
-                    &state.config.mail_destination_override
-                };
-                let encoded_subject = format!(
-                    "=?UTF-8?B?{}?=",
-                    base64::Engine::encode(
-                        &base64::engine::general_purpose::STANDARD,
-                        subject.as_bytes()
-                    )
+        if mail_method == "gmail" {
+            let Some(client) = &state.gmail_client else {
+                warn!(
+                    "Gmail not configured, cannot send notification to {}",
+                    to_addr
                 );
-                let raw_message = format!(
-                    "From: {}\r\nTo: {}\r\nSubject: {}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",
-                    from, dest, encoded_subject, html_body
+                continue;
+            };
+            let client = client.clone();
+            let from = if state.config.gmail_from.is_empty() {
+                "me".to_string()
+            } else {
+                state.config.gmail_from.clone()
+            };
+            let dest = if state.config.mail_destination_override.is_empty() {
+                to_addr.as_str()
+            } else {
+                warn!(
+                    "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}",
+                    to_addr, state.config.mail_destination_override
                 );
-                let message_body = httpclient::InMemoryBody::Text(raw_message);
-                match client.messages_send("me", message_body, None).await {
-                    Ok(_) => info!("Notification email sent via Gmail to {}", to_addr),
-                    Err(e) => error!(
-                        "Failed to send notification via Gmail to {}: {}",
-                        to_addr, e
-                    ),
-                }
+                &state.config.mail_destination_override
+            };
+            let encoded_subject = format!(
+                "=?UTF-8?B?{}?=",
+                base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    subject.as_bytes()
+                )
+            );
+            let raw_message = format!(
+                "From: {}\r\nTo: {}\r\nSubject: {}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",
+                from, dest, encoded_subject, html_body
+            );
+            let message_body = httpclient::InMemoryBody::Text(raw_message);
+            match client.messages_send("me", message_body, None).await {
+                Ok(_) => info!("Notification email sent via Gmail to {}", to_addr),
+                Err(e) => error!(
+                    "Failed to send notification via Gmail to {}: {}",
+                    to_addr, e
+                ),
             }
-            _ => {
-                if state.config.smtp_host.is_empty() {
-                    warn!(
-                        "SMTP not configured, cannot send notification to {}",
-                        to_addr
-                    );
+        } else {
+            if state.config.smtp_host.is_empty() {
+                warn!(
+                    "SMTP not configured, cannot send notification to {}",
+                    to_addr
+                );
+                continue;
+            }
+            let from = match state.config.smtp_from.parse::<lettre::message::Mailbox>() {
+                Ok(m) => m,
+                Err(e) => {
+                    error!("Invalid SMTP_FROM address: {}", e);
                     continue;
                 }
-                let from = match state.config.smtp_from.parse::<lettre::message::Mailbox>() {
-                    Ok(m) => m,
-                    Err(e) => {
-                        error!("Invalid SMTP_FROM address: {}", e);
-                        continue;
-                    }
-                };
-                let dest = if state.config.mail_destination_override.is_empty() {
-                    to_addr.as_str()
-                } else {
-                    warn!(
-                        "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}",
-                        to_addr, state.config.mail_destination_override
-                    );
-                    &state.config.mail_destination_override
-                };
-                let to = match dest.parse::<lettre::message::Mailbox>() {
-                    Ok(m) => m,
-                    Err(e) => {
-                        error!("Invalid destination email {}: {}", dest, e);
-                        continue;
-                    }
-                };
-                let email = match lettre::Message::builder()
-                    .from(from)
-                    .to(to)
-                    .subject(subject)
-                    .header(lettre::message::header::ContentType::TEXT_HTML)
-                    .body(html_body.to_string())
-                {
-                    Ok(m) => m,
-                    Err(e) => {
-                        error!("Failed to build notification email: {}", e);
-                        continue;
-                    }
-                };
-                let creds = lettre::transport::smtp::authentication::Credentials::new(
-                    state.config.smtp_user.clone(),
-                    state.config.smtp_password.clone(),
+            };
+            let dest = if state.config.mail_destination_override.is_empty() {
+                to_addr.as_str()
+            } else {
+                warn!(
+                    "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}",
+                    to_addr, state.config.mail_destination_override
                 );
-                let mailer = match lettre::SmtpTransport::relay(&state.config.smtp_host) {
-                    Ok(builder) => builder
-                        .port(state.config.smtp_port)
-                        .credentials(creds)
-                        .build(),
-                    Err(e) => {
-                        error!("SMTP transport error: {}", e);
-                        continue;
-                    }
-                };
-                use lettre::Transport;
-                match mailer.send(&email) {
-                    Ok(_) => info!("Notification email sent via SMTP to {}", to_addr),
-                    Err(e) => error!("Failed to send notification via SMTP to {}: {}", to_addr, e),
+                &state.config.mail_destination_override
+            };
+            let to = match dest.parse::<lettre::message::Mailbox>() {
+                Ok(m) => m,
+                Err(e) => {
+                    error!("Invalid destination email {}: {}", dest, e);
+                    continue;
                 }
+            };
+            let email = match lettre::Message::builder()
+                .from(from)
+                .to(to)
+                .subject(subject)
+                .header(lettre::message::header::ContentType::TEXT_HTML)
+                .body(html_body.to_string())
+            {
+                Ok(m) => m,
+                Err(e) => {
+                    error!("Failed to build notification email: {}", e);
+                    continue;
+                }
+            };
+            let creds = lettre::transport::smtp::authentication::Credentials::new(
+                state.config.smtp_user.clone(),
+                state.config.smtp_password.clone(),
+            );
+            let mailer = match lettre::SmtpTransport::relay(&state.config.smtp_host) {
+                Ok(builder) => builder
+                    .port(state.config.smtp_port)
+                    .credentials(creds)
+                    .build(),
+                Err(e) => {
+                    error!("SMTP transport error: {}", e);
+                    continue;
+                }
+            };
+            match mailer.send(&email) {
+                Ok(_) => info!("Notification email sent via SMTP to {}", to_addr),
+                Err(e) => error!("Failed to send notification via SMTP to {}: {}", to_addr, e),
             }
         }
     }
@@ -3712,10 +3716,10 @@ async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usize, u
                 new_unimported
             );
             let html_body = format!(
-                r#"<p>Bonjour,</p>
+                r"<p>Bonjour,</p>
 <p><strong>{count}</strong> nouvelle(s) adhésion(s) HelloAsso sont en attente d'import ({total} au total).</p>
 <p>Connectez-vous à AGHIL pour les traiter.</p>
-<p><em>— PowPow pour AG'HIL</em></p>"#,
+<p><em>— PowPow pour AG'HIL</em></p>",
                 count = new_unimported,
                 total = unimported_after,
             );
@@ -3921,10 +3925,12 @@ struct UserListResponse {
 
 type Season = i16;
 
+#[must_use]
 pub fn get_current_season() -> Season {
     get_season_for(chrono::Utc::now())
 }
 
+#[must_use]
 pub fn get_season_for(date: chrono::DateTime<chrono::Utc>) -> Season {
     // Season runs from June to May (e.g., June 2023 - May 2024 = season 2024)
     // Payments from June onwards are for the next year's season

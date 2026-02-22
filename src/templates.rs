@@ -176,7 +176,7 @@ fn page(
 ) -> String {
     let nav = navbar(prefix, nav_kind, active);
     let p = prefix;
-    let badge_css = r#"<style>.navbar-item{position:relative;}.nav-badge{background:#f14668;color:white;border-radius:999px;min-width:18px;height:18px;font-size:0.65rem;font-weight:bold;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;position:absolute;top:6px;right:-2px;line-height:1;box-shadow:0 0 0 2px var(--bulma-navbar-background-color,#363636);}.button .nav-badge{position:static;margin-left:6px;box-shadow:none;}</style>"#;
+    let badge_css = r"<style>.navbar-item{position:relative;}.nav-badge{background:#f14668;color:white;border-radius:999px;min-width:18px;height:18px;font-size:0.65rem;font-weight:bold;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;position:absolute;top:6px;right:-2px;line-height:1;box-shadow:0 0 0 2px var(--bulma-navbar-background-color,#363636);}.button .nav-badge{position:static;margin-left:6px;box-shadow:none;}</style>";
     let badge_script = format!(
         "<script>fetch('{p}/api/badge-counts').then(r=>r.json()).then(d=>{{document.querySelectorAll('.nav-badge').forEach(b=>{{const c=d[b.dataset.badge];if(c>0){{b.textContent=c;b.style.display='';}}}});}}).catch(()=>{{}});</script>",
         p = p,
@@ -199,7 +199,7 @@ fn page(
         .unwrap_or_default();
 
     let photo_bg_css = PHOTO_BG_URL.read().ok().and_then(|r| r.clone()).map(|url| format!(
-        r#"<style>
+        r"<style>
         body {{
             background-image: linear-gradient(rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.15)), url('{}{}');
             background-size: cover;
@@ -210,7 +210,7 @@ fn page(
         .section, .box, .footer {{
             background-color: rgba(255, 255, 255, 0.65);
         }}
-        </style>"#,
+        </style>",
         p, url
     )).unwrap_or_default();
 
@@ -261,9 +261,9 @@ pub fn index(
     chief_ateliers: &[Atelier],
     upcoming: &[(chrono::NaiveDate, String, i16, i64)],
 ) -> String {
-    let extra_head = r#"<style>
+    let extra_head = r"<style>
             .week-day { padding: 0.5rem 0; border-bottom: 1px solid var(--bulma-border-weak); display: flex; align-items: center; gap: 0.4rem; }
-        </style>"#;
+        </style>";
 
     let mut sections = String::new();
 
@@ -472,12 +472,13 @@ pub fn index(
         prefix,
         &NavKind::LoginOnly,
         "",
-        &extra_head,
+        extra_head,
         &sections,
         "",
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn membership_list_with_filters(
     memberships_with_status: Vec<(User, MembershipWithStatus)>,
     search: Option<String>,
@@ -583,10 +584,10 @@ pub fn membership_list_with_filters(
         ""
     };
     let not_imported_card_active = if only_not_imported { "is-active" } else { "" };
-    let filter_all_class = if !only_not_imported {
-        "is-primary"
-    } else {
+    let filter_all_class = if only_not_imported {
         "is-light"
+    } else {
+        "is-primary"
     };
     let filter_not_imported_class = if only_not_imported {
         "is-primary"
@@ -594,7 +595,7 @@ pub fn membership_list_with_filters(
         "is-light"
     };
 
-    let extra_head = r#"<style>
+    let extra_head = r"<style>
         .table-container {
             overflow-x: auto;
         }
@@ -614,7 +615,7 @@ pub fn membership_list_with_filters(
             font-weight: bold;
             line-height: 1;
         }
-    </style>"#;
+    </style>";
 
     let content = format!(
         r#"    <section class="section">
@@ -746,14 +747,14 @@ pub fn membership_list_with_filters(
         rows_html = rows_html
     );
 
-    let scripts = r#"<script>
+    let scripts = r"<script>
         // Auto-submit on enter in search field
         document.getElementById('searchInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 document.getElementById('filterForm').submit();
             }
         });
-    </script>"#;
+    </script>";
 
     page(
         "Liste des Adhésions - HelloAsso",
@@ -940,10 +941,10 @@ pub fn import_staff_form(
             }
         };
 
-        let season_info = candidate
-            .latest_season
-            .map(|s| format!("Dernière saison: {}", s))
-            .unwrap_or_else(|| "Aucune saison".to_string());
+        let season_info = candidate.latest_season.map_or_else(
+            || "Aucune saison".to_string(),
+            |s| format!("Dernière saison: {}", s),
+        );
 
         // Highlight and recommendation based on match type and position
         let is_exact_match = matches!(
@@ -1078,8 +1079,7 @@ pub fn import_staff_form(
             }
             let default_email_val = unique_emails
                 .first()
-                .map(|(_, _, d)| *d)
-                .unwrap_or(default_email);
+                .map_or(default_email.as_str(), |(_, _, d)| *d);
             format!(
                 r#"<div class="field">
                     <label class="label">Garder l'email</label>
@@ -1093,7 +1093,7 @@ pub fn import_staff_form(
         };
 
         // Alternate background colors for better visual separation
-        let bg_color = if option_index % 2 == 0 {
+        let bg_color = if option_index.is_multiple_of(2) {
             "var(--bulma-scheme-main)"
         } else {
             "var(--bulma-scheme-main-bis)"
@@ -1182,7 +1182,7 @@ pub fn import_staff_form(
     } else {
         "var(--bulma-border)"
     };
-    let create_bg_color = if option_index % 2 == 0 {
+    let create_bg_color = if option_index.is_multiple_of(2) {
         "var(--bulma-scheme-main)"
     } else {
         "var(--bulma-scheme-main-bis)"
@@ -1326,7 +1326,7 @@ pub fn import_staff_form(
     };
 
     // Count total options available
-    let total_options = candidates.len() + if allow_create { 1 } else { 0 };
+    let total_options = candidates.len() + usize::from(allow_create);
 
     // Warning notification if there are multiple options
     let multiple_options_warning = if total_options > 1 {
@@ -1647,12 +1647,12 @@ pub fn restore_page(prefix: &str) -> String {
         p = prefix
     );
 
-    let scripts = r#"    <script>
+    let scripts = r"    <script>
         function updateFileName(input) {
             const fileName = input.files[0] ? input.files[0].name : 'Aucun fichier sélectionné';
             document.getElementById('file-name').textContent = fileName;
         }
-    </script>"#;
+    </script>";
 
     page(
         "Restaurer la base de données - AGHIL",
@@ -1859,11 +1859,11 @@ pub fn staff_list(
         } else if staff.is_admin {
             r#"<td class="has-text-centered has-background-info"><span class="icon has-text-white"><i class="fas fa-check"></i></span></td>"#.to_string()
         } else {
-            r#"<td></td>"#.to_string()
+            r"<td></td>".to_string()
         };
 
         let contact_cells = if show_contact {
-            format!(r#"<td>{}</td><td>{}</td>"#, email_display, phone)
+            format!(r"<td>{}</td><td>{}</td>", email_display, phone)
         } else {
             String::new()
         };
@@ -1891,7 +1891,7 @@ pub fn staff_list(
         ));
     }
 
-    let extra_head = r#"    <style>
+    let extra_head = r"    <style>
         .table-container {
             overflow: auto;
             max-height: calc(100vh - 300px);
@@ -1927,7 +1927,7 @@ pub fn staff_list(
                 white-space: nowrap;
             }
         }
-    </style>"#;
+    </style>";
 
     let content = format!(
         r#"    <section class="section">
@@ -1998,6 +1998,7 @@ pub fn staff_list(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn person_detail(
     staff: &Staff,
     ateliers: &[Atelier],
@@ -2061,7 +2062,7 @@ pub fn person_detail(
                 )
             } else {
                 // Non-admin: show read-only validation status badge
-                let badge = if r.chief {
+                if r.chief {
                     r#"<span class="tag is-warning ml-5 mt-1"><i class="fas fa-crown mr-1"></i> Chef</span>"#.to_string()
                 } else if r.validated {
                     r#"<span class="tag is-success ml-5 mt-1"><i class="fas fa-check mr-1"></i> Validé</span>"#.to_string()
@@ -2069,8 +2070,7 @@ pub fn person_detail(
                     r#"<span class="tag is-warning is-light ml-5 mt-1"><i class="fas fa-clock mr-1"></i> En attente de validation</span>"#.to_string()
                 } else {
                     String::new()
-                };
-                badge
+                }
             }
         } else {
             String::new()
@@ -2205,10 +2205,10 @@ pub fn person_detail(
         )
     } else if !staff.comment.is_empty() {
         format!(
-            r#"<p>
+            r"<p>
                                 <strong>Commentaire:</strong><br>
                                 {comment}
-                            </p>"#,
+                            </p>",
             comment = comment_display
         )
     } else {
@@ -2300,16 +2300,16 @@ pub fn person_detail(
                 _ => r#"<span class="icon has-text-warning"><i class="fas fa-coins"></i></span>"#,
             };
             let date_display = entry.date.as_deref().unwrap_or("—");
-            let amount_display = entry
-                .amount
-                .map(|a| {
+            let amount_display = entry.amount.map_or_else(
+                || "—".to_string(),
+                |a| {
                     if entry.source == "helloasso" {
                         format!("{:.2}€", a as f32 / 100.0)
                     } else {
                         format!("{}€", a)
                     }
-                })
-                .unwrap_or_else(|| "—".to_string());
+                },
+            );
             let name = format!(
                 "{} {}",
                 capitalize_words(&entry.first_name),
@@ -2319,21 +2319,29 @@ pub fn person_detail(
             let phone_display = entry
                 .phone
                 .as_deref()
-                .map(|p| format_phone_international(p))
-                .unwrap_or_else(|| "—".to_string());
+                .map_or_else(|| "—".to_string(), format_phone_international);
             let payer_line = if let Some(ref payer) = entry.payer_email {
-                if entry.email.as_deref() != Some(payer.as_str()) {
+                if entry.email.as_deref() == Some(payer.as_str()) {
+                    String::new()
+                } else {
                     format!(
                         r#"<span class="is-size-7 has-text-grey">Payeur: {}</span><br>"#,
                         payer
                     )
-                } else {
-                    String::new()
                 }
             } else {
                 String::new()
             };
 
+            let item_type = format!(
+                "{} {}",
+                entry.item_type,
+                match entry.source.as_str() {
+                    "helloasso" => "HelloAsso",
+                    "check" => "Chèque",
+                    _ => "Liquide",
+                }
+            );
             items_html.push_str(&format!(
                 r#"<div class="box mb-3 p-3">
                     <div class="columns is-mobile is-vcentered is-multiline">
@@ -2353,15 +2361,7 @@ pub fn person_detail(
                     </div>
                 </div>"#,
                 icon = icon,
-                item_type = format!(
-                    "{} {}",
-                    entry.item_type,
-                    match entry.source.as_str() {
-                        "helloasso" => "HelloAsso",
-                        "check" => "Chèque",
-                        _ => "Liquide",
-                    }
-                ),
+                item_type = item_type,
                 season = entry.season,
                 date = date_display,
                 amount = amount_display,
@@ -2383,7 +2383,7 @@ pub fn person_detail(
         )
     };
 
-    let extra_head = r##"    <style>
+    let extra_head = r"    <style>
         .atelier-checkbox {
             width: 1.25rem;
             height: 1.25rem;
@@ -2402,7 +2402,7 @@ pub fn person_detail(
             z-index: 100;
             min-width: 300px;
         }
-    </style>"##;
+    </style>";
 
     let content = format!(
         r##"    <div id="notification-container"></div>
@@ -2480,7 +2480,7 @@ pub fn person_detail(
 
     // Build admin-only scripts conditionally
     let admin_scripts = if is_admin {
-        r##"
+        r#"
         // Handle validated checkbox changes
         document.querySelectorAll('.role-validated-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', async function() {
@@ -2647,13 +2647,13 @@ pub fn person_detail(
                 btn.classList.remove('is-loading');
             }
         });
-"##
+"#
     } else {
         ""
     };
 
     let contact_scripts = if can_edit_contact && show_contact {
-        r##"
+        r"
         // Handle contact save
         document.getElementById('save-contact-btn').addEventListener('click', async function() {
             if (!confirm('Attention à bien vérifier avant de confirmer !')) return;
@@ -2684,13 +2684,13 @@ pub fn person_detail(
                 btn.classList.remove('is-loading');
             }
         });
-"##
+"
     } else {
         ""
     };
 
     let scripts = format!(
-        r##"    <script>
+        r#"    <script>
         const staffId = "{staff_id}";
         const prefix = "{p}";
 
@@ -2750,7 +2750,7 @@ pub fn person_detail(
         {admin_scripts}
 
         {contact_scripts}
-    </script>"##,
+    </script>"#,
         p = prefix,
         staff_id = staff.id,
         admin_scripts = admin_scripts,
@@ -2788,8 +2788,7 @@ pub fn cash_list(cash_payments: Vec<(Cash, bool)>, current_season: i16, prefix: 
         let phone = cash
             .phone
             .as_deref()
-            .map(|p| format_phone_international(p))
-            .unwrap_or_else(|| "—".to_string());
+            .map_or_else(|| "—".to_string(), format_phone_international);
         let date = cash.date.format("%d/%m/%Y").to_string();
         let season: i16 = if cash.date.month() >= 6 {
             cash.date.year() as i16 + 1
@@ -3054,7 +3053,7 @@ pub fn cash_import_form(
     let phone = cash
         .phone
         .as_deref()
-        .map(|p| format_phone_international(p))
+        .map(format_phone_international)
         .unwrap_or_default();
     let amount = format!("{}€", cash.amount);
     let date = cash.date.format("%d/%m/%Y").to_string();
@@ -3094,10 +3093,10 @@ pub fn cash_import_form(
             StaffMatchType::DoubleSubscription => "Double adhésion probable",
         };
 
-        let season_info = candidate
-            .latest_season
-            .map(|s| format!("Dernière saison: {}", s))
-            .unwrap_or_else(|| "Aucune saison".to_string());
+        let season_info = candidate.latest_season.map_or_else(
+            || "Aucune saison".to_string(),
+            |s| format!("Dernière saison: {}", s),
+        );
 
         let is_exact_match = matches!(
             candidate.match_type,
@@ -3169,10 +3168,10 @@ pub fn cash_import_form(
 
         let staff_email_lower = staff.email.to_lowercase();
         let email_choice_html = if cash_email.is_empty() || cash_email == staff_email_lower {
-            let email_value = if !cash_email.is_empty() {
-                &cash_email
-            } else {
+            let email_value = if cash_email.is_empty() {
                 &staff.email
+            } else {
+                &cash_email
             };
             format!(
                 r#"<input type="hidden" name="email" value="{}">"#,
@@ -3199,7 +3198,7 @@ pub fn cash_import_form(
             )
         };
 
-        let bg_color = if option_index % 2 == 0 {
+        let bg_color = if option_index.is_multiple_of(2) {
             "var(--bulma-scheme-main)"
         } else {
             "var(--bulma-scheme-main-bis)"
@@ -3284,7 +3283,7 @@ pub fn cash_import_form(
     } else {
         "var(--bulma-border)"
     };
-    let create_bg_color = if option_index % 2 == 0 {
+    let create_bg_color = if option_index.is_multiple_of(2) {
         "var(--bulma-scheme-main)"
     } else {
         "var(--bulma-scheme-main-bis)"
@@ -3497,6 +3496,11 @@ pub fn cash_import_form(
     )
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 pub fn calendar(
     atelier: &Atelier,
     needs: &[Need],
@@ -3504,7 +3508,7 @@ pub fn calendar(
     presence: &HashMap<(uuid::Uuid, uuid::Uuid), (bool, bool)>,
     all_ateliers: &[Atelier],
     prefix: &str,
-    viewer_id: uuid::Uuid,
+    viewer_id: Option<uuid::Uuid>,
     _is_admin: bool,
 ) -> String {
     // Build nav links for ateliers
@@ -3544,21 +3548,11 @@ pub fn calendar(
         // Count filled per half-day
         let filled_first: i16 = staff_list
             .iter()
-            .filter(|s| {
-                presence
-                    .get(&(need.id, s.id))
-                    .map(|(f, _)| *f)
-                    .unwrap_or(false)
-            })
+            .filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(f, _)| *f))
             .count() as i16;
         let filled_second: i16 = staff_list
             .iter()
-            .filter(|s| {
-                presence
-                    .get(&(need.id, s.id))
-                    .map(|(_, s)| *s)
-                    .unwrap_or(false)
-            })
+            .filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(_, s)| *s))
             .count() as i16;
         let both_complete = filled_first >= need.quantity && filled_second >= need.quantity;
         let first_class = if filled_first >= need.quantity {
@@ -3573,7 +3567,11 @@ pub fn calendar(
         };
 
         let sunday_class = if is_sunday { " cal-sunday" } else { "" };
-        let complete_class = if both_complete { " cal-complete" } else { "" };
+        let complete_class = if both_complete {
+            " cal-complete"
+        } else {
+            " cal-danger"
+        };
 
         let (first_label_h, second_label_h) = if need.nightly {
             ("soir", "nuit")
@@ -3602,21 +3600,11 @@ pub fn calendar(
         .filter(|need| {
             let filled_first: i16 = staff_list
                 .iter()
-                .filter(|s| {
-                    presence
-                        .get(&(need.id, s.id))
-                        .map(|(f, _)| *f)
-                        .unwrap_or(false)
-                })
+                .filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(f, _)| *f))
                 .count() as i16;
             let filled_second: i16 = staff_list
                 .iter()
-                .filter(|s| {
-                    presence
-                        .get(&(need.id, s.id))
-                        .map(|(_, s)| *s)
-                        .unwrap_or(false)
-                })
+                .filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(_, s)| *s))
                 .count() as i16;
             filled_first >= need.quantity && filled_second >= need.quantity
         })
@@ -3626,7 +3614,7 @@ pub fn calendar(
     // Build rows (staff)
     let mut rows_html = String::new();
     for staff in staff_list {
-        let can_toggle = staff.id == viewer_id;
+        let can_toggle = viewer_id.is_some_and(|vid| staff.id == vid);
         let disabled_attr = if can_toggle { "" } else { "disabled" };
         let name = format!(
             "{} {}",
@@ -3668,7 +3656,7 @@ pub fn calendar(
             let complete_class = if complete_needs.contains(&need.id) {
                 " cal-complete"
             } else {
-                ""
+                " cal-danger"
             };
 
             rows_html.push_str(&format!(
@@ -3700,7 +3688,7 @@ pub fn calendar(
         rows_html.push_str("</tr>");
     }
 
-    let extra_head = r##"    <style>
+    let extra_head = r"    <style>
         .cal-scroll { overflow-x: auto; max-height: 85vh; }
         .cal-table { border-collapse: collapse; white-space: nowrap; }
         .cal-table th, .cal-table td { border: 1px solid var(--bulma-border); padding: 0.3rem 0.4rem; vertical-align: middle; }
@@ -3713,7 +3701,8 @@ pub fn calendar(
         .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: white; }
         .cal-table tbody tr:nth-child(even) td.cal-name-col { background: #fafafa; }
         .cal-sunday { background: var(--bulma-link-light) !important; }
-        .cal-complete { background: var(--bulma-success-light) !important; }
+        .cal-complete { background: #effaf5 !important; }
+        .cal-danger { background: #feecf0 !important; }
         .cal-cell.cal-active { background: var(--bulma-success) !important; color: var(--bulma-success-invert); }
         .cal-day-col { min-width: 70px; }
         .cal-day-name { font-size: 0.75rem; }
@@ -3734,7 +3723,7 @@ pub fn calendar(
         .atelier-nav a { padding: 0.4rem 0.75rem; border-radius: 4px; background: var(--bulma-background); color: var(--bulma-text); text-decoration: none; font-size: 0.9rem; }
         .atelier-nav a.is-active { background: var(--bulma-link); color: var(--bulma-link-invert); font-weight: 600; }
         .atelier-nav a:hover:not(.is-active) { background: var(--bulma-scheme-main-ter); }
-    </style>"##;
+    </style>";
 
     let empty_message = if needs.is_empty() {
         r#"<div class="notification is-warning is-light mt-4"><span class="icon"><i class="fas fa-exclamation-triangle"></i></span> Aucun besoin déclaré pour cet atelier.</div>"#
@@ -3745,7 +3734,7 @@ pub fn calendar(
     };
 
     let content = format!(
-        r##"    <div id="notification-container"></div>
+        r#"    <div id="notification-container"></div>
 
     <section class="section pt-4 pb-4">
         <div class="container is-fluid">
@@ -3771,7 +3760,7 @@ pub fn calendar(
 
             {empty_message}
         </div>
-    </section>"##,
+    </section>"#,
         atelier_name = atelier.name,
         atelier_nav = atelier_nav,
         header_html = header_html,
@@ -3780,7 +3769,7 @@ pub fn calendar(
     );
 
     let scripts = format!(
-        r##"    <script>
+        r#"    <script>
         const prefix = "{p}";
 
         function showNotification(message, type) {{
@@ -3866,7 +3855,7 @@ pub fn calendar(
                 }}
             }});
         }});
-    </script>"##,
+    </script>"#,
         p = prefix,
     );
 
@@ -3943,7 +3932,7 @@ fn render_upcoming_week(upcoming: &[(chrono::NaiveDate, String, i16, i64)]) -> S
         };
 
         for (day, atelier_name, quantity, filled) in upcoming {
-            let missing = (*quantity as i64) - filled;
+            let missing = i64::from(*quantity) - filled;
             if current_day != Some(*day) {
                 if let Some(prev_day) = current_day {
                     flush_day(prev_day, &day_deficits, &mut week_html);
@@ -4023,7 +4012,7 @@ pub fn render_upcoming_week_email(upcoming: &[(chrono::NaiveDate, String, i16, i
     };
 
     for (day, atelier_name, quantity, filled) in upcoming {
-        let missing = (*quantity as i64) - filled;
+        let missing = i64::from(*quantity) - filled;
         if current_day != Some(*day) {
             if let Some(prev_day) = current_day {
                 flush_day(prev_day, &day_deficits, &mut html);
@@ -4045,6 +4034,7 @@ pub fn calendar_editor(
     editable_ids: &[uuid::Uuid],
     future_needs: &[(Need, i64, i64)],
     prefix: &str,
+    logged_in: bool,
 ) -> String {
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -4098,12 +4088,14 @@ pub fn calendar_editor(
     let mut header1 = String::from(r#"<th rowspan="2" class="cal-name-col">Atelier</th>"#);
     for d in &days {
         let n = subcols(d);
+        let dd = format!("{:02}", d.day());
+        let mm = format!("{:02}", d.month());
         header1.push_str(&format!(
             r#"<th class="day-start" colspan="{n}">{dow} {dd}/{mm}</th>"#,
             n = n,
             dow = day_abbrev(*d),
-            dd = format!("{:02}", d.day()),
-            mm = format!("{:02}", d.month()),
+            dd = dd,
+            mm = mm,
         ));
     }
 
@@ -4165,7 +4157,7 @@ pub fn calendar_editor(
                     }
                 }
                 Some((need, h1, h2)) => {
-                    let qty = need.quantity as i64;
+                    let qty = i64::from(need.quantity);
                     let pad_before = if mixed && need.nightly { 2 } else { 0 };
                     let pad_after = if mixed && !need.nightly { 2 } else { 0 };
 
@@ -4179,29 +4171,29 @@ pub fn calendar_editor(
                     }
 
                     // First half cell
-                    let css1 = if *h1 >= qty {
+                    let style_first = if *h1 >= qty {
                         "cell-ok"
                     } else {
                         "cell-deficit"
                     };
-                    let cls1 = cell_class(css1);
+                    let class_first = cell_class(style_first);
                     body.push_str(&format!(
                         r#"<td class="{cls}" data-day="{day}">{h}/{q}</td>"#,
-                        cls = cls1,
+                        cls = class_first,
                         day = day_str,
                         h = h1,
                         q = qty,
                     ));
                     // Second half cell
-                    let css2 = if *h2 >= qty {
+                    let style_second = if *h2 >= qty {
                         "cell-ok"
                     } else {
                         "cell-deficit"
                     };
-                    let cls2 = cell_class(css2);
+                    let class_second = cell_class(style_second);
                     body.push_str(&format!(
                         r#"<td class="{cls}" data-day="{day}">{h}/{q}</td>"#,
-                        cls = cls2,
+                        cls = class_second,
                         day = day_str,
                         h = h2,
                         q = qty,
@@ -4221,18 +4213,20 @@ pub fn calendar_editor(
         body.push_str("</tr>");
     }
 
-    // Build calendar page links
+    // Build calendar page links (only for logged-in users who can access /calendar/{slug})
     let mut calendar_links = String::new();
-    for a in all_ateliers {
-        calendar_links.push_str(&format!(
-            r#"<a class="tag is-medium is-link is-light" href="{p}/calendar/{slug}">
-            <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
-            {name}</a>"#,
-            p = prefix,
-            slug = a.slug,
-            icon = a.icon,
-            name = a.name,
-        ));
+    if logged_in {
+        for a in all_ateliers {
+            calendar_links.push_str(&format!(
+                r#"<a class="tag is-medium is-link is-light" href="{p}/calendar/{slug}">
+                <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
+                {name}</a>"#,
+                p = prefix,
+                slug = a.slug,
+                icon = a.icon,
+                name = a.name,
+            ));
+        }
     }
 
     // Build editable atelier IDs as JSON array for JS
@@ -4264,7 +4258,7 @@ pub fn calendar_editor(
         ""
     };
 
-    let extra_head = r##"    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/css/bulma-calendar.min.css">
+    let extra_head = r#"    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/css/bulma-calendar.min.css">
     <style>
         .calendar-links { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.2rem; }
         .cal-scroll { overflow-x: auto; max-height: 85vh; }
@@ -4281,8 +4275,8 @@ pub fn calendar_editor(
         .cal-table .day-start { border-left: 2.5px solid var(--bulma-grey-light) !important; }
         .cal-table td.day-cell { cursor: pointer; }
         .cal-table td.day-cell:hover { background: var(--bulma-link-light) !important; }
-        .cell-ok { color: var(--bulma-success-dark); font-weight: 600; background: var(--bulma-success-light) !important; }
-        .cell-deficit { color: var(--bulma-danger-dark); font-weight: 600; }
+        .cal-table td.cell-ok { color: #257953; font-weight: 600; background: #effaf5 !important; }
+        .cal-table td.cell-deficit { color: #cc0f35; font-weight: 600; background: #feecf0 !important; }
         .notification.toast {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             z-index: 100; min-width: 300px;
@@ -4328,29 +4322,45 @@ pub fn calendar_editor(
         .editor-columns { display: flex; gap: 2rem; flex-wrap: wrap; align-items: flex-start; }
         .editor-left { flex: 0 0 auto; }
         .editor-right { flex: 1 1 400px; min-width: 300px; }
-    </style>"##;
+    </style>"#;
+
+    let calendar_links_section = if logged_in {
+        format!(
+            r#"<div class="calendar-links">
+                <span class="has-text-grey mr-1" style="line-height:2rem;">Plannings :</span>
+                {calendar_links}
+            </div>"#,
+            calendar_links = calendar_links,
+        )
+    } else {
+        String::new()
+    };
+
+    let add_button = if editable_ids.is_empty() {
+        String::new()
+    } else {
+        r#"<div class="mb-4">
+                <button class="button is-primary" id="open-add-modal">
+                    <span class="icon"><i class="fas fa-plus"></i></span>
+                    <span>Ajouter des besoins en bénévoles</span>
+                </button>
+            </div>"#
+            .to_string()
+    };
 
     let content = format!(
-        r##"    <div id="notification-container"></div>
+        r#"    <div id="notification-container"></div>
 
     <section class="section pt-4 pb-4">
         <div class="container is-fluid">
             <h1 class="title is-4 mb-3">
                 <span class="icon"><i class="fas fa-calendar-alt"></i></span>
-                Gestion des besoins
+                Planning des besoins
             </h1>
 
-            <div class="calendar-links">
-                <span class="has-text-grey mr-1" style="line-height:2rem;">Plannings :</span>
-                {calendar_links}
-            </div>
+            {calendar_links_section}
 
-            <div class="mb-4">
-                <button class="button is-primary" id="open-add-modal">
-                    <span class="icon"><i class="fas fa-plus"></i></span>
-                    <span>Ajouter des besoins en bénévoles</span>
-                </button>
-            </div>
+            {add_button}
 
             <div class="cal-scroll">
                 <table class="cal-table table is-bordered is-narrow is-hoverable">
@@ -4407,8 +4417,7 @@ pub fn calendar_editor(
                 </div>
             </section>
         </div>
-    </div>"##,
-        calendar_links = calendar_links,
+    </div>"#,
         header1 = header1,
         header2 = header2,
         no_data_row = no_data_row,
@@ -4416,7 +4425,7 @@ pub fn calendar_editor(
     );
 
     let scripts = format!(
-        r##"    <script src="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/js/bulma-calendar.min.js"></script>
+        r#"    <script src="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/js/bulma-calendar.min.js"></script>
     <script>
     (function() {{
         const prefix = "{p}";
@@ -4650,7 +4659,7 @@ pub fn calendar_editor(
             }});
         }}
     }})();
-    </script>"##,
+    </script>"#,
         p = prefix,
         ateliers_json = ateliers_json,
         editable_json = editable_json,
@@ -4668,7 +4677,7 @@ pub fn calendar_editor(
 }
 
 pub fn login_page(prefix: &str) -> String {
-    let content = r##"    <section class="section">
+    let content = r#"    <section class="section">
         <div class="container">
             <div class="columns is-centered">
                 <div class="column is-5">
@@ -4706,10 +4715,10 @@ pub fn login_page(prefix: &str) -> String {
                 </div>
             </div>
         </div>
-    </section>"##;
+    </section>"#;
 
     let scripts = format!(
-        r##"    <script>
+        r#"    <script>
     (function() {{
         const prefix = '{p}';
         const input = document.getElementById('search-input');
@@ -4797,7 +4806,7 @@ pub fn login_page(prefix: &str) -> String {
             }});
         }});
     }})();
-    </script>"##,
+    </script>"#,
         p = prefix
     );
 
@@ -5017,7 +5026,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
     // Generate admin upload form (only shown to admins)
     let admin_upload_form = if is_admin {
         format!(
-            r##"<div class="box">
+            r#"<div class="box">
                 <form id="photo-upload-form" action="{prefix}/photos/upload" method="post" enctype="multipart/form-data">
                     <input type="hidden" name="photographer_id" id="photographer_id">
                     <div class="field">
@@ -5099,7 +5108,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
                         </div>
                     </div>
                 </form>
-            </div>"##,
+            </div>"#,
             prefix = prefix
         )
     } else {
@@ -5123,14 +5132,14 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
 
         let delete_footer = if is_admin {
             format!(
-                r##"<footer class="card-footer">
+                r#"<footer class="card-footer">
                     <form action="{url}" method="post" style="width:100%" onsubmit="return confirm('Supprimer cette photo ?')">
                         <button type="submit" class="card-footer-item has-text-danger" style="border:none;background:none;cursor:pointer;width:100%">
                             <span class="icon"><i class="fas fa-trash"></i></span>
                             <span>Supprimer</span>
                         </button>
                     </form>
-                </footer>"##,
+                </footer>"#,
                 url = delete_url
             )
         } else {
@@ -5151,7 +5160,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
         };
 
         photo_thumbnails.push_str(&format!(
-            r##"
+            r#"
             <div class="column is-one-quarter">
                 <div class="card">
                     <div class="card-image">
@@ -5171,7 +5180,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
                     {delete_footer}
                 </div>
             </div>
-            "##,
+            "#,
             photo_url = photo_url,
             image_html = image_html,
             photographer = escape_html(photographer_name),
@@ -5179,7 +5188,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
     }
 
     if photo_thumbnails.is_empty() {
-        photo_thumbnails = r##"<div class="column"><div class="notification is-info">Aucune photo disponible</div></div>"##.to_string();
+        photo_thumbnails = r#"<div class="column"><div class="notification is-info">Aucune photo disponible</div></div>"#.to_string();
     }
 
     let content = format!(
@@ -5214,7 +5223,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
     );
 
     let script = format!(
-        r##"<script>
+        r#"<script>
     document.querySelectorAll('input[type="file"]').forEach(input => {{
         input.addEventListener('change', function(e) {{
             const fileName = e.target.files[0] ? e.target.files[0].name : 'Aucun fichier sélectionné';
@@ -5375,7 +5384,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
             }});
         }});
     }})();
-    </script>"##,
+    </script>"#,
         prefix = prefix
     );
 

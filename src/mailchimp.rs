@@ -162,7 +162,7 @@ impl MailchimpClient {
     }
 
     /// Sync all staff members to the Mailchimp audience.
-    /// Returns (success_count, error_count).
+    /// Returns (`success_count`, `error_count`).
     pub async fn sync_staff(&self, staff: &[Staff]) -> Result<(usize, usize)> {
         let mut ok = 0usize;
         let mut err_count = 0usize;
@@ -311,7 +311,7 @@ impl MailchimpClient {
 }
 
 /// Compute the hex-encoded MD5 hash of `data`.
-/// Mailchimp uses MD5(lowercase_email) as subscriber hash.
+/// Mailchimp uses `MD5(lowercase_email)` as subscriber hash.
 fn md5_hex(data: &[u8]) -> String {
     use std::fmt::Write;
     // Simple MD5 implementation inline to avoid adding a dependency.
@@ -325,6 +325,7 @@ fn md5_hex(data: &[u8]) -> String {
 }
 
 // Minimal MD5 (RFC 1321) – only used for subscriber hashes.
+#[allow(clippy::unreadable_literal, clippy::many_single_char_names)]
 fn md5_digest(input: &[u8]) -> [u8; 16] {
     const S: [u32; 64] = [
         7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5,

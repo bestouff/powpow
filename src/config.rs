@@ -1,8 +1,11 @@
 use anyhow::Result;
 use std::env;
 
+const DEFAULT_ADDRESS: &str = "127.0.0.1:3000";
+
 #[derive(Debug, Clone)]
 pub struct AppConfig {
+    pub listen_address: String,
     pub database_url: String,
     pub helloasso_client_id: String,
     pub helloasso_client_secret: String,
@@ -34,6 +37,7 @@ impl AppConfig {
             env::var("DATABASE_URL").map_err(|_| anyhow::anyhow!("DATABASE_URL must be set"))?;
 
         Ok(Self {
+            listen_address: env::var("LISTEN_ADDRESS").unwrap_or(DEFAULT_ADDRESS.into()),
             database_url,
             helloasso_client_id: env::var("HELLOASSO_CLIENT_ID")
                 .map_err(|_| anyhow::anyhow!("HELLOASSO_CLIENT_ID must be set"))?,
