@@ -41,6 +41,8 @@ services:
       GMAIL_FROM: ${GMAIL_FROM:-}
       MAIL_DESTINATION_ADDRESS_OVERRIDE: ${MAIL_DESTINATION_ADDRESS_OVERRIDE:-}
       COOKIE_SECRET: ${COOKIE_SECRET:-}
+      SYNC_TOKEN: ${SYNC_TOKEN:-}
+      BACKUP_TOKEN: ${BACKUP_TOKEN:-}
       RUST_LOG: debug
     depends_on:
       postgres:

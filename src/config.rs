@@ -29,6 +29,8 @@ pub struct AppConfig {
     pub mail_method: String,
     pub mail_destination_override: String,
     pub cookie_secret: String,
+    pub sync_token: String,
+    pub backup_token: String,
 }
 
 impl AppConfig {
@@ -68,6 +70,8 @@ impl AppConfig {
             mail_destination_override: env::var("MAIL_DESTINATION_ADDRESS_OVERRIDE")
                 .unwrap_or_default(),
             cookie_secret: env::var("COOKIE_SECRET").unwrap_or_default(),
+            sync_token: env::var("SYNC_TOKEN").unwrap_or_default(),
+            backup_token: env::var("BACKUP_TOKEN").unwrap_or_default(),
         })
     }
 }

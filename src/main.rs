@@ -2239,16 +2239,60 @@ async fn do_import_cash(
     }
 }
 
+/// Check sync token from query param or Authorization header.
+/// Returns the caller name if authorized, or an error response.
+fn check_automation_token(
+    params: &HashMap<String, String>,
+    headers: &HeaderMap,
+    expected_token: &str,
+    label: &str,
+) -> Result<String, Response> {
+    let provided = params
+        .get("token")
+        .map(String::as_str)
+        .or_else(|| {
+            headers
+                .get("Authorization")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.strip_prefix("Bearer "))
+        });
+    match provided {
+        Some(t) if !expected_token.is_empty() && t == expected_token => {
+            Ok(format!("Automation ({label})"))
+        }
+        _ => Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "Unauthorized"})),
+        )
+            .into_response()),
+    }
+}
+
 async fn sync_users(
-    RequireAdmin(admin): RequireAdmin,
+    jar: SignedCookieJar,
+    headers: HeaderMap,
     State(state): State<AppState>,
-) -> impl IntoResponse {
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    // Check auth: either logged-in admin or valid sync token
+    let (caller_name, staff_id) =
+        if let Some(admin) = resolve_staff_if_admin(&jar, &state).await {
+            let name = format!("{} {}", admin.first_name, admin.last_name);
+            (name, Some(admin.id))
+        } else {
+            match check_automation_token(&params, &headers, &state.config.sync_token, "sync token")
+            {
+                Ok(name) => (name, None),
+                Err(resp) => return resp,
+            }
+        };
+
     match sync_users_from_helloasso(&state).await {
         Ok((user_count, membership_count)) => {
             let _ = database::insert_audit(
                 &state.db,
-                Some(admin.id),
-                &format!("{} {}", admin.first_name, admin.last_name),
+                staff_id,
+                &caller_name,
                 "Synchronisation HelloAsso",
                 &format!(
                     "{} utilisateurs, {} adhésions",
@@ -2259,15 +2303,46 @@ async fn sync_users(
             Html(format!(
                 "<div class='alert alert-success'>Successfully synchronized {} users and {} memberships</div>",
                 user_count, membership_count
-            ))
+            )).into_response()
         }
         Err(e) => {
             error!("Error syncing users: {}", e);
             Html(format!(
                 "<div class='alert alert-danger'>Error syncing users: {}</div>",
                 e
-            ))
+            )).into_response()
         }
+    }
+}
+
+/// Resolve logged-in staff if they are an admin.
+async fn resolve_staff_if_admin(
+    jar: &SignedCookieJar,
+    state: &AppState,
+) -> Option<models::Staff> {
+    let id = jar
+        .get("aghil_session")
+        .and_then(|c| c.value().parse::<uuid::Uuid>().ok())?;
+    let staff = database::get_staff_by_id(&state.db, id).await.ok()??;
+    if staff.is_admin || staff.is_god {
+        Some(staff)
+    } else {
+        None
+    }
+}
+
+async fn resolve_staff_if_god(
+    jar: &SignedCookieJar,
+    state: &AppState,
+) -> Option<models::Staff> {
+    let id = jar
+        .get("aghil_session")
+        .and_then(|c| c.value().parse::<uuid::Uuid>().ok())?;
+    let staff = database::get_staff_by_id(&state.db, id).await.ok()??;
+    if staff.is_god {
+        Some(staff)
+    } else {
+        None
     }
 }
 
@@ -2316,15 +2391,29 @@ async fn api_list_users(
 }
 
 async fn api_sync_users(
-    RequireAdmin(admin): RequireAdmin,
+    jar: SignedCookieJar,
+    headers: HeaderMap,
     State(state): State<AppState>,
-) -> impl IntoResponse {
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let (caller_name, staff_id) =
+        if let Some(admin) = resolve_staff_if_admin(&jar, &state).await {
+            let name = format!("{} {}", admin.first_name, admin.last_name);
+            (name, Some(admin.id))
+        } else {
+            match check_automation_token(&params, &headers, &state.config.sync_token, "sync token")
+            {
+                Ok(name) => (name, None),
+                Err(resp) => return resp,
+            }
+        };
+
     match sync_users_from_helloasso(&state).await {
         Ok((user_count, membership_count)) => {
             let _ = database::insert_audit(
                 &state.db,
-                Some(admin.id),
-                &format!("{} {}", admin.first_name, admin.last_name),
+                staff_id,
+                &caller_name,
                 "Synchronisation HelloAsso (API)",
                 &format!(
                     "{} utilisateurs, {} adhésions",
@@ -3732,13 +3821,32 @@ async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usize, u
 
 // Database backup endpoint - pure Rust using COPY protocol
 async fn backup_database(
-    RequireGod(god): RequireGod,
+    jar: SignedCookieJar,
+    headers: HeaderMap,
     State(state): State<AppState>,
-) -> impl IntoResponse {
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    // Check auth: either logged-in god or valid backup token
+    let (caller_name, staff_id) =
+        if let Some(god) = resolve_staff_if_god(&jar, &state).await {
+            let name = format!("{} {}", god.first_name, god.last_name);
+            (name, Some(god.id))
+        } else {
+            match check_automation_token(
+                &params,
+                &headers,
+                &state.config.backup_token,
+                "backup token",
+            ) {
+                Ok(name) => (name, None),
+                Err(resp) => return resp,
+            }
+        };
+
     let _ = database::insert_audit(
         &state.db,
-        Some(god.id),
-        &format!("{} {}", god.first_name, god.last_name),
+        staff_id,
+        &caller_name,
         "Sauvegarde base de données",
         "",
     )
