@@ -2241,6 +2241,7 @@ async fn do_import_cash(
 
 /// Check sync token from query param or Authorization header.
 /// Returns the caller name if authorized, or an error response.
+#[allow(clippy::result_large_err)]
 fn check_automation_token(
     params: &HashMap<String, String>,
     headers: &HeaderMap,
