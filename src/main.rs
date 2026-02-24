@@ -152,7 +152,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Clone state for background task before it moves into the router
-    let state_for_daily = app_state.clone();
+    let state_for_weekly = app_state.clone();
 
     // Build router
     let app = Router::new()
@@ -211,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
         .with_state(app_state);
 
     // Spawn daily morning email task
-    tokio::spawn(weekly_morning_email_loop(state_for_daily));
+    tokio::spawn(weekly_morning_email_loop(state_for_weekly));
 
     // Start server
     let listener = tokio::net::TcpListener::bind(&listen_address).await?;
@@ -3188,33 +3188,45 @@ fn get_custom_field_value(
         .and_then(|f| f.answer.clone())
 }
 
+fn next_monday_8am_local(
+    from_when: chrono::DateTime<chrono::Local>,
+) -> Option<chrono::DateTime<chrono::Local>> {
+    let today = from_when.date_naive();
+    let days_ahead = 8 - i64::from(today.weekday().number_from_monday());
+    let monday_8am =
+        from_when.date_naive().and_hms_opt(8, 0, 0).unwrap() + TimeDelta::days(days_ahead);
+    let Some(monday_8am_local) =
+        chrono::TimeZone::from_local_datetime(&from_when.timezone(), &monday_8am).single()
+    else {
+        // TZ failure, bail out
+        return None;
+    };
+
+    let target = if from_when >= monday_8am_local {
+        // Already past 8 AM today, schedule for next Monday
+        monday_8am_local + TimeDelta::days(7)
+    } else if from_when < monday_8am_local - TimeDelta::days(7) {
+        // Next Monday 8 AM is too far away
+        monday_8am_local - TimeDelta::days(7)
+    } else {
+        // Schedule for this coming Monday 8 AM
+        monday_8am_local
+    };
+    Some(target)
+}
+
 /// Send a notification email to a list of recipients.
 /// Uses the configured mail method (SMTP or Gmail).
 /// Background loop that sends a daily summary email to admins at 8:00 AM local time.
 async fn weekly_morning_email_loop(state: AppState) {
     loop {
-        // Calculate duration until next 8:00 AM local time
+        // Calculate duration until next Monday 8:00 AM local time
         let now = chrono::Local::now();
-        let today = now.date_naive();
-        let days_ahead = 8 - i64::from(today.weekday().number_from_monday());
-        let monday_8am =
-            now.date_naive().and_hms_opt(8, 0, 0).unwrap() + TimeDelta::days(days_ahead);
-        let Some(monday_8am_local) =
-            chrono::TimeZone::from_local_datetime(&now.timezone(), &monday_8am).single()
-        else {
+
+        let Some(target) = next_monday_8am_local(now) else {
             // Fallback: sleep 1 hour and retry
             tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
             continue;
-        };
-
-        let target = if now >= monday_8am_local {
-            // Already past 8 AM today, schedule for next week
-            monday_8am_local + TimeDelta::days(7)
-        } else if now < monday_8am_local - TimeDelta::days(7) {
-            // Next Monday 8 AM is too far away
-            monday_8am_local - TimeDelta::days(7)
-        } else {
-            monday_8am_local
         };
 
         let sleep_duration = (target - now)
@@ -4188,5 +4200,50 @@ async fn delete_photo(
             error!("Failed to delete photo: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+
+    use super::*;
+
+    #[test]
+    fn test_next_monday_8am_from_1am() {
+        let monday_1am = chrono::Local
+            .with_ymd_and_hms(2026, 2, 23, 1, 0, 0)
+            .unwrap();
+        let next_monday_8am_local = next_monday_8am_local(monday_1am).unwrap();
+        assert_eq!(
+            next_monday_8am_local,
+            chrono::Local
+                .with_ymd_and_hms(2026, 2, 23, 8, 0, 0)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_next_monday_8am_from_9am() {
+        let monday_9am = chrono::Local
+            .with_ymd_and_hms(2026, 2, 23, 9, 0, 0)
+            .unwrap();
+        let next_monday_8am_local = next_monday_8am_local(monday_9am).unwrap();
+        assert_eq!(
+            next_monday_8am_local,
+            chrono::Local.with_ymd_and_hms(2026, 3, 2, 8, 0, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_next_monday_8am_from_tuesday() {
+        let tuesday_5am = chrono::Local
+            .with_ymd_and_hms(2026, 2, 24, 5, 0, 0)
+            .unwrap();
+        let next_monday_8am_local = next_monday_8am_local(tuesday_5am).unwrap();
+        assert_eq!(
+            next_monday_8am_local,
+            chrono::Local.with_ymd_and_hms(2026, 3, 2, 8, 0, 0).unwrap()
+        );
     }
 }
