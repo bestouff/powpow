@@ -1,5 +1,5 @@
 use crate::models::{
-    Atelier, Cash, Membership, Need, PaymentHistoryEntry, Photo, PhotoMeta, Role, Staff,
+    self, Atelier, Cash, Membership, Need, PaymentHistoryEntry, Photo, PhotoMeta, Role, Staff,
     StaffMatchType, StaffWithSeason, User,
 };
 use anyhow::Result;
@@ -1756,6 +1756,79 @@ pub async fn delete_need(
     Ok(result.rows_affected() > 0)
 }
 
+// ── Opening days ──────────────────────────────────────────────────────
+
+/// Get all opening days (ordered by day).
+#[allow(dead_code)]
+pub async fn get_all_opening_days(pool: &PgPool) -> Result<Vec<models::OpeningDay>> {
+    let rows = sqlx::query_as::<_, models::OpeningDay>(
+        r"SELECT day, status FROM opening_days ORDER BY day",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// Get opening days for a set of dates (used when rendering calendar columns).
+pub async fn get_opening_days_for_dates(
+    pool: &PgPool,
+    dates: &[chrono::NaiveDate],
+) -> Result<Vec<models::OpeningDay>> {
+    if dates.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows = sqlx::query_as::<_, models::OpeningDay>(
+        r"SELECT day, status FROM opening_days WHERE day = ANY($1) ORDER BY day",
+    )
+    .bind(dates)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// Create a new opening day with 'reserved' status.
+pub async fn create_opening_day(
+    pool: &PgPool,
+    day: chrono::NaiveDate,
+) -> Result<models::OpeningDay> {
+    let row = sqlx::query_as::<_, models::OpeningDay>(
+        r"
+        INSERT INTO opening_days (day, status) VALUES ($1, 'reserved')
+        ON CONFLICT (day) DO NOTHING
+        RETURNING day, status
+        ",
+    )
+    .bind(day)
+    .fetch_optional(pool)
+    .await?;
+
+    row.ok_or_else(|| anyhow::anyhow!("Opening day {day} already exists"))
+}
+
+/// Update the status of an opening day.
+pub async fn update_opening_day_status(
+    pool: &PgPool,
+    day: chrono::NaiveDate,
+    status: models::OpeningDayStatus,
+) -> Result<bool> {
+    let result = sqlx::query(r"UPDATE opening_days SET status = $2 WHERE day = $1")
+        .bind(day)
+        .bind(status)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+/// Delete all needs (and cascade presence) for a given day across all ateliers.
+#[allow(dead_code)]
+pub async fn delete_needs_for_day(pool: &PgPool, day: chrono::NaiveDate) -> Result<u64> {
+    let result = sqlx::query(r"DELETE FROM needs WHERE day = $1")
+        .bind(day)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
 /// Upsert presence; delete row if both halves are false
 pub async fn upsert_presence(
     pool: &PgPool,
@@ -2179,7 +2252,7 @@ pub async fn get_pending_validations(
     let rows = if let Some(atelier_ids) = chief_of_ateliers {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -2193,7 +2266,7 @@ pub async fn get_pending_validations(
     } else {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -2227,6 +2300,7 @@ pub async fn get_pending_validations(
             needs_validation: row.try_get("a_needs_validation")?,
             default_nightly: row.try_get("a_default_nightly")?,
             icon: row.try_get("a_icon")?,
+            opening_day_typical_needed: row.try_get("a_opening_day_typical_needed")?,
         };
         result.push((staff, atelier));
     }
@@ -2259,6 +2333,7 @@ const TABLES_PARENT_FIRST: &[&str] = &[
     "staff",
     "cash",
     "ateliers",
+    "opening_days",
     "memberships",
     "payments",
     "roles",
@@ -2275,6 +2350,7 @@ const TABLES_CHILD_FIRST: &[&str] = &[
     "needs",
     "payments",
     "memberships",
+    "opening_days",
     "cash",
     "ateliers",
     "staff",

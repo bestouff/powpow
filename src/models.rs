@@ -200,6 +200,7 @@ pub struct Atelier {
     pub needs_validation: bool,
     pub default_nightly: bool,
     pub icon: String,
+    pub opening_day_typical_needed: i16,
 }
 
 impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
@@ -211,6 +212,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
             needs_validation: row.try_get("needs_validation")?,
             default_nightly: row.try_get("default_nightly")?,
             icon: row.try_get("icon")?,
+            opening_day_typical_needed: row.try_get("opening_day_typical_needed")?,
         })
     }
 }
@@ -253,6 +255,41 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Need {
             atelier: row.try_get("atelier")?,
             quantity: row.try_get("quantity")?,
             nightly: row.try_get("nightly")?,
+        })
+    }
+}
+
+// Opening day status
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "opening_day_status", rename_all = "lowercase")]
+pub enum OpeningDayStatus {
+    Reserved,
+    Validated,
+    Canceled,
+}
+
+impl std::fmt::Display for OpeningDayStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Reserved => write!(f, "reserved"),
+            Self::Validated => write!(f, "validated"),
+            Self::Canceled => write!(f, "canceled"),
+        }
+    }
+}
+
+// Opening day model (days when the ski station is open)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpeningDay {
+    pub day: chrono::NaiveDate,
+    pub status: OpeningDayStatus,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for OpeningDay {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(OpeningDay {
+            day: row.try_get("day")?,
+            status: row.try_get("status")?,
         })
     }
 }

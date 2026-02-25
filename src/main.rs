@@ -190,6 +190,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/calendar/need-days", get(api_get_need_days))
         .route("/calendar/{slug}", get(calendar_view))
         .route("/api/calendar/toggle", post(toggle_presence_api))
+        .route("/api/calendar/opening-day", post(api_create_opening_day))
+        .route(
+            "/api/calendar/opening-day/status",
+            post(api_update_opening_day_status),
+        )
         .route("/api/admin/flags", post(api_update_admin_flags))
         .route("/audit", get(audit_page_handler))
         .route("/validation", get(validation_page_handler))
@@ -1193,6 +1198,12 @@ async fn calendar_view(
         presence_map.insert((need_id, staff_id), (first_half, second_half));
     }
 
+    // Fetch opening day status for the days shown
+    let calendar_days: Vec<chrono::NaiveDate> = needs.iter().map(|n| n.day).collect();
+    let opening_days = database::get_opening_days_for_dates(&state.db, &calendar_days)
+        .await
+        .unwrap_or_default();
+
     Html(templates::calendar(
         &atelier,
         &needs,
@@ -1202,6 +1213,7 @@ async fn calendar_view(
         &prefix,
         me.as_ref().map(|s| s.id),
         me.as_ref().is_some_and(|s| s.is_admin),
+        &opening_days,
     ))
     .into_response()
 }
@@ -1357,6 +1369,155 @@ async fn toggle_presence_api(
     }
 }
 
+// --- Opening day management (admin only) ---
+
+#[derive(Debug, Deserialize)]
+struct CreateOpeningDayRequest {
+    day: String,
+}
+
+async fn api_create_opening_day(
+    RequireAdmin(me): RequireAdmin,
+    State(state): State<AppState>,
+    Json(payload): Json<CreateOpeningDayRequest>,
+) -> impl IntoResponse {
+    let Ok(day) = chrono::NaiveDate::parse_from_str(&payload.day, "%Y-%m-%d") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Format de date invalide (YYYY-MM-DD)"})),
+        );
+    };
+
+    // Create the opening day record
+    match database::create_opening_day(&state.db, day).await {
+        Ok(_) => {}
+        Err(e) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({"error": e.to_string()})),
+            );
+        }
+    }
+
+    // Create needs for all ateliers with opening_day_typical_needed > 0
+    let ateliers = match database::get_all_ateliers(&state.db).await {
+        Ok(a) => a,
+        Err(e) => {
+            error!("Error fetching ateliers for opening day: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            );
+        }
+    };
+
+    let mut created_count = 0_u32;
+    for atelier in &ateliers {
+        if atelier.opening_day_typical_needed > 0 {
+            match database::upsert_need(
+                &state.db,
+                atelier.id,
+                day,
+                atelier.opening_day_typical_needed,
+                atelier.default_nightly,
+            )
+            .await
+            {
+                Ok(_) => created_count += 1,
+                Err(e) => {
+                    error!(
+                        "Error creating need for atelier {} on {}: {}",
+                        atelier.name, day, e
+                    );
+                }
+            }
+        }
+    }
+
+    let _ = database::insert_audit(
+        &state.db,
+        Some(me.id),
+        &format!("{} {}", me.first_name, me.last_name),
+        "Jour d'ouverture créé",
+        &format!("{day} — {created_count} besoins créés"),
+    )
+    .await;
+
+    (
+        StatusCode::OK,
+        Json(
+            serde_json::json!({"success": true, "day": payload.day, "needs_created": created_count}),
+        ),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateOpeningDayStatusRequest {
+    day: String,
+    status: String,
+}
+
+async fn api_update_opening_day_status(
+    RequireAdmin(me): RequireAdmin,
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateOpeningDayStatusRequest>,
+) -> impl IntoResponse {
+    let Ok(day) = chrono::NaiveDate::parse_from_str(&payload.day, "%Y-%m-%d") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Format de date invalide (YYYY-MM-DD)"})),
+        );
+    };
+
+    let status = match payload.status.as_str() {
+        "validated" => models::OpeningDayStatus::Validated,
+        "canceled" => models::OpeningDayStatus::Canceled,
+        "reserved" => models::OpeningDayStatus::Reserved,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "Statut invalide"})),
+            );
+        }
+    };
+
+    // Note: we intentionally keep needs in place when canceling, so the day
+    // column stays visible in calendar views with the "Annulé" tag.
+
+    match database::update_opening_day_status(&state.db, day, status).await {
+        Ok(true) => {
+            let status_label = match status {
+                models::OpeningDayStatus::Validated => "Confirmé",
+                models::OpeningDayStatus::Canceled => "Annulé",
+                models::OpeningDayStatus::Reserved => "Prévu",
+            };
+            let _ = database::insert_audit(
+                &state.db,
+                Some(me.id),
+                &format!("{} {}", me.first_name, me.last_name),
+                "Jour d'ouverture modifié",
+                &format!("{day} → {status_label}"),
+            )
+            .await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"success": true, "status": payload.status})),
+            )
+        }
+        Ok(false) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Jour d'ouverture non trouvé"})),
+        ),
+        Err(e) => {
+            error!("Error updating opening day status: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}
+
 // --- Calendar landing (public: redirect to first atelier, or editor for chiefs) ---
 
 async fn calendar_landing(
@@ -1409,12 +1570,23 @@ async fn calendar_landing(
         .await
         .unwrap_or_default();
 
+    // Collect all days shown in the calendar and fetch opening day status
+    let calendar_days: Vec<chrono::NaiveDate> =
+        future_needs.iter().map(|(n, _, _)| n.day).collect();
+    let opening_days = database::get_opening_days_for_dates(&state.db, &calendar_days)
+        .await
+        .unwrap_or_default();
+
+    let is_admin = staff.as_ref().is_some_and(|s| s.is_admin || s.is_god);
+
     Html(templates::calendar_editor(
         &ateliers,
         &editable_ids,
         &future_needs,
         &prefix,
         staff.is_some(),
+        is_admin,
+        &opening_days,
     ))
     .into_response()
 }

@@ -3747,6 +3747,7 @@ pub fn calendar(
     prefix: &str,
     viewer_id: Option<uuid::Uuid>,
     _is_admin: bool,
+    opening_days: &[crate::models::OpeningDay],
 ) -> String {
     // Build nav links for ateliers
     let mut atelier_nav = String::new();
@@ -3847,6 +3848,42 @@ pub fn calendar(
         })
         .map(|n| n.id)
         .collect();
+
+    // Build opening day status row (just below the header)
+    let mut opening_row_html = String::from(
+        r#"<tr class="cal-opening-row"><td class="cal-name-col"><strong>Ouverture</strong></td>"#,
+    );
+    // Build a lookup map for quick access
+    let opening_map: std::collections::HashMap<chrono::NaiveDate, &crate::models::OpeningDay> =
+        opening_days.iter().map(|od| (od.day, od)).collect();
+    for need in needs {
+        let sunday_class = if need.day.weekday() == chrono::Weekday::Sun {
+            " cal-sunday"
+        } else {
+            ""
+        };
+        let tag_html = if let Some(od) = opening_map.get(&need.day) {
+            match od.status {
+                crate::models::OpeningDayStatus::Reserved => {
+                    r#"<span class="tag is-info">Prévu</span>"#
+                }
+                crate::models::OpeningDayStatus::Validated => {
+                    r#"<span class="tag is-success">Confirmé</span>"#
+                }
+                crate::models::OpeningDayStatus::Canceled => {
+                    r#"<span class="tag is-danger">Annulé</span>"#
+                }
+            }
+        } else {
+            ""
+        };
+        opening_row_html.push_str(&format!(
+            r#"<td class="has-text-centered{sunday_class}">{tag_html}</td>"#,
+            sunday_class = sunday_class,
+            tag_html = tag_html,
+        ));
+    }
+    opening_row_html.push_str("</tr>");
 
     // Build rows (staff)
     let mut rows_html = String::new();
@@ -3963,6 +4000,7 @@ pub fn calendar(
         .atelier-nav a { padding: 0.4rem 0.75rem; border-radius: 4px; background: var(--bulma-background); color: var(--bulma-text); text-decoration: none; font-size: 0.9rem; }
         .atelier-nav a.is-active { background: var(--bulma-link); color: var(--bulma-link-invert); font-weight: 600; }
         .atelier-nav a:hover:not(.is-active) { background: var(--bulma-scheme-main-ter); }
+        .cal-opening-row td { background: var(--bulma-scheme-main-bis) !important; }
     </style>";
 
     let empty_message = if needs.is_empty() {
@@ -3991,6 +4029,7 @@ pub fn calendar(
                 <table class="cal-table table is-bordered is-narrow is-hoverable">
                     <thead>
                         <tr>{header_html}</tr>
+                        {opening_row_html}
                     </thead>
                     <tbody>
                         {rows_html}
@@ -4004,6 +4043,7 @@ pub fn calendar(
         atelier_name = atelier.name,
         atelier_nav = atelier_nav,
         header_html = header_html,
+        opening_row_html = opening_row_html,
         rows_html = rows_html,
         empty_message = empty_message,
     );
@@ -4275,6 +4315,8 @@ pub fn calendar_editor(
     future_needs: &[(Need, i64, i64)],
     prefix: &str,
     logged_in: bool,
+    is_admin: bool,
+    opening_days: &[crate::models::OpeningDay],
 ) -> String {
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -4558,10 +4600,15 @@ pub fn calendar_editor(
         /* Ensure datetimepicker renders properly inside modal */
         #add-modal .datetimepicker { position: relative; z-index: 1; }
         #add-modal .modal-card-body { overflow: visible; }
+        #opening-day-modal .datetimepicker { position: relative; z-index: 1; }
+        #opening-day-modal .modal-card-body { overflow: visible; }
         /* Modal editor layout */
         .editor-columns { display: flex; gap: 2rem; flex-wrap: wrap; align-items: flex-start; }
         .editor-left { flex: 0 0 auto; }
         .editor-right { flex: 1 1 400px; min-width: 300px; }
+        .cal-opening-row td { background: var(--bulma-scheme-main-bis) !important; }
+        .opening-tag { cursor: pointer; }
+        .opening-tag:hover { filter: brightness(0.9); }
     </style>"#;
 
     let calendar_links_section = if logged_in {
@@ -4576,16 +4623,66 @@ pub fn calendar_editor(
         String::new()
     };
 
+    // Build the opening day row for the editor table
+    let opening_map: std::collections::HashMap<chrono::NaiveDate, &crate::models::OpeningDay> =
+        opening_days.iter().map(|od| (od.day, od)).collect();
+    let mut opening_row = String::from(
+        r#"<tr class="cal-opening-row"><td class="cal-name-col"><strong>Ouverture</strong></td>"#,
+    );
+    for d in &days {
+        let n_subcols = subcols(d);
+        let tag_html = if let Some(od) = opening_map.get(d) {
+            let (class, label) = match od.status {
+                crate::models::OpeningDayStatus::Reserved => ("is-info", "Prévu"),
+                crate::models::OpeningDayStatus::Validated => ("is-success", "Confirmé"),
+                crate::models::OpeningDayStatus::Canceled => ("is-danger", "Annulé"),
+            };
+            let day_str = d.format("%Y-%m-%d").to_string();
+            let clickable = if is_admin && od.status == crate::models::OpeningDayStatus::Reserved {
+                format!(
+                    r#" style="cursor:pointer" class="tag {class} opening-tag" data-day="{day_str}""#,
+                    class = class,
+                    day_str = day_str,
+                )
+            } else {
+                format!(r#" class="tag {class}""#, class = class)
+            };
+            format!(
+                "<span{clickable}>{label}</span>",
+                clickable = clickable,
+                label = label
+            )
+        } else {
+            String::new()
+        };
+        opening_row.push_str(&format!(
+            r#"<td class="day-start has-text-centered" colspan="{n}">{tag}</td>"#,
+            n = n_subcols,
+            tag = tag_html,
+        ));
+    }
+    opening_row.push_str("</tr>");
+
     let add_button = if editable_ids.is_empty() {
         String::new()
     } else {
-        r#"<div class="mb-4">
+        let opening_day_btn = if is_admin {
+            r#"<button class="button is-info" id="open-add-opening-day-modal">
+                    <span class="icon"><i class="fa-solid fa-sun"></i></span>
+                    <span>Ajouter un jour d'ouverture</span>
+                </button>"#
+        } else {
+            ""
+        };
+        format!(
+            r#"<div class="mb-4 buttons">
+                {opening_day_btn}
                 <button class="button is-primary" id="open-add-modal">
-                    <span class="icon"><i class="fa-solid fa-plus"></i></span>
-                    <span>Ajouter des besoins en bénévoles</span>
+                    <span class="icon"><i class="fa-solid fa-pen-to-square"></i></span>
+                    <span>Modifier des besoins en bénévoles</span>
                 </button>
             </div>"#
-            .to_string()
+        )
     };
 
     let content = format!(
@@ -4607,6 +4704,7 @@ pub fn calendar_editor(
                     <thead>
                         <tr>{header1}</tr>
                         <tr>{header2}</tr>
+                        {opening_row}
                     </thead>
                     <tbody>
                         {no_data_row}
@@ -4636,7 +4734,7 @@ pub fn calendar_editor(
         <div class="modal-background"></div>
         <div class="modal-card" style="max-width:900px;width:95vw;">
             <header class="modal-card-head">
-                <p class="modal-card-title">Ajouter des besoins en bénévoles</p>
+                <p class="modal-card-title">Modifier des besoins en bénévoles</p>
                 <button class="delete" aria-label="close" id="close-add-modal"></button>
             </header>
             <section class="modal-card-body">
@@ -4657,9 +4755,60 @@ pub fn calendar_editor(
                 </div>
             </section>
         </div>
+    </div>
+
+    <!-- Modal: add opening day via calendar picker -->
+    <div class="modal" id="opening-day-modal">
+        <div class="modal-background"></div>
+        <div class="modal-card" style="max-width:500px;width:90vw;">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Ajouter un jour d'ouverture</p>
+                <button class="delete" aria-label="close" id="close-opening-day-modal"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="has-text-centered">
+                    <input type="date" id="opening-day-picker">
+                </div>
+                <div class="mt-4 has-text-centered" id="opening-day-confirm" style="display:none;">
+                    <p class="mb-3" id="opening-day-confirm-text"></p>
+                    <button class="button is-info" id="opening-day-submit">
+                        <span class="icon"><i class="fa-solid fa-check"></i></span>
+                        <span>Créer le jour d'ouverture</span>
+                    </button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Modal: Go / NoGo for a reserved opening day -->
+    <div class="modal" id="gonogo-modal">
+        <div class="modal-background"></div>
+        <div class="modal-card" style="max-width:400px;">
+            <header class="modal-card-head">
+                <p class="modal-card-title" id="gonogo-title">—</p>
+                <button class="delete" aria-label="close" id="close-gonogo-modal"></button>
+            </header>
+            <section class="modal-card-body has-text-centered">
+                <p class="mb-4">Que souhaitez-vous faire pour cette journée ?</p>
+                <div class="buttons is-centered">
+                    <button class="button is-success is-medium" id="gonogo-go">
+                        <span class="icon"><i class="fa-solid fa-circle-check"></i></span>
+                        <span>Go</span>
+                    </button>
+                    <button class="button is-danger is-medium" id="gonogo-nogo">
+                        <span class="icon"><i class="fa-solid fa-circle-xmark"></i></span>
+                        <span>NO Go</span>
+                    </button>
+                    <button class="button is-medium" id="gonogo-cancel">
+                        <span>Ne rien faire</span>
+                    </button>
+                </div>
+            </section>
+        </div>
     </div>"#,
         header1 = header1,
         header2 = header2,
+        opening_row = opening_row,
         no_data_row = no_data_row,
         body = body,
     );
@@ -4898,6 +5047,136 @@ pub fn calendar_editor(
                 if (needDaysSet.has(dateKey)) btn.classList.add('has-need');
             }});
         }}
+        // ========== Section 3: Opening day modal ==========
+        const openingDayModal = document.getElementById('opening-day-modal');
+        const openingDayBtn = document.getElementById('open-add-opening-day-modal');
+        const openingDayConfirm = document.getElementById('opening-day-confirm');
+        const openingDayConfirmText = document.getElementById('opening-day-confirm-text');
+        const openingDaySubmit = document.getElementById('opening-day-submit');
+        const closeOpeningDayModal = document.getElementById('close-opening-day-modal');
+        let openingCalendarInit = false;
+        let openingSelectedDay = null;
+
+        if (openingDayBtn) {{
+            openingDayBtn.addEventListener('click', function() {{
+                openingDayModal.classList.add('is-active');
+                openingSelectedDay = null;
+                if (openingDayConfirm) openingDayConfirm.style.display = 'none';
+                if (!openingCalendarInit) {{
+                    openingCalendarInit = true;
+                    requestAnimationFrame(function() {{ initOpeningCalendar(); }});
+                }}
+            }});
+        }}
+
+        function initOpeningCalendar() {{
+            const cals = bulmaCalendar.attach('#opening-day-picker', {{
+                displayMode: 'inline',
+                type: 'date',
+                lang: 'fr',
+                dateFormat: 'YYYY-MM-DD',
+                showHeader: false,
+                showFooter: false,
+            }});
+            if (cals.length > 0) {{
+                cals[0].on('select', function(e) {{
+                    const dt = e.data.date.start;
+                    if (dt) {{
+                        const y = dt.getFullYear();
+                        const m = String(dt.getMonth() + 1).padStart(2, '0');
+                        const d = String(dt.getDate()).padStart(2, '0');
+                        openingSelectedDay = y + '-' + m + '-' + d;
+                        openingDayConfirmText.textContent = 'Jour d\'ouverture le ' + formatDateTitle(openingSelectedDay) + ' ?';
+                        openingDayConfirm.style.display = 'block';
+                    }}
+                }});
+            }}
+        }}
+
+        if (openingDaySubmit) {{
+            openingDaySubmit.addEventListener('click', function() {{
+                if (!openingSelectedDay) return;
+                openingDaySubmit.classList.add('is-loading');
+                fetch(prefix + '/api/calendar/opening-day', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{day: openingSelectedDay}})
+                }}).then(function(resp) {{
+                    if (!resp.ok) return resp.json().then(function(d) {{ throw new Error(d.error || 'Erreur'); }});
+                    return resp.json();
+                }}).then(function(data) {{
+                    showNotification('Jour d\'ouverture le ' + formatDateTitle(openingSelectedDay) + ' (' + data.needs_created + ' besoins)', 'success');
+                    setTimeout(function() {{ location.reload(); }}, 800);
+                }}).catch(function(err) {{
+                    showNotification(err.message, 'danger');
+                    openingDaySubmit.classList.remove('is-loading');
+                }});
+            }});
+        }}
+
+        if (closeOpeningDayModal) {{
+            closeOpeningDayModal.addEventListener('click', function() {{
+                openingDayModal.classList.remove('is-active');
+            }});
+        }}
+        if (openingDayModal) {{
+            openingDayModal.querySelector('.modal-background').addEventListener('click', function() {{
+                openingDayModal.classList.remove('is-active');
+            }});
+        }}
+
+        // ========== Section 4: Go / NoGo modal ==========
+        const gonogoModal = document.getElementById('gonogo-modal');
+        const gonogoTitle = document.getElementById('gonogo-title');
+        const closeGonogoModal = document.getElementById('close-gonogo-modal');
+        const gonogoCancel = document.getElementById('gonogo-cancel');
+        const gonogoGo = document.getElementById('gonogo-go');
+        const gonogoNogo = document.getElementById('gonogo-nogo');
+        let gonogoDay = '';
+
+        document.querySelectorAll('.opening-tag').forEach(function(tag) {{
+            tag.addEventListener('click', function() {{
+                gonogoDay = tag.dataset.day;
+                gonogoTitle.textContent = formatDateTitle(gonogoDay);
+                gonogoModal.classList.add('is-active');
+            }});
+        }});
+
+        function closeGonogo() {{
+            gonogoModal.classList.remove('is-active');
+            gonogoDay = '';
+        }}
+
+        if (closeGonogoModal) closeGonogoModal.addEventListener('click', closeGonogo);
+        if (gonogoCancel) gonogoCancel.addEventListener('click', closeGonogo);
+        if (gonogoModal) {{
+            gonogoModal.querySelector('.modal-background').addEventListener('click', closeGonogo);
+        }}
+
+        function sendGonogoStatus(status) {{
+            if (!gonogoDay) return;
+            const btn = status === 'validated' ? gonogoGo : gonogoNogo;
+            btn.classList.add('is-loading');
+            fetch(prefix + '/api/calendar/opening-day/status', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{day: gonogoDay, status: status}})
+            }}).then(function(resp) {{
+                if (!resp.ok) return resp.json().then(function(d) {{ throw new Error(d.error || 'Erreur'); }});
+                return resp.json();
+            }}).then(function() {{
+                const label = status === 'validated' ? 'Confirmé' : 'Annulé';
+                showNotification(label + ' : ' + formatDateTitle(gonogoDay), status === 'validated' ? 'success' : 'warning');
+                setTimeout(function() {{ location.reload(); }}, 800);
+            }}).catch(function(err) {{
+                showNotification(err.message, 'danger');
+                btn.classList.remove('is-loading');
+            }});
+        }}
+
+        if (gonogoGo) gonogoGo.addEventListener('click', function() {{ sendGonogoStatus('validated'); }});
+        if (gonogoNogo) gonogoNogo.addEventListener('click', function() {{ sendGonogoStatus('canceled'); }});
+
     }})();
     </script>"#,
         p = prefix,
