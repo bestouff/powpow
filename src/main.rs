@@ -4140,6 +4140,10 @@ async fn display_photo(
                 header::CONTENT_TYPE,
                 header::HeaderValue::from_str(&photo.mime_type).unwrap(),
             );
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                header::HeaderValue::from_static("public, max-age=86400, immutable"),
+            );
             response
         }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),

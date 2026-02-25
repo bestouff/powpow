@@ -1,5 +1,5 @@
 use crate::models::{
-    Atelier, Cash, Membership, MembershipWithStatus, Need, Photo, Role, Staff, StaffMatchType,
+    Atelier, Cash, Membership, MembershipWithStatus, Need, PhotoMeta, Role, Staff, StaffMatchType,
     StaffWithSeason, User,
 };
 use chrono::Datelike;
@@ -5228,7 +5228,7 @@ async function doValidate(staffId, atelierId, accept) {{
     )
 }
 
-pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> String {
+pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) -> String {
     // Generate admin upload form (only shown to admins)
     let admin_upload_form = if is_admin {
         format!(

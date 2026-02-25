@@ -1,6 +1,6 @@
 use crate::models::{
-    Atelier, Cash, Membership, Need, PaymentHistoryEntry, Photo, Role, Staff, StaffMatchType,
-    StaffWithSeason, User,
+    Atelier, Cash, Membership, Need, PaymentHistoryEntry, Photo, PhotoMeta, Role, Staff,
+    StaffMatchType, StaffWithSeason, User,
 };
 use anyhow::Result;
 use chrono::Datelike;
@@ -2430,10 +2430,11 @@ pub async fn get_photo_by_id(pool: &PgPool, id: uuid::Uuid) -> Result<Option<Pho
     Ok(result)
 }
 
-pub async fn get_all_photos(pool: &PgPool) -> Result<Vec<(Photo, String)>> {
+pub async fn get_all_photos(pool: &PgPool) -> Result<Vec<(PhotoMeta, String)>> {
     let rows = sqlx::query(
         r"
-        SELECT p.*, s.first_name AS staff_first_name, s.last_name AS staff_last_name
+        SELECT p.id, p.mime_type, p.photographer_id, p.created_at, p.updated_at,
+               s.first_name AS staff_first_name, s.last_name AS staff_last_name
         FROM photos p
         JOIN staff s ON p.photographer_id = s.id
         ORDER BY p.created_at DESC
@@ -2446,7 +2447,7 @@ pub async fn get_all_photos(pool: &PgPool) -> Result<Vec<(Photo, String)>> {
     for row in rows {
         use sqlx::FromRow;
         use sqlx::Row;
-        let photo = Photo::from_row(&row)?;
+        let photo = PhotoMeta::from_row(&row)?;
         let first: String = row.try_get("staff_first_name")?;
         let last: String = row.try_get("staff_last_name")?;
         result.push((photo, format!("{} {}", first, last)));
@@ -2468,10 +2469,9 @@ pub async fn delete_photo(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
     Ok(result.rows_affected() > 0)
 }
 
-/// Get a pseudo-random photo of the day based on current date
-/// Uses a deterministic algorithm to select the same photo for the same day
-pub async fn get_photo_of_the_day(pool: &PgPool) -> Result<Option<(Photo, String)>> {
-    // Get all photos first
+/// Get a pseudo-random photo of the day based on current date.
+/// Uses a deterministic algorithm to select the same photo for the same day.
+pub async fn get_photo_of_the_day(pool: &PgPool) -> Result<Option<(PhotoMeta, String)>> {
     let all_photos = get_all_photos(pool).await?;
 
     if all_photos.is_empty() {

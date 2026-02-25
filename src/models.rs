@@ -26,6 +26,28 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Photo {
     }
 }
 
+/// Photo metadata without the binary blob — used for listings.
+#[derive(Debug, Clone, Serialize)]
+pub struct PhotoMeta {
+    pub id: uuid::Uuid,
+    pub mime_type: String,
+    pub photographer_id: uuid::Uuid,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for PhotoMeta {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(PhotoMeta {
+            id: row.try_get("id")?,
+            mime_type: row.try_get("mime_type")?,
+            photographer_id: row.try_get("photographer_id")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "user_type")]
 pub struct User {
