@@ -2421,8 +2421,10 @@ pub fn person_detail(
         .pcal-cell { white-space: nowrap; }
     </style>";
 
-    // Build "Mon Calendrier" widget (only for self-viewing, when there are upcoming needs)
-    let my_calendar_html = if is_self && !person_calendar.is_empty() {
+    // Build calendar widget (self: editable, admin/chief: read-only)
+    let my_calendar_html = if person_calendar.is_empty() {
+        String::new()
+    } else {
         // Group by day, then by atelier within each day
         let mut days: Vec<chrono::NaiveDate> = person_calendar
             .iter()
@@ -2487,8 +2489,6 @@ pub fn person_detail(
                     .iter()
                     .find(|(n, _, _, _, _, _)| n.atelier == *atelier_id && n.day == *day)
                 {
-                    let first_checked = if *first_half { "checked" } else { "" };
-                    let second_checked = if *second_half { "checked" } else { "" };
                     let (first_label, second_label) = if need.nightly {
                         ("soir", "nuit")
                     } else {
@@ -2505,28 +2505,58 @@ pub fn person_detail(
                         ""
                     };
 
-                    rows_html.push_str(&format!(
-                        r#"<td class="pcal-cell has-text-centered{active_class}{sunday_class}">
-                            <label class="pcal-check" title="{first_title}">
-                                <input type="checkbox" class="pcal-presence-cb" data-need="{need_id}" data-staff="{staff_id}" data-half="first" {first_checked}>
-                                <span>{first_label}</span>
-                            </label>
-                            <label class="pcal-check" title="{second_title}">
-                                <input type="checkbox" class="pcal-presence-cb" data-need="{need_id}" data-staff="{staff_id}" data-half="second" {second_checked}>
-                                <span>{second_label}</span>
-                            </label>
-                        </td>"#,
-                        active_class = active_class,
-                        sunday_class = sunday_class,
-                        first_title = if need.nightly { "Soirée" } else { "Matin" },
-                        second_title = if need.nightly { "Nuit" } else { "Après-midi" },
-                        need_id = need.id,
-                        staff_id = staff.id,
-                        first_checked = first_checked,
-                        second_checked = second_checked,
-                        first_label = first_label,
-                        second_label = second_label,
-                    ));
+                    if is_self {
+                        let first_checked = if *first_half { "checked" } else { "" };
+                        let second_checked = if *second_half { "checked" } else { "" };
+                        rows_html.push_str(&format!(
+                            r#"<td class="pcal-cell has-text-centered{active_class}{sunday_class}">
+                                <label class="pcal-check" title="{first_title}">
+                                    <input type="checkbox" class="pcal-presence-cb" data-need="{need_id}" data-staff="{staff_id}" data-half="first" {first_checked}>
+                                    <span>{first_label}</span>
+                                </label>
+                                <label class="pcal-check" title="{second_title}">
+                                    <input type="checkbox" class="pcal-presence-cb" data-need="{need_id}" data-staff="{staff_id}" data-half="second" {second_checked}>
+                                    <span>{second_label}</span>
+                                </label>
+                            </td>"#,
+                            active_class = active_class,
+                            sunday_class = sunday_class,
+                            first_title = if need.nightly { "Soirée" } else { "Matin" },
+                            second_title = if need.nightly { "Nuit" } else { "Après-midi" },
+                            need_id = need.id,
+                            staff_id = staff.id,
+                            first_checked = first_checked,
+                            second_checked = second_checked,
+                            first_label = first_label,
+                            second_label = second_label,
+                        ));
+                    } else {
+                        // Read-only view: show check marks instead of checkboxes
+                        let first_icon = if *first_half {
+                            r#"<span class="icon has-text-success"><i class="fa-solid fa-check"></i></span>"#
+                        } else {
+                            r#"<span class="icon has-text-grey-lighter"><i class="fa-solid fa-xmark"></i></span>"#
+                        };
+                        let second_icon = if *second_half {
+                            r#"<span class="icon has-text-success"><i class="fa-solid fa-check"></i></span>"#
+                        } else {
+                            r#"<span class="icon has-text-grey-lighter"><i class="fa-solid fa-xmark"></i></span>"#
+                        };
+                        rows_html.push_str(&format!(
+                            r#"<td class="pcal-cell has-text-centered{active_class}{sunday_class}">
+                                <span class="pcal-check" title="{first_title}">{first_icon} <span>{first_label}</span></span>
+                                <span class="pcal-check" title="{second_title}">{second_icon} <span>{second_label}</span></span>
+                            </td>"#,
+                            active_class = active_class,
+                            sunday_class = sunday_class,
+                            first_title = if need.nightly { "Soirée" } else { "Matin" },
+                            second_title = if need.nightly { "Nuit" } else { "Après-midi" },
+                            first_icon = first_icon,
+                            second_icon = second_icon,
+                            first_label = first_label,
+                            second_label = second_label,
+                        ));
+                    }
                 } else {
                     // No need for this atelier on this day
                     let sunday_class = if day.weekday() == chrono::Weekday::Sun {
@@ -2543,11 +2573,17 @@ pub fn person_detail(
             rows_html.push_str("</tr>");
         }
 
+        let calendar_title = if is_self {
+            "Mon calendrier".to_string()
+        } else {
+            format!("Calendrier de {}", staff.first_name)
+        };
+
         format!(
             r#"<div class="box">
                 <h2 class="title is-4">
                     <span class="icon"><i class="fa-solid fa-calendar-days"></i></span>
-                    Mon calendrier
+                    {calendar_title}
                 </h2>
                 <div class="pcal-scroll">
                     <table class="pcal-table table is-bordered is-narrow is-hoverable">
@@ -2559,8 +2595,6 @@ pub fn person_detail(
             header_html = header_html,
             rows_html = rows_html,
         )
-    } else {
-        String::new()
     };
 
     let content = format!(

@@ -673,7 +673,8 @@ async fn view_person(
     };
 
     // Fetch person calendar (upcoming needs + presence across all ateliers)
-    let person_calendar = if is_self {
+    // Visible to self, admins, and chiefs
+    let person_calendar = if is_self || is_viewer_admin || is_viewer_chief {
         match database::get_person_calendar(&state.db, id).await {
             Ok(c) => c,
             Err(e) => {
