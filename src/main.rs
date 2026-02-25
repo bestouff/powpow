@@ -674,6 +674,19 @@ async fn view_person(
         }
     };
 
+    // Fetch person calendar (upcoming needs + presence across all ateliers)
+    let person_calendar = if is_self {
+        match database::get_person_calendar(&state.db, id).await {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Error fetching person calendar: {}", e);
+                Vec::new()
+            }
+        }
+    } else {
+        Vec::new()
+    };
+
     Html(templates::person_detail(
         &staff,
         &ateliers,
@@ -685,6 +698,7 @@ async fn view_person(
         show_contact,
         &todos,
         &payment_history,
+        &person_calendar,
     ))
     .into_response()
 }
@@ -1239,6 +1253,57 @@ async fn toggle_presence_api(
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"error": "half must be 'first' or 'second'"})),
             );
+        }
+    }
+
+    // Conflict check: prevent registering for the same half-day in two different ateliers
+    if payload.value {
+        // Look up the need to get the day
+        let need = match database::get_need_by_id(&state.db, payload.needs_id).await {
+            Ok(Some(n)) => n,
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error": "Besoin introuvable"})),
+                );
+            }
+            Err(e) => {
+                error!("Error fetching need: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": e.to_string()})),
+                );
+            }
+        };
+
+        match database::check_presence_conflict(
+            &state.db,
+            payload.staff_id,
+            need.day,
+            payload.needs_id,
+            &payload.half,
+        )
+        .await
+        {
+            Ok(Some(conflicting_atelier)) => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(serde_json::json!({
+                        "error": format!(
+                            "Vous êtes déjà inscrit(e) sur ce créneau pour l'atelier « {} »",
+                            conflicting_atelier
+                        )
+                    })),
+                );
+            }
+            Ok(None) => {} // No conflict
+            Err(e) => {
+                error!("Error checking presence conflict: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": e.to_string()})),
+                );
+            }
         }
     }
 

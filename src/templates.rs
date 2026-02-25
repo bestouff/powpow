@@ -2010,6 +2010,7 @@ pub fn person_detail(
     show_contact: bool,
     todos: &[TodoItem],
     payment_history: &[crate::models::PaymentHistoryEntry],
+    person_calendar: &[(crate::models::Need, String, String, String, bool, bool)],
 ) -> String {
     let can_edit_ateliers = is_self || is_admin;
     let mut ateliers_html = String::new();
@@ -2404,7 +2405,163 @@ pub fn person_detail(
             z-index: 100;
             min-width: 300px;
         }
+        .pcal-scroll { overflow-x: auto; }
+        .pcal-table { border-collapse: collapse; white-space: nowrap; }
+        .pcal-table th, .pcal-table td { border: 1px solid var(--bulma-border); padding: 0.3rem 0.4rem; vertical-align: middle; }
+        .pcal-table thead th { background: var(--bulma-scheme-main-bis) !important; }
+        .pcal-atelier-col { position: sticky; left: 0; z-index: 2; min-width: 140px; background: var(--bulma-scheme-main); }
+        .pcal-table thead th.pcal-atelier-col { z-index: 3; background: var(--bulma-scheme-main-bis) !important; }
+        .pcal-sunday { background: var(--bulma-link-light) !important; }
+        .pcal-cell.pcal-active { background: var(--bulma-success) !important; color: var(--bulma-success-invert); }
+        .pcal-day-col { min-width: 70px; }
+        .pcal-day-name { font-size: 0.75rem; }
+        .pcal-day-date { font-size: 0.85rem; font-weight: 600; }
+        .pcal-check { display: inline-flex; align-items: center; gap: 1px; margin: 0 2px; cursor: pointer; font-size: 0.7rem; }
+        .pcal-check input { width: 1rem; height: 1rem; margin: 0; }
+        .pcal-cell { white-space: nowrap; }
     </style>";
+
+    // Build "Mon Calendrier" widget (only for self-viewing, when there are upcoming needs)
+    let my_calendar_html = if is_self && !person_calendar.is_empty() {
+        // Group by day, then by atelier within each day
+        let mut days: Vec<chrono::NaiveDate> = person_calendar
+            .iter()
+            .map(|(n, _, _, _, _, _)| n.day)
+            .collect();
+        days.sort();
+        days.dedup();
+
+        // Collect unique ateliers (preserving order of first appearance)
+        let mut atelier_order: Vec<(uuid::Uuid, String, String, String)> = Vec::new();
+        for (need, name, slug, icon, _, _) in person_calendar {
+            if !atelier_order
+                .iter()
+                .any(|(id, _, _, _)| *id == need.atelier)
+            {
+                atelier_order.push((need.atelier, name.clone(), slug.clone(), icon.clone()));
+            }
+        }
+
+        // Build header row (days)
+        let mut header_html = String::from(r#"<th class="pcal-atelier-col">Atelier</th>"#);
+        for day in &days {
+            let day_abbrev = day.format("%a").to_string();
+            let day_name = match day_abbrev.as_str() {
+                "Mon" => "lun.",
+                "Tue" => "mar.",
+                "Wed" => "mer.",
+                "Thu" => "jeu.",
+                "Fri" => "ven.",
+                "Sat" => "sam.",
+                "Sun" => "dim.",
+                _ => &day_abbrev,
+            };
+            let day_date = day.format("%d/%m").to_string();
+            let sunday_class = if day.weekday() == chrono::Weekday::Sun {
+                " pcal-sunday"
+            } else {
+                ""
+            };
+            header_html.push_str(&format!(
+                r#"<th class="pcal-day-col has-text-centered{sunday_class}"><div class="pcal-day-name">{day_name}</div><div class="pcal-day-date">{day_date}</div></th>"#,
+                sunday_class = sunday_class,
+                day_name = day_name,
+                day_date = day_date,
+            ));
+        }
+
+        // Build body rows (one per atelier)
+        let mut rows_html = String::new();
+        for (atelier_id, atelier_name, atelier_slug, atelier_icon) in &atelier_order {
+            rows_html.push_str(&format!(
+                r#"<tr><td class="pcal-atelier-col"><a href="{p}/calendar/{slug}"><span class="icon"><i class="fa-solid fa-{icon}"></i></span>&nbsp;{name}</a></td>"#,
+                p = prefix,
+                slug = atelier_slug,
+                icon = atelier_icon,
+                name = atelier_name,
+            ));
+
+            for day in &days {
+                // Find the need for this atelier+day
+                if let Some((need, _, _, _, first_half, second_half)) = person_calendar
+                    .iter()
+                    .find(|(n, _, _, _, _, _)| n.atelier == *atelier_id && n.day == *day)
+                {
+                    let first_checked = if *first_half { "checked" } else { "" };
+                    let second_checked = if *second_half { "checked" } else { "" };
+                    let (first_label, second_label) = if need.nightly {
+                        ("soir", "nuit")
+                    } else {
+                        ("matin", "a-m")
+                    };
+                    let active_class = if *first_half || *second_half {
+                        " pcal-active"
+                    } else {
+                        ""
+                    };
+                    let sunday_class = if day.weekday() == chrono::Weekday::Sun {
+                        " pcal-sunday"
+                    } else {
+                        ""
+                    };
+
+                    rows_html.push_str(&format!(
+                        r#"<td class="pcal-cell has-text-centered{active_class}{sunday_class}">
+                            <label class="pcal-check" title="{first_title}">
+                                <input type="checkbox" class="pcal-presence-cb" data-need="{need_id}" data-staff="{staff_id}" data-half="first" {first_checked}>
+                                <span>{first_label}</span>
+                            </label>
+                            <label class="pcal-check" title="{second_title}">
+                                <input type="checkbox" class="pcal-presence-cb" data-need="{need_id}" data-staff="{staff_id}" data-half="second" {second_checked}>
+                                <span>{second_label}</span>
+                            </label>
+                        </td>"#,
+                        active_class = active_class,
+                        sunday_class = sunday_class,
+                        first_title = if need.nightly { "Soirée" } else { "Matin" },
+                        second_title = if need.nightly { "Nuit" } else { "Après-midi" },
+                        need_id = need.id,
+                        staff_id = staff.id,
+                        first_checked = first_checked,
+                        second_checked = second_checked,
+                        first_label = first_label,
+                        second_label = second_label,
+                    ));
+                } else {
+                    // No need for this atelier on this day
+                    let sunday_class = if day.weekday() == chrono::Weekday::Sun {
+                        " pcal-sunday"
+                    } else {
+                        ""
+                    };
+                    rows_html.push_str(&format!(
+                        r#"<td class="pcal-cell has-text-centered has-text-grey-lighter{sunday_class}">—</td>"#,
+                        sunday_class = sunday_class,
+                    ));
+                }
+            }
+            rows_html.push_str("</tr>");
+        }
+
+        format!(
+            r#"<div class="box">
+                <h2 class="title is-4">
+                    <span class="icon"><i class="fa-solid fa-calendar-days"></i></span>
+                    Mon calendrier
+                </h2>
+                <div class="pcal-scroll">
+                    <table class="pcal-table table is-bordered is-narrow is-hoverable">
+                        <thead><tr>{header_html}</tr></thead>
+                        <tbody>{rows_html}</tbody>
+                    </table>
+                </div>
+            </div>"#,
+            header_html = header_html,
+            rows_html = rows_html,
+        )
+    } else {
+        String::new()
+    };
 
     let content = format!(
         r##"    <div id="notification-container"></div>
@@ -2460,6 +2617,8 @@ pub fn person_detail(
                     </div>
 
                     {plannings_box}
+
+                    {my_calendar_html}
                 </div>
             </div>
 
@@ -2476,6 +2635,7 @@ pub fn person_detail(
         info_text = info_text,
         ateliers_html = ateliers_html,
         plannings_box = plannings_box,
+        my_calendar_html = my_calendar_html,
         todo_html = todo_html,
         payment_history_html = payment_history_html,
     );
@@ -2691,6 +2851,44 @@ pub fn person_detail(
         ""
     };
 
+    let calendar_scripts = if is_self && !person_calendar.is_empty() {
+        r#"
+        // Handle "Mon calendrier" presence toggles
+        document.querySelectorAll('.pcal-presence-cb').forEach(cb => {
+            cb.addEventListener('change', async function() {
+                const needId = this.dataset.need;
+                const staffIdVal = this.dataset.staff;
+                const half = this.dataset.half;
+                const value = this.checked;
+
+                try {
+                    const response = await fetch(`${prefix}/api/calendar/toggle`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ needs_id: needId, staff_id: staffIdVal, half: half, value: value })
+                    });
+
+                    if (!response.ok) {
+                        const body = await response.json().catch(() => ({}));
+                        throw new Error(body.error || 'Erreur serveur');
+                    }
+
+                    // Update cell highlight
+                    const cell = this.closest('td');
+                    const anyChecked = Array.from(cell.querySelectorAll('.pcal-presence-cb')).some(c => c.checked);
+                    cell.classList.toggle('pcal-active', anyChecked);
+                } catch (error) {
+                    console.error('Error:', error);
+                    showNotification('Erreur: ' + error.message, 'danger');
+                    this.checked = !value;
+                }
+            });
+        });
+"#
+    } else {
+        ""
+    };
+
     let scripts = format!(
         r#"    <script>
         const staffId = "{staff_id}";
@@ -2752,11 +2950,14 @@ pub fn person_detail(
         {admin_scripts}
 
         {contact_scripts}
+
+        {calendar_scripts}
     </script>"#,
         p = prefix,
         staff_id = staff.id,
         admin_scripts = admin_scripts,
         contact_scripts = contact_scripts,
+        calendar_scripts = calendar_scripts,
     );
 
     let title = format!("{} {} - AGHIL", staff.first_name, staff.last_name);
@@ -3618,13 +3819,15 @@ pub fn calendar(
     for staff in staff_list {
         let can_toggle = viewer_id.is_some_and(|vid| staff.id == vid);
         let disabled_attr = if can_toggle { "" } else { "disabled" };
+        let me_class = if can_toggle { " cal-me" } else { "" };
         let name = format!(
             "{} {}",
             capitalize_words(&staff.first_name),
             capitalize_words(&staff.last_name)
         );
         rows_html.push_str(&format!(
-            r#"<tr><td class="cal-name-col"><a href="{p}/person/{id}">{name}</a></td>"#,
+            r#"<tr class="{me_class}"><td class="cal-name-col"><a href="{p}/person/{id}">{name}</a></td>"#,
+            me_class = me_class,
             p = prefix,
             id = staff.id,
             name = name,
@@ -3713,6 +3916,7 @@ pub fn calendar(
         .cal-check { display: inline-flex; align-items: center; gap: 1px; margin: 0 2px; cursor: pointer; font-size: 0.7rem; }
         .cal-check input { width: 1rem; height: 1rem; margin: 0; }
         .cal-cell { white-space: nowrap; }
+        .cal-me td.cal-name-col { background: var(--bulma-warning) !important; font-weight: 600; }
         .notification.is-loading {
             position: fixed;
             top: 20px;
@@ -3802,8 +4006,8 @@ pub fn calendar(
                         if (response.status === 403) {{
                             throw new Error('Vous ne pouvez modifier que votre propre disponibilité');
                         }}
-                        const err = await response.text();
-                        throw new Error(err);
+                        const body = await response.json().catch(() => ({{}}));
+                        throw new Error(body.error || 'Erreur serveur');
                     }}
 
                     // Update cell highlight

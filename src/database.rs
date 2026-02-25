@@ -1787,6 +1787,107 @@ pub async fn get_presence(
     }
 }
 
+/// Get a single need by ID
+pub async fn get_need_by_id(pool: &PgPool, need_id: uuid::Uuid) -> Result<Option<Need>> {
+    let need = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE id = $1")
+        .bind(need_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(need)
+}
+
+/// Check whether a staff member already has presence on the same day for a different atelier,
+/// on the specified half-day. Returns the conflicting atelier name if found.
+pub async fn check_presence_conflict(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    day: chrono::NaiveDate,
+    exclude_need_id: uuid::Uuid,
+    half: &str,
+) -> Result<Option<String>> {
+    let half_filter = match half {
+        "first" => "p.first_half",
+        "second" => "p.second_half",
+        _ => return Ok(None),
+    };
+    // Cannot use a bind parameter inside a column reference, so we use two separate queries.
+    let query = format!(
+        r"
+        SELECT a.name
+        FROM presence p
+        JOIN needs n ON n.id = p.needs
+        JOIN ateliers a ON a.id = n.atelier
+        WHERE p.staff = $1
+          AND n.day = $2
+          AND n.id <> $3
+          AND {half_filter}
+        LIMIT 1
+        "
+    );
+    let row = sqlx::query_scalar::<_, String>(&query)
+        .bind(staff_id)
+        .bind(day)
+        .bind(exclude_need_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row)
+}
+
+/// Get all upcoming needs (today or later) where a staff member has a role in the atelier,
+/// along with their presence status. Used for the "Mon Calendrier" widget.
+/// Returns tuples of (`Need`, `atelier_name`, `atelier_slug`, `atelier_icon`, `first_half`, `second_half`).
+#[allow(clippy::type_complexity)]
+pub async fn get_person_calendar(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+) -> Result<Vec<(Need, String, String, String, bool, bool)>> {
+    let today = chrono::Utc::now().date_naive();
+    let rows = sqlx::query(
+        r"
+        SELECT n.id, n.day, n.atelier, n.quantity, n.nightly,
+               a.name AS atelier_name, a.slug AS atelier_slug, a.icon AS atelier_icon,
+               COALESCE(p.first_half, false) AS first_half,
+               COALESCE(p.second_half, false) AS second_half
+        FROM needs n
+        JOIN ateliers a ON a.id = n.atelier
+        JOIN roles r ON r.staff = $1 AND r.atelier = n.atelier
+        LEFT JOIN presence p ON p.needs = n.id AND p.staff = $1
+        WHERE n.day >= $2
+        ORDER BY n.day, a.name
+        ",
+    )
+    .bind(staff_id)
+    .bind(today)
+    .fetch_all(pool)
+    .await?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        let need = Need {
+            id: row.try_get("id")?,
+            day: row.try_get("day")?,
+            atelier: row.try_get("atelier")?,
+            quantity: row.try_get("quantity")?,
+            nightly: row.try_get("nightly")?,
+        };
+        let atelier_name: String = row.try_get("atelier_name")?;
+        let atelier_slug: String = row.try_get("atelier_slug")?;
+        let atelier_icon: String = row.try_get("atelier_icon")?;
+        let first_half: bool = row.try_get("first_half")?;
+        let second_half: bool = row.try_get("second_half")?;
+        result.push((
+            need,
+            atelier_name,
+            atelier_slug,
+            atelier_icon,
+            first_half,
+            second_half,
+        ));
+    }
+
+    Ok(result)
+}
+
 /// Update admin flags for a staff member
 /// Enforces: `is_god` implies `is_admin`
 pub async fn update_staff_admin_flags(
