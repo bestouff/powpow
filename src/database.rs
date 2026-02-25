@@ -314,6 +314,7 @@ pub async fn get_all_imported_item_ids(
     let rows = sqlx::query(
         r"
         SELECT helloasso_item_id, season FROM payments
+        WHERE helloasso_item_id IS NOT NULL
         ",
     )
     .fetch_all(pool)
