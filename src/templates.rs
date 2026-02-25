@@ -103,24 +103,24 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str) -> String {
 
     let links = format!(
         r#"<a class="navbar-item{calendar_active}" href="{p}/calendar">
-                        <span class="icon mr-1"><i class="fas fa-calendar-alt"></i></span>
+                        <span class="icon mr-1"><i class="fa-solid fa-calendar-days"></i></span>
                         Planning
                     </a>
                     <a class="navbar-item navbar-admin{users_active}" href="{p}/users"{admin_hide}>
-                        <span class="icon mr-1"><i class="fas fa-ticket-alt"></i></span>
+                        <span class="icon mr-1"><i class="fa-solid fa-ticket"></i></span>
                         Adhésions
                         <span class="nav-badge" data-badge="users" style="display:none"></span>
                     </a>
                     <a class="navbar-item navbar-admin{cash_active}" href="{p}/cash"{admin_hide}>
-                        <span class="icon mr-1"><i class="fas fa-money-bill-wave"></i></span>
+                        <span class="icon mr-1"><i class="fa-solid fa-money-bill-wave"></i></span>
                         Espèces / Chèques
                         <span class="nav-badge" data-badge="cash" style="display:none"></span>
                     </a>
                     <a class="navbar-item navbar-admin{staff_active}" href="{p}/staff"{admin_hide}>
-                        <span class="icon mr-1"><i class="fas fa-user-friends"></i></span>
+                        <span class="icon mr-1"><i class="fa-solid fa-user-group"></i></span>
                         Staff
                     </a>
-                    <a class="navbar-item" id="login-btn" href="{p}/login"><i class="fas fa-sign-in-alt"></i>&nbsp;Se connecter</a>"#,
+                    <a class="navbar-item" id="login-btn" href="{p}/login"><i class="fa-solid fa-right-to-bracket"></i>&nbsp;Se connecter</a>"#,
         p = prefix,
         admin_hide = admin_hide,
         calendar_active = calendar_active,
@@ -134,7 +134,7 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str) -> String {
         <div class="container is-fluid">
             <div class="navbar-brand">
                 <a class="navbar-item" href="{p}/">
-                    <span class="icon mr-2"><i class="fas fa-skiing"></i></span>
+                    <span class="icon mr-2"><i class="fa-solid fa-person-skiing"></i></span>
                     <strong>PowPow pour AGH'IL</strong>
                 </a>
                 <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="main-navbar">
@@ -176,13 +176,13 @@ fn page(
 ) -> String {
     let nav = navbar(prefix, nav_kind, active);
     let p = prefix;
-    let badge_css = r"<style>.navbar-item{position:relative;}.nav-badge{background:#f14668;color:white;border-radius:999px;min-width:18px;height:18px;font-size:0.65rem;font-weight:bold;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;position:absolute;top:6px;right:-2px;line-height:1;box-shadow:0 0 0 2px var(--bulma-navbar-background-color,#363636);}.button .nav-badge{position:static;margin-left:6px;box-shadow:none;}</style>";
+    let badge_css = r"<style>.navbar-item{position:relative;}.nav-badge{background:var(--bulma-danger);color:var(--bulma-scheme-main);border-radius:999px;min-width:18px;height:18px;font-size:0.65rem;font-weight:bold;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;position:absolute;top:6px;right:-2px;line-height:1;box-shadow:0 0 0 2px var(--bulma-navbar-background-color,#363636);}.button .nav-badge{position:static;margin-left:6px;box-shadow:none;}</style>";
     let badge_script = format!(
         "<script>fetch('{p}/api/badge-counts').then(r=>r.json()).then(d=>{{document.querySelectorAll('.nav-badge').forEach(b=>{{const c=d[b.dataset.badge];if(c>0){{b.textContent=c;b.style.display='';}}}});}}).catch(()=>{{}});</script>",
         p = p,
     );
     let me_script = format!(
-        "<script>fetch('{p}/api/me').then(r=>{{if(r.ok)return r.json();throw 0;}}).then(d=>{{const b=document.getElementById('login-btn');if(b){{b.innerHTML='<i class=\"fas fa-user\"></i>&nbsp;'+d.first_name+' '+d.last_name;b.href='{p}/person/'+d.id;const lo=document.createElement('a');lo.className='navbar-item';lo.href='{p}/logout';lo.innerHTML='<i class=\"fas fa-sign-out-alt\"></i>';b.parentNode.insertBefore(lo,b.nextSibling);}}if(d.is_admin){{document.querySelectorAll('.navbar-admin').forEach(el=>el.style.display='');}}}}).catch(()=>{{}});</script>",
+        "<script>fetch('{p}/api/me').then(r=>{{if(r.ok)return r.json();throw 0;}}).then(d=>{{const b=document.getElementById('login-btn');if(b){{b.innerHTML='<i class=\"fa-solid fa-user\"></i>&nbsp;'+d.first_name+' '+d.last_name;b.href='{p}/person/'+d.id;const lo=document.createElement('a');lo.className='navbar-item';lo.href='{p}/logout';lo.innerHTML='<i class=\"fa-solid fa-right-from-bracket\"></i>';b.parentNode.insertBefore(lo,b.nextSibling);}}if(d.is_admin){{document.querySelectorAll('.navbar-admin').forEach(el=>el.style.display='');}}}}).catch(()=>{{}});</script>",
         p = p,
     );
 
@@ -222,9 +222,9 @@ fn page(
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="S04nKUrv5gsWl0VqBBdd9Q6zS7rxLWHJLc2aFftaD4E" />
     <title>{title}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/fontawesome.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/solid.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.2.0/css/fontawesome.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.2.0/css/solid.min.css">
     {photo_bg_css}
     {extra_head}
 </head>
@@ -273,7 +273,7 @@ pub fn index(
         <div class="hero-body">
             <div class="container has-text-centered">
                 <h1 class="title is-2 mb-4">
-                    <span class="icon is-large"><i class="fas fa-skiing fa-2x"></i></span>
+                    <span class="icon is-large"><i class="fa-solid fa-person-skiing fa-2x"></i></span>
                     <br>
                     Gestionnaire de plannings bénévoles
                 </h1>
@@ -294,7 +294,7 @@ pub fn index(
     <section class="section py-4">
         <div class="container is-fluid">
             <div class="notification is-success is-light">
-                <span class="icon"><i class="fas fa-check-circle"></i></span>
+                <span class="icon"><i class="fa-solid fa-circle-check"></i></span>
                 Ta cotisation est à jour pour la saison {season}.
             </div>
         </div>
@@ -307,7 +307,7 @@ pub fn index(
     <section class="section py-4">
         <div class="container is-fluid">
             <div class="notification is-warning is-light">
-                <span class="icon"><i class="fas fa-exclamation-triangle"></i></span>
+                <span class="icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
                 Ta cotisation n'est pas à jour pour la saison {season} &mdash; <a href="https://www.helloasso.com/associations/agir-pour-la-station-de-ski-de-st-hil" target="_blank">inscris-toi sur HelloAsso</a>.
             </div>
         </div>
@@ -322,7 +322,7 @@ pub fn index(
     <section class="section py-4">
         <div class="container is-fluid">
             <a class="box" href="{p}/person/{id}">
-                <span class="icon mr-2"><i class="fas fa-user-cog"></i></span>
+                <span class="icon mr-2"><i class="fa-solid fa-user-gear"></i></span>
                 <strong>Gérer mes ateliers et mes préférences</strong>
             </a>
         </div>
@@ -337,7 +337,7 @@ pub fn index(
             for a in chief_ateliers {
                 links.push_str(&format!(
                     r#"<a class="button is-link is-light mr-2 mb-2" href="{p}/calendar/{slug}">
-                        <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
+                        <span class="icon"><i class="fa-solid fa-{icon}"></i></span>&nbsp;
                         <span>{name}</span>
                     </a>"#,
                     p = prefix,
@@ -352,7 +352,7 @@ pub fn index(
         <div class="container is-fluid">
             <div class="box">
                 <h3 class="title is-5 mb-3">
-                    <span class="icon mr-2"><i class="fas fa-user-shield"></i></span>
+                    <span class="icon mr-2"><i class="fa-solid fa-user-shield"></i></span>
                     Mes ateliers
                 </h3>
                 <div class="buttons">{links}</div>
@@ -372,7 +372,7 @@ pub fn index(
         <div class="container is-fluid">
             <a class="box" href="{p}/calendar" style="display:block;text-decoration:none;color:inherit;">
                 <h3 class="title is-5 mb-3">
-                    <span class="icon mr-2"><i class="fas fa-calendar-week"></i></span>
+                    <span class="icon mr-2"><i class="fa-solid fa-calendar-week"></i></span>
                     Semaine à venir
                 </h3>
                 {week_html}
@@ -392,17 +392,17 @@ pub fn index(
         <div class="container is-fluid">
             <div class="box">
                 <h3 class="title is-5 mb-3">
-                    <span class="icon mr-2"><i class="fas fa-ticket-alt"></i></span>
+                    <span class="icon mr-2"><i class="fa-solid fa-ticket"></i></span>
                     Gestion des adhésions
                 </h3>
                 <div class="buttons">
                     <a class="button is-primary" href="{p}/users">
-                        <span class="icon"><i class="fas fa-ticket-alt"></i></span>
+                        <span class="icon"><i class="fa-solid fa-ticket"></i></span>
                         <span>Adhésions HelloAsso</span>
                         <span class="nav-badge" data-badge="users" style="display:none"></span>
                     </a>
                     <a class="button is-primary is-light" href="{p}/cash">
-                        <span class="icon"><i class="fas fa-money-bill-wave"></i></span>
+                        <span class="icon"><i class="fa-solid fa-money-bill-wave"></i></span>
                         <span>Espèces / Chèques</span>
                         <span class="nav-badge" data-badge="cash" style="display:none"></span>
                     </a>
@@ -414,20 +414,20 @@ pub fn index(
         <div class="container is-fluid">
             <div class="box">
                 <h3 class="title is-5 mb-3">
-                    <span class="icon mr-2"><i class="fas fa-user-friends"></i></span>
+                    <span class="icon mr-2"><i class="fa-solid fa-user-group"></i></span>
                     Gestion du staff
                 </h3>
                 <div class="buttons">
                 <a class="button is-link" href="{p}/staff">
-                    <span class="icon"><i class="fas fa-user-friends"></i></span>
+                    <span class="icon"><i class="fa-solid fa-user-group"></i></span>
                     <span>Voir le staff</span>
                 </a>
                 <a class="button is-link is-light" href="{p}/export/mailchimp">
-                    <span class="icon"><i class="fas fa-file-csv"></i></span>
+                    <span class="icon"><i class="fa-solid fa-file-csv"></i></span>
                     <span>Export Mailchimp</span>
                 </a>
                 <a class="button is-light" href="{p}/audit">
-                    <span class="icon"><i class="fas fa-clipboard-list"></i></span>
+                    <span class="icon"><i class="fa-solid fa-clipboard-list"></i></span>
                     <span>Journal d'audit</span>
                 </a>
                 </div>
@@ -446,16 +446,16 @@ pub fn index(
         <div class="container is-fluid">
             <div class="box">
                 <h3 class="title is-5 mb-3">
-                    <span class="icon mr-2"><i class="fas fa-database"></i></span>
+                    <span class="icon mr-2"><i class="fa-solid fa-database"></i></span>
                     Sauvegarde / Restauration
                 </h3>
                 <div class="buttons">
                     <a class="button is-warning" href="{p}/backup">
-                        <span class="icon"><i class="fas fa-download"></i></span>
+                        <span class="icon"><i class="fa-solid fa-download"></i></span>
                         <span>Télécharger la sauvegarde</span>
                     </a>
                     <a class="button is-danger" href="{p}/restore">
-                        <span class="icon"><i class="fas fa-upload"></i></span>
+                        <span class="icon"><i class="fa-solid fa-upload"></i></span>
                         <span>Restaurer</span>
                     </a>
                 </div>
@@ -569,7 +569,7 @@ pub fn membership_list_with_filters(
     let clear_filters_html = if has_filters {
         format!(
             r#"<a href="{}/users" class="button is-light is-small ml-2">
-            <span class="icon"><i class="fas fa-times"></i></span>
+            <span class="icon"><i class="fa-solid fa-xmark"></i></span>
             <span>Effacer filtres</span>
         </a>"#,
             prefix
@@ -626,7 +626,7 @@ pub fn membership_list_with_filters(
                 </div>
                 <div class="level-right">
                     <a href="{p}/sync" class="button is-primary">
-                        <span class="icon"><i class="fas fa-sync-alt"></i></span>
+                        <span class="icon"><i class="fa-solid fa-arrows-rotate"></i></span>
                         <span>Synchronisation manuelle</span>
                     </a>
                 </div>
@@ -637,7 +637,7 @@ pub fn membership_list_with_filters(
                 <div class="column is-4">
                     <a href="{p}/users" class="box stat-card has-text-centered {total_card_active}">
                         <span class="icon is-large has-text-info">
-                            <i class="fas fa-ticket-alt fa-2x"></i>
+                            <i class="fa-solid fa-ticket fa-2x"></i>
                         </span>
                         <p class="stat-number has-text-info mt-2">{total_count}</p>
                         <p class="has-text-grey">Total adhésions</p>
@@ -646,7 +646,7 @@ pub fn membership_list_with_filters(
                 <div class="column is-4">
                     <a href="{p}/users?filter=all" class="box stat-card has-text-centered">
                         <span class="icon is-large has-text-success">
-                            <i class="fas fa-check-circle fa-2x"></i>
+                            <i class="fa-solid fa-circle-check fa-2x"></i>
                         </span>
                         <p class="stat-number has-text-success mt-2">{imported_count}</p>
                         <p class="has-text-grey">Importées</p>
@@ -655,7 +655,7 @@ pub fn membership_list_with_filters(
                 <div class="column is-4">
                     <a href="{p}/users?filter=not_imported" class="box stat-card has-text-centered {not_imported_card_active}">
                         <span class="icon is-large has-text-warning">
-                            <i class="fas fa-exclamation-circle fa-2x"></i>
+                            <i class="fa-solid fa-circle-exclamation fa-2x"></i>
                         </span>
                         <p class="stat-number has-text-warning mt-2">{not_imported_count}</p>
                         <p class="has-text-grey">À importer</p>
@@ -673,12 +673,12 @@ pub fn membership_list_with_filters(
                                     <input class="input" type="text" name="search" id="searchInput"
                                            placeholder="Rechercher par email, nom ou prénom..." value="{search_value}">
                                     <span class="icon is-left">
-                                        <i class="fas fa-search"></i>
+                                        <i class="fa-solid fa-magnifying-glass"></i>
                                     </span>
                                 </div>
                                 <div class="control">
                                     <button type="submit" class="button is-info">
-                                        <span class="icon"><i class="fas fa-search"></i></span>
+                                        <span class="icon"><i class="fa-solid fa-magnifying-glass"></i></span>
                                     </button>
                                 </div>
                             </div>
@@ -688,11 +688,11 @@ pub fn membership_list_with_filters(
                                 <div class="control">
                                     <div class="buttons has-addons">
                                         <a href="{p}/users?search={search_value}" class="button {filter_all_class} is-medium">
-                                            <span class="icon"><i class="fas fa-list"></i></span>
+                                            <span class="icon"><i class="fa-solid fa-list"></i></span>
                                             <span>Toutes</span>
                                         </a>
                                         <a href="{p}/users?search={search_value}&filter=not_imported" class="button {filter_not_imported_class} is-medium">
-                                            <span class="icon"><i class="fas fa-exclamation-circle"></i></span>
+                                            <span class="icon"><i class="fa-solid fa-circle-exclamation"></i></span>
                                             <span>À importer</span>
                                         </a>
                                     </div>
@@ -791,7 +791,7 @@ pub fn already_imported_page(membership: Membership, season: i16, prefix: &str) 
                 <div class="column is-8">
                     <div class="box has-text-centered">
                         <span class="icon is-large has-text-success mb-4">
-                            <i class="fas fa-check-circle fa-4x"></i>
+                            <i class="fa-solid fa-circle-check fa-4x"></i>
                         </span>
                         <h1 class="title is-3 has-text-success">Adhésion déjà importée</h1>
                         <p class="subtitle is-5 mb-5">Cette adhésion a déjà été importée dans le système pour la saison {season}.</p>
@@ -829,7 +829,7 @@ pub fn already_imported_page(membership: Membership, season: i16, prefix: &str) 
                         </div>
 
                         <a href="{p}/users" class="button is-primary is-medium mt-4">
-                            <span class="icon"><i class="fas fa-arrow-left"></i></span>
+                            <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
                             <span>Retour aux adhésions</span>
                         </a>
                     </div>
@@ -1135,7 +1135,7 @@ pub fn import_staff_form(
                     <div class="field">
                         <div class="control">
                             <button type="submit" class="button {} is-fullwidth">
-                                <span class="icon"><i class="fas fa-sync"></i></span>
+                                <span class="icon"><i class="fa-solid fa-arrows-rotate"></i></span>
                                 <span>Mettre à jour ce staff</span>
                             </button>
                         </div>
@@ -1293,7 +1293,7 @@ pub fn import_staff_form(
                 <div class="field">
                     <div class="control">
                         <button type="submit" class="button {} is-fullwidth">
-                            <span class="icon"><i class="fas fa-plus"></i></span>
+                            <span class="icon"><i class="fa-solid fa-plus"></i></span>
                             <span>Créer un nouveau staff</span>
                         </button>
                     </div>
@@ -1331,7 +1331,7 @@ pub fn import_staff_form(
     // Warning notification if there are multiple options
     let multiple_options_warning = if total_options > 1 {
         r#"<div class="notification is-danger mb-4">
-            <span class="icon"><i class="fas fa-exclamation-triangle"></i></span>
+            <span class="icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
             <strong>Attention</strong>, il y a plusieurs possibilités, examinez-les bien avant de choisir la bonne.
         </div>"#
     } else {
@@ -1363,7 +1363,7 @@ pub fn import_staff_form(
                 </div>
                 <div class="level-right">
                     <a href="{p}/users" class="button is-light">
-                        <span class="icon"><i class="fas fa-arrow-left"></i></span>
+                        <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
                         <span>Retour</span>
                     </a>
                 </div>
@@ -1486,7 +1486,7 @@ pub fn user_detail(user: User, prefix: &str) -> String {
                 </div>
                 <div class="level-right">
                     <a href="{p}/users" class="button is-light">
-                        <span class="icon"><i class="fas fa-arrow-left"></i></span>
+                        <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
                         <span>Retour à la liste</span>
                     </a>
                 </div>
@@ -1497,7 +1497,7 @@ pub fn user_detail(user: User, prefix: &str) -> String {
                     <div class="column is-4">
                         <div class="has-text-centered">
                             <div class="avatar-circle is-size-1 mb-4" style="width: 120px; height: 120px; margin: 0 auto;">
-                                <span class="icon is-large"><i class="fas fa-user fa-3x"></i></span>
+                                <span class="icon is-large"><i class="fa-solid fa-user fa-3x"></i></span>
                             </div>
                             <h2 class="title is-4">{full_name}</h2>
                             <p class="subtitle is-6 has-text-grey">{email}</p>
@@ -1585,7 +1585,7 @@ pub fn restore_page(prefix: &str) -> String {
                 <div class="column is-8">
                     <div class="box">
                         <h1 class="title is-3 has-text-centered">
-                            <span class="icon has-text-warning"><i class="fas fa-upload"></i></span>
+                            <span class="icon has-text-warning"><i class="fa-solid fa-upload"></i></span>
                             Restaurer la base de données
                         </h1>
 
@@ -1602,7 +1602,7 @@ pub fn restore_page(prefix: &str) -> String {
                                             <input class="file-input" type="file" name="backup_file" accept=".sql" required onchange="updateFileName(this)">
                                             <span class="file-cta">
                                                 <span class="file-icon">
-                                                    <i class="fas fa-upload"></i>
+                                                    <i class="fa-solid fa-upload"></i>
                                                 </span>
                                                 <span class="file-label">Choisir un fichier...</span>
                                             </span>
@@ -1615,13 +1615,13 @@ pub fn restore_page(prefix: &str) -> String {
                             <div class="field is-grouped is-grouped-centered mt-5">
                                 <div class="control">
                                     <button type="submit" class="button is-danger is-medium">
-                                        <span class="icon"><i class="fas fa-database"></i></span>
+                                        <span class="icon"><i class="fa-solid fa-database"></i></span>
                                         <span>Restaurer la base de données</span>
                                     </button>
                                 </div>
                                 <div class="control">
                                     <a href="{p}/" class="button is-light is-medium">
-                                        <span class="icon"><i class="fas fa-times"></i></span>
+                                        <span class="icon"><i class="fa-solid fa-xmark"></i></span>
                                         <span>Annuler</span>
                                     </a>
                                 </div>
@@ -1631,12 +1631,12 @@ pub fn restore_page(prefix: &str) -> String {
 
                     <div class="box">
                         <h2 class="title is-5">
-                            <span class="icon has-text-info"><i class="fas fa-download"></i></span>
+                            <span class="icon has-text-info"><i class="fa-solid fa-download"></i></span>
                             Créer une sauvegarde
                         </h2>
                         <p class="mb-4">Téléchargez une copie de la base de données actuelle avant de restaurer.</p>
                         <a href="{p}/backup" class="button is-info">
-                            <span class="icon"><i class="fas fa-download"></i></span>
+                            <span class="icon"><i class="fa-solid fa-download"></i></span>
                             <span>Télécharger la sauvegarde</span>
                         </a>
                     </div>
@@ -1685,7 +1685,7 @@ pub fn restore_result(prefix: &str, success: bool, message: &str) -> String {
                 <div class="column is-8">
                     <div class="box has-text-centered">
                         <span class="icon is-large {icon_class} mb-4">
-                            <i class="fas fa-{icon} fa-4x"></i>
+                            <i class="fa-solid fa-{icon} fa-4x"></i>
                         </span>
                         <h1 class="title is-3">{title}</h1>
                         <div class="notification {notification_class} is-light">
@@ -1693,11 +1693,11 @@ pub fn restore_result(prefix: &str, success: bool, message: &str) -> String {
                         </div>
                         <div class="buttons is-centered mt-5">
                             <a href="{p}/" class="button is-primary is-medium">
-                                <span class="icon"><i class="fas fa-home"></i></span>
+                                <span class="icon"><i class="fa-solid fa-house"></i></span>
                                 <span>Retour à l'accueil</span>
                             </a>
                             <a href="{p}/users" class="button is-info is-medium">
-                                <span class="icon"><i class="fas fa-users"></i></span>
+                                <span class="icon"><i class="fa-solid fa-users"></i></span>
                                 <span>Voir les adhésions</span>
                             </a>
                         </div>
@@ -1738,18 +1738,18 @@ pub fn import_result(success: bool, message: &str, prefix: &str) -> String {
         <div class="container is-fluid">
             <div class="notification {notification_class}">
                 <p class="title is-4">
-                    <span class="icon"><i class="fas fa-{icon}"></i></span>
+                    <span class="icon"><i class="fa-solid fa-{icon}"></i></span>
                     {title}
                 </p>
                 <p>{message}</p>
             </div>
             <div class="buttons mt-4">
                 <a href="{p}/users?filter=not_imported" class="button is-primary">
-                    <span class="icon"><i class="fas fa-arrow-left"></i></span>
+                    <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
                     <span>Retour aux adhésions à importer</span>
                 </a>
                 <a href="{p}/users" class="button is-light">
-                    <span class="icon"><i class="fas fa-list"></i></span>
+                    <span class="icon"><i class="fa-solid fa-list"></i></span>
                     <span>Voir toutes les adhésions</span>
                 </a>
             </div>
@@ -1835,15 +1835,15 @@ pub fn staff_list(
             let (cell_class, cell_content) = match role {
                 Some(r) if r.chief => (
                     "has-background-warning",
-                    r#"<span class="icon has-text-black"><i class="fas fa-crown"></i></span>"#,
+                    r#"<span class="icon has-text-black"><i class="fa-solid fa-crown"></i></span>"#,
                 ),
                 Some(r) if r.validated => (
                     "has-background-info",
-                    r#"<span class="icon has-text-white"><i class="fas fa-check"></i></span>"#,
+                    r#"<span class="icon has-text-white"><i class="fa-solid fa-check"></i></span>"#,
                 ),
                 Some(_) => (
                     "has-background-grey",
-                    r#"<span class="icon has-text-grey-dark"><i class="fas fa-clock"></i></span>"#,
+                    r#"<span class="icon has-text-grey-dark"><i class="fa-solid fa-clock"></i></span>"#,
                 ),
                 None => ("", ""),
             };
@@ -1855,9 +1855,9 @@ pub fn staff_list(
 
         // Admin column
         let admin_cell = if staff.is_god {
-            r#"<td class="has-text-centered has-background-warning"><span class="icon has-text-black"><i class="fas fa-crown"></i></span></td>"#.to_string()
+            r#"<td class="has-text-centered has-background-warning"><span class="icon has-text-black"><i class="fa-solid fa-crown"></i></span></td>"#.to_string()
         } else if staff.is_admin {
-            r#"<td class="has-text-centered has-background-info"><span class="icon has-text-white"><i class="fas fa-check"></i></span></td>"#.to_string()
+            r#"<td class="has-text-centered has-background-info"><span class="icon has-text-white"><i class="fa-solid fa-check"></i></span></td>"#.to_string()
         } else {
             r"<td></td>".to_string()
         };
@@ -1904,11 +1904,11 @@ pub fn staff_list(
             vertical-align: bottom !important;
             position: sticky;
             top: 0;
-            background: white !important;
+            background: var(--bulma-scheme-main) !important;
             z-index: 10;
         }
         th.atelier-col {
-            background: white !important;
+            background: var(--bulma-scheme-main) !important;
             padding: 8px 4px !important;
             min-width: 30px;
             max-width: 30px;
@@ -1935,7 +1935,7 @@ pub fn staff_list(
             <div class="level mb-4">
                 <div class="level-left">
                     <h1 class="title is-3">
-                        <span class="icon"><i class="fas fa-user-friends"></i></span>
+                        <span class="icon"><i class="fa-solid fa-user-group"></i></span>
                         Liste des Staff
                     </h1>
                 </div>
@@ -1946,7 +1946,7 @@ pub fn staff_list(
 
             <div class="notification is-info is-light mb-4">
                 <p>
-                    <span class="icon"><i class="fas fa-info-circle"></i></span>
+                    <span class="icon"><i class="fa-solid fa-circle-info"></i></span>
                     <strong>Légende saison:</strong>
                     <span class="tag is-success ml-2">Saison courante ({current_season})</span>
                     <span class="tag is-danger ml-2">Saison précédente</span>
@@ -1954,9 +1954,9 @@ pub fn staff_list(
                 </p>
                 <p class="mt-2">
                     <strong>Légende ateliers:</strong>
-                    <span class="tag is-warning ml-2"><span class="icon"><i class="fas fa-crown"></i></span> Chef</span>
-                    <span class="tag is-info ml-2"><span class="icon"><i class="fas fa-check"></i></span> Validé</span>
-                    <span class="tag is-grey ml-2"><span class="icon"><i class="fas fa-clock"></i></span> En attente</span>
+                    <span class="tag is-warning ml-2"><span class="icon"><i class="fa-solid fa-crown"></i></span> Chef</span>
+                    <span class="tag is-info ml-2"><span class="icon"><i class="fa-solid fa-check"></i></span> Validé</span>
+                    <span class="tag is-grey ml-2"><span class="icon"><i class="fa-solid fa-clock"></i></span> En attente</span>
                 </p>
             </div>
 
@@ -2043,7 +2043,7 @@ pub fn person_detail(
                                    class="role-validated-checkbox"
                                    data-atelier-id="{atelier_id}"
                                    {validated_checked} {validated_disabled}>
-                            <span class="icon has-text-info"><i class="fas fa-check"></i></span>
+                            <span class="icon has-text-info"><i class="fa-solid fa-check"></i></span>
                             <span>Validé</span>
                         </label>
                         <label class="checkbox">
@@ -2051,7 +2051,7 @@ pub fn person_detail(
                                    class="role-chief-checkbox"
                                    data-atelier-id="{atelier_id}"
                                    {chief_checked}>
-                            <span class="icon has-text-warning"><i class="fas fa-crown"></i></span>
+                            <span class="icon has-text-warning"><i class="fa-solid fa-crown"></i></span>
                             <span>Chef</span>
                         </label>
                     </div>"#,
@@ -2063,11 +2063,11 @@ pub fn person_detail(
             } else {
                 // Non-admin: show read-only validation status badge
                 if r.chief {
-                    r#"<span class="tag is-warning ml-5 mt-1"><i class="fas fa-crown mr-1"></i> Chef</span>"#.to_string()
+                    r#"<span class="tag is-warning ml-5 mt-1"><i class="fa-solid fa-crown mr-1"></i> Chef</span>"#.to_string()
                 } else if r.validated {
-                    r#"<span class="tag is-success ml-5 mt-1"><i class="fas fa-check mr-1"></i> Validé</span>"#.to_string()
+                    r#"<span class="tag is-success ml-5 mt-1"><i class="fa-solid fa-check mr-1"></i> Validé</span>"#.to_string()
                 } else if atelier.needs_validation {
-                    r#"<span class="tag is-warning is-light ml-5 mt-1"><i class="fas fa-clock mr-1"></i> En attente de validation</span>"#.to_string()
+                    r#"<span class="tag is-warning is-light ml-5 mt-1"><i class="fa-solid fa-clock mr-1"></i> En attente de validation</span>"#.to_string()
                 } else {
                     String::new()
                 }
@@ -2107,7 +2107,7 @@ pub fn person_detail(
         if has_role && !atelier.slug.is_empty() {
             plannings_html.push_str(&format!(
                 r#"<a href="{p}/calendar/{slug}" class="button is-link is-outlined mr-2 mb-2">
-                    <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
+                    <span class="icon"><i class="fa-solid fa-{icon}"></i></span>&nbsp;
                     <span>{name}</span>
                 </a>"#,
                 p = prefix,
@@ -2124,7 +2124,7 @@ pub fn person_detail(
         format!(
             r#"<div class="box">
                         <h2 class="title is-4">
-                            <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+                            <span class="icon"><i class="fa-solid fa-calendar-days"></i></span>
                             Mes plannings
                         </h2>
                         <div class="buttons">
@@ -2143,19 +2143,19 @@ pub fn person_detail(
                                 <label class="label">Email:</label>
                                 <div class="control has-icons-left">
                                     <input class="input" type="email" id="edit-email" value="{email}">
-                                    <span class="icon is-left"><i class="fas fa-envelope"></i></span>
+                                    <span class="icon is-left"><i class="fa-solid fa-envelope"></i></span>
                                 </div>
                             </div>
                             <div class="field">
                                 <label class="label">Téléphone:</label>
                                 <div class="control has-icons-left">
                                     <input class="input" type="tel" id="edit-phone" value="{phone}">
-                                    <span class="icon is-left"><i class="fas fa-phone"></i></span>
+                                    <span class="icon is-left"><i class="fa-solid fa-phone"></i></span>
                                 </div>
                             </div>
                             <div class="control mt-2">
                                 <button class="button is-small is-info" id="save-contact-btn">
-                                    <span class="icon"><i class="fas fa-save"></i></span>
+                                    <span class="icon"><i class="fa-solid fa-floppy-disk"></i></span>
                                     <span>Enregistrer</span>
                                 </button>
                             </div>"#,
@@ -2196,7 +2196,7 @@ pub fn person_detail(
                                 </div>
                                 <div class="control mt-2">
                                     <button class="button is-small is-info" id="save-comment-btn">
-                                        <span class="icon"><i class="fas fa-save"></i></span>
+                                        <span class="icon"><i class="fa-solid fa-floppy-disk"></i></span>
                                         <span>Enregistrer</span>
                                     </button>
                                 </div>
@@ -2222,20 +2222,20 @@ pub fn person_detail(
         format!(
             r#"<div class="box">
                         <h2 class="title is-4">
-                            <span class="icon"><i class="fas fa-shield-alt"></i></span>
+                            <span class="icon"><i class="fa-solid fa-shield-halved"></i></span>
                             Administration
                         </h2>
                         <div class="field mb-3">
                             <label class="checkbox">
                                 <input type="checkbox" id="admin-cb" {admin_checked}>
-                                <span class="icon has-text-info"><i class="fas fa-check"></i></span>
+                                <span class="icon has-text-info"><i class="fa-solid fa-check"></i></span>
                                 <span>Admin</span>
                             </label>
                         </div>
                         <div class="field">
                             <label class="checkbox">
                                 <input type="checkbox" id="god-cb" {god_checked}>
-                                <span class="icon has-text-warning"><i class="fas fa-crown"></i></span>
+                                <span class="icon has-text-warning"><i class="fa-solid fa-crown"></i></span>
                                 <span>God</span>
                             </label>
                         </div>
@@ -2264,7 +2264,7 @@ pub fn person_detail(
         for item in todos {
             items_html.push_str(&format!(
                 r#"<li class="mb-2">
-                    <span class="icon has-text-{color}"><i class="fas {icon}"></i></span>
+                    <span class="icon has-text-{color}"><i class="fa-solid {icon}"></i></span>
                     {html}
                 </li>"#,
                 color = item.color,
@@ -2273,9 +2273,9 @@ pub fn person_detail(
             ));
         }
         format!(
-            r#"<div class="box mb-4" style="border-left: 4px solid #f14668;">
+            r#"<div class="box mb-4" style="border-left: 4px solid var(--bulma-danger);">
                 <h2 class="title is-5">
-                    <span class="icon has-text-danger"><i class="fas fa-clipboard-list"></i></span>
+                    <span class="icon has-text-danger"><i class="fa-solid fa-clipboard-list"></i></span>
                     À faire
                 </h2>
                 <ul class="ml-2" style="list-style:none;">{items_html}</ul>
@@ -2292,12 +2292,14 @@ pub fn person_detail(
         for entry in payment_history {
             let icon = match entry.source.as_str() {
                 "helloasso" => {
-                    r#"<span class="icon has-text-link"><i class="fas fa-ticket-alt"></i></span>"#
+                    r#"<span class="icon has-text-link"><i class="fa-solid fa-ticket"></i></span>"#
                 }
                 "check" => {
-                    r#"<span class="icon has-text-success"><i class="fas fa-money-check"></i></span>"#
+                    r#"<span class="icon has-text-success"><i class="fa-solid fa-money-check"></i></span>"#
                 }
-                _ => r#"<span class="icon has-text-warning"><i class="fas fa-coins"></i></span>"#,
+                _ => {
+                    r#"<span class="icon has-text-warning"><i class="fa-solid fa-coins"></i></span>"#
+                }
             };
             let date_display = entry.date.as_deref().unwrap_or("—");
             let amount_display = entry.amount.map_or_else(
@@ -2374,7 +2376,7 @@ pub fn person_detail(
         format!(
             r#"<div class="box">
                         <h2 class="title is-4">
-                            <span class="icon"><i class="fas fa-history"></i></span>
+                            <span class="icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
                             Historique des cotisations
                         </h2>
                         {items_html}
@@ -2423,7 +2425,7 @@ pub fn person_detail(
                 <div class="column is-one-third">
                     <div class="box">
                         <h2 class="title is-4">
-                            <span class="icon"><i class="fas fa-user"></i></span>
+                            <span class="icon"><i class="fa-solid fa-user"></i></span>
                             Informations
                         </h2>
 
@@ -2443,12 +2445,12 @@ pub fn person_detail(
                 <div class="column">
                     <div class="box">
                         <h2 class="title is-4">
-                            <span class="icon"><i class="fas fa-tools"></i></span>
+                            <span class="icon"><i class="fa-solid fa-screwdriver-wrench"></i></span>
                             Ateliers (Saison {current_season})
                         </h2>
 
                         <div class="notification is-info is-light mb-4">
-                            <span class="icon"><i class="fas fa-info-circle"></i></span>
+                            <span class="icon"><i class="fa-solid fa-circle-info"></i></span>
                             {info_text}
                         </div>
 
@@ -2832,7 +2834,7 @@ pub fn cash_list(cash_payments: Vec<(Cash, bool)>, current_season: i16, prefix: 
                     <td><strong>{full_name}</strong></td>
                     <td>{email}</td>
                     <td>{phone}</td>
-                    <td><span class="icon-text"><span class="icon"><i class="fas {method_icon}"></i></span><span>{method_label}</span></span></td>
+                    <td><span class="icon-text"><span class="icon"><i class="fa-solid {method_icon}"></i></span><span>{method_label}</span></span></td>
                     <td><span class="tag {type_class}">{type_label}</span></td>
                     <td class="has-text-right"><strong class="has-text-success">{amount}</strong></td>
                     <td>{date}</td>
@@ -2860,13 +2862,13 @@ pub fn cash_list(cash_payments: Vec<(Cash, bool)>, current_season: i16, prefix: 
             <div class="level mb-4">
                 <div class="level-left">
                     <h1 class="title is-3">
-                        <span class="icon"><i class="fas fa-money-bill-wave"></i></span>
+                        <span class="icon"><i class="fa-solid fa-money-bill-wave"></i></span>
                         Paiements espèces / chèques
                     </h1>
                 </div>
                 <div class="level-right">
                     <a href="{p}/cash?form=1" class="button is-primary">
-                        <span class="icon"><i class="fas fa-plus"></i></span>
+                        <span class="icon"><i class="fa-solid fa-plus"></i></span>
                         <span>Nouveau paiement</span>
                     </a>
                 </div>
@@ -2932,7 +2934,7 @@ pub fn cash_form(prefix: &str) -> String {
                         </div>
                         <div class="level-right">
                             <a href="{p}/cash" class="button is-light">
-                                <span class="icon"><i class="fas fa-arrow-left"></i></span>
+                                <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
                                 <span>Retour</span>
                             </a>
                         </div>
@@ -3015,7 +3017,7 @@ pub fn cash_form(prefix: &str) -> String {
                             <div class="field mt-5">
                                 <div class="control">
                                     <button type="submit" class="button is-primary is-fullwidth">
-                                        <span class="icon"><i class="fas fa-save"></i></span>
+                                        <span class="icon"><i class="fa-solid fa-floppy-disk"></i></span>
                                         <span>Enregistrer le paiement</span>
                                     </button>
                                 </div>
@@ -3240,7 +3242,7 @@ pub fn cash_import_form(
                     <div class="field">
                         <div class="control">
                             <button type="submit" class="button {} is-fullwidth">
-                                <span class="icon"><i class="fas fa-sync"></i></span>
+                                <span class="icon"><i class="fa-solid fa-arrows-rotate"></i></span>
                                 <span>Mettre à jour ce staff</span>
                             </button>
                         </div>
@@ -3352,7 +3354,7 @@ pub fn cash_import_form(
                 <div class="field">
                     <div class="control">
                         <button type="submit" class="button {} is-fullwidth">
-                            <span class="icon"><i class="fas fa-plus"></i></span>
+                            <span class="icon"><i class="fa-solid fa-plus"></i></span>
                             <span>Créer un nouveau staff</span>
                         </button>
                     </div>
@@ -3380,7 +3382,7 @@ pub fn cash_import_form(
     let total_options = candidates.len() + 1;
     let multiple_options_warning = if total_options > 1 {
         r#"<div class="notification is-danger mb-4">
-            <span class="icon"><i class="fas fa-exclamation-triangle"></i></span>
+            <span class="icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
             <strong>Attention</strong>, il y a plusieurs possibilités, examinez-les bien avant de choisir la bonne.
         </div>"#
     } else {
@@ -3412,7 +3414,7 @@ pub fn cash_import_form(
                 </div>
                 <div class="level-right">
                     <a href="{p}/cash" class="button is-light">
-                        <span class="icon"><i class="fas fa-arrow-left"></i></span>
+                        <span class="icon"><i class="fa-solid fa-arrow-left"></i></span>
                         <span>Retour</span>
                     </a>
                 </div>
@@ -3517,7 +3519,7 @@ pub fn calendar(
         let active = if a.id == atelier.id { " is-active" } else { "" };
         atelier_nav.push_str(&format!(
             r#"<a class="navbar-item{active}" href="{p}/calendar/{slug}">
-            <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
+            <span class="icon"><i class="fa-solid fa-{icon}"></i></span>&nbsp;
             {name}</a>"#,
             active = active,
             p = prefix,
@@ -3693,16 +3695,16 @@ pub fn calendar(
         .cal-table { border-collapse: collapse; white-space: nowrap; }
         .cal-table th, .cal-table td { border: 1px solid var(--bulma-border); padding: 0.3rem 0.4rem; vertical-align: middle; }
         .cal-table thead { position: sticky; top: 0; z-index: 4; }
-        .cal-table thead th { background: #f5f5f5 !important; }
+        .cal-table thead th { background: var(--bulma-scheme-main-bis) !important; }
         .cal-name-col { position: sticky; left: 0; z-index: 2; min-width: 150px; }
-        .cal-table thead th.cal-name-col { z-index: 5; background: #f5f5f5 !important; }
-        .cal-table tbody tr:nth-child(odd) td { background: white; }
-        .cal-table tbody tr:nth-child(even) td { background: #fafafa; }
-        .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: white; }
-        .cal-table tbody tr:nth-child(even) td.cal-name-col { background: #fafafa; }
+        .cal-table thead th.cal-name-col { z-index: 5; background: var(--bulma-scheme-main-bis) !important; }
+        .cal-table tbody tr:nth-child(odd) td { background: var(--bulma-scheme-main); }
+        .cal-table tbody tr:nth-child(even) td { background: var(--bulma-background); }
+        .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: var(--bulma-scheme-main); }
+        .cal-table tbody tr:nth-child(even) td.cal-name-col { background: var(--bulma-background); }
         .cal-sunday { background: var(--bulma-link-light) !important; }
-        .cal-complete { background: #effaf5 !important; }
-        .cal-danger { background: #feecf0 !important; }
+        .cal-complete { background: var(--bulma-success-light) !important; }
+        .cal-danger { background: var(--bulma-danger-light) !important; }
         .cal-cell.cal-active { background: var(--bulma-success) !important; color: var(--bulma-success-invert); }
         .cal-day-col { min-width: 70px; }
         .cal-day-name { font-size: 0.75rem; }
@@ -3726,9 +3728,9 @@ pub fn calendar(
     </style>";
 
     let empty_message = if needs.is_empty() {
-        r#"<div class="notification is-warning is-light mt-4"><span class="icon"><i class="fas fa-exclamation-triangle"></i></span> Aucun besoin déclaré pour cet atelier.</div>"#
+        r#"<div class="notification is-warning is-light mt-4"><span class="icon"><i class="fa-solid fa-triangle-exclamation"></i></span> Aucun besoin déclaré pour cet atelier.</div>"#
     } else if staff_list.is_empty() {
-        r#"<div class="notification is-info is-light mt-4"><span class="icon"><i class="fas fa-info-circle"></i></span> Aucun bénévole assigné à cet atelier.</div>"#
+        r#"<div class="notification is-info is-light mt-4"><span class="icon"><i class="fa-solid fa-circle-info"></i></span> Aucun bénévole assigné à cet atelier.</div>"#
     } else {
         ""
     };
@@ -3739,7 +3741,7 @@ pub fn calendar(
     <section class="section pt-4 pb-4">
         <div class="container is-fluid">
             <h1 class="title is-4 mb-3">
-                <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+                <span class="icon"><i class="fa-solid fa-calendar-days"></i></span>
                 Planning — {atelier_name}
             </h1>
 
@@ -3919,12 +3921,12 @@ fn render_upcoming_week(upcoming: &[(chrono::NaiveDate, String, i16, i64)]) -> S
 
             if missing_parts.is_empty() {
                 html.push_str(&format!(
-                    r#"<div class="week-day week-day-ok"><span class="icon has-text-success"><i class="fas fa-check-circle"></i></span> <strong>{}</strong> — complet</div>"#,
+                    r#"<div class="week-day week-day-ok"><span class="icon has-text-success"><i class="fa-solid fa-circle-check"></i></span> <strong>{}</strong> — complet</div>"#,
                     date_str
                 ));
             } else {
                 html.push_str(&format!(
-                    r#"<div class="week-day week-day-missing"><span class="icon has-text-danger"><i class="fas fa-exclamation-circle"></i></span> <strong>{}</strong> — il manque {}</div>"#,
+                    r#"<div class="week-day week-day-missing"><span class="icon has-text-danger"><i class="fa-solid fa-circle-exclamation"></i></span> <strong>{}</strong> — il manque {}</div>"#,
                     date_str,
                     missing_parts.join(", "),
                 ));
@@ -4219,7 +4221,7 @@ pub fn calendar_editor(
         for a in all_ateliers {
             calendar_links.push_str(&format!(
                 r#"<a class="tag is-medium is-link is-light" href="{p}/calendar/{slug}">
-                <span class="icon"><i class="fas fa-{icon}"></i></span>&nbsp;
+                <span class="icon"><i class="fa-solid fa-{icon}"></i></span>&nbsp;
                 {name}</a>"#,
                 p = prefix,
                 slug = a.slug,
@@ -4265,18 +4267,18 @@ pub fn calendar_editor(
         .cal-table { border-collapse: collapse; white-space: nowrap; }
         .cal-table th, .cal-table td { border: 1px solid var(--bulma-border); padding: 0.3rem 0.5rem; vertical-align: middle; }
         .cal-table thead { position: sticky; top: 0; z-index: 4; }
-        .cal-table thead th { background: #f5f5f5 !important; text-align: center; }
+        .cal-table thead th { background: var(--bulma-scheme-main-bis) !important; text-align: center; }
         .cal-name-col { position: sticky; left: 0; z-index: 2; min-width: 150px; }
-        .cal-table thead th.cal-name-col { z-index: 5; background: #f5f5f5 !important; text-align: left; }
-        .cal-table tbody tr:nth-child(odd) td { background: white; }
-        .cal-table tbody tr:nth-child(even) td { background: #eef1f5; }
-        .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: white; }
-        .cal-table tbody tr:nth-child(even) td.cal-name-col { background: #eef1f5; }
+        .cal-table thead th.cal-name-col { z-index: 5; background: var(--bulma-scheme-main-bis) !important; text-align: left; }
+        .cal-table tbody tr:nth-child(odd) td { background: var(--bulma-scheme-main); }
+        .cal-table tbody tr:nth-child(even) td { background: var(--bulma-background); }
+        .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: var(--bulma-scheme-main); }
+        .cal-table tbody tr:nth-child(even) td.cal-name-col { background: var(--bulma-background); }
         .cal-table .day-start { border-left: 2.5px solid var(--bulma-grey-light) !important; }
         .cal-table td.day-cell { cursor: pointer; }
         .cal-table td.day-cell:hover { background: var(--bulma-link-light) !important; }
-        .cal-table td.cell-ok { color: #257953; font-weight: 600; background: #effaf5 !important; }
-        .cal-table td.cell-deficit { color: #cc0f35; font-weight: 600; background: #feecf0 !important; }
+        .cal-table td.cell-ok { color: var(--bulma-success-dark); font-weight: 600; background: var(--bulma-success-light) !important; }
+        .cal-table td.cell-deficit { color: var(--bulma-danger-dark); font-weight: 600; background: var(--bulma-danger-light) !important; }
         .notification.toast {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             z-index: 100; min-width: 300px;
@@ -4298,9 +4300,9 @@ pub fn calendar_editor(
         .nightly-switch .side-label.is-active { color: var(--bulma-text); font-weight: 600; }
         label.switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
         label.switch input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
-        label.switch .check { position: relative; display: inline-block; width: 2.75em; height: 1.5em; background: hsl(48, 100%, 67%); border-radius: 1em; transition: background 0.3s; flex-shrink: 0; border: 1px solid transparent; }
-        label.switch .check::before { content: ""; position: absolute; top: 0.15em; left: 0.15em; width: 1.15em; height: 1.15em; background: #fff; border-radius: 50%; transition: transform 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-        label.switch input[type="checkbox"]:checked + .check { background: hsl(217, 71%, 53%); }
+        label.switch .check { position: relative; display: inline-block; width: 2.75em; height: 1.5em; background: var(--bulma-warning); border-radius: 1em; transition: background 0.3s; flex-shrink: 0; border: 1px solid transparent; }
+        label.switch .check::before { content: ""; position: absolute; top: 0.15em; left: 0.15em; width: 1.15em; height: 1.15em; background: var(--bulma-scheme-main); border-radius: 50%; transition: transform 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        label.switch input[type="checkbox"]:checked + .check { background: var(--bulma-link); }
         label.switch input[type="checkbox"]:checked + .check::before { transform: translateX(1.25em); }
         label.switch input[type="checkbox"]:disabled + .check { opacity: 0.5; cursor: not-allowed; }
         /* Highlight dates that have needs */
@@ -4341,7 +4343,7 @@ pub fn calendar_editor(
     } else {
         r#"<div class="mb-4">
                 <button class="button is-primary" id="open-add-modal">
-                    <span class="icon"><i class="fas fa-plus"></i></span>
+                    <span class="icon"><i class="fa-solid fa-plus"></i></span>
                     <span>Ajouter des besoins en bénévoles</span>
                 </button>
             </div>"#
@@ -4354,7 +4356,7 @@ pub fn calendar_editor(
     <section class="section pt-4 pb-4">
         <div class="container is-fluid">
             <h1 class="title is-4 mb-3">
-                <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+                <span class="icon"><i class="fa-solid fa-calendar-days"></i></span>
                 Planning des besoins
             </h1>
 
@@ -4410,7 +4412,7 @@ pub fn calendar_editor(
                             <div class="atelier-cards" id="add-atelier-cards"></div>
                         </div>
                         <div id="add-no-selection" class="notification is-info is-light">
-                            <span class="icon"><i class="fas fa-hand-pointer"></i></span>
+                            <span class="icon"><i class="fa-solid fa-hand-pointer"></i></span>
                             Sélectionnez une date sur le calendrier.
                         </div>
                     </div>
@@ -4470,13 +4472,13 @@ pub fn calendar_editor(
                         '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
                         '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' + qty + '"></div></div>' +
                         '<div class="field"><div class="nightly-switch">' +
-                        '<span class="side-label' + (nightly ? '' : ' is-active') + '" data-role="day"><i class="fas fa-sun"></i> Journée</span>' +
+                        '<span class="side-label' + (nightly ? '' : ' is-active') + '" data-role="day"><i class="fa-solid fa-sun"></i> Journée</span>' +
                         '<label class="switch"><input type="checkbox" class="nightly-cb"' + (nightly ? ' checked' : '') + '><span class="check"></span></label>' +
-                        '<span class="side-label' + (nightly ? ' is-active' : '') + '" data-role="night"><i class="fas fa-moon"></i> Nocturne</span>' +
+                        '<span class="side-label' + (nightly ? ' is-active' : '') + '" data-role="night"><i class="fa-solid fa-moon"></i> Nocturne</span>' +
                         '</div></div>' +
                         '<div class="card-actions">' +
-                        '<button class="button is-primary is-small btn-card-save"><span class="icon is-small"><i class="fas fa-save"></i></span><span>' + (hasNeed ? 'Modifier' : 'Créer') + '</span></button>' +
-                        (hasNeed ? '<button class="button is-danger is-small is-outlined btn-card-delete"><span class="icon is-small"><i class="fas fa-trash"></i></span><span>Supprimer</span></button>' : '') +
+                        '<button class="button is-primary is-small btn-card-save"><span class="icon is-small"><i class="fa-solid fa-floppy-disk"></i></span><span>' + (hasNeed ? 'Modifier' : 'Créer') + '</span></button>' +
+                        (hasNeed ? '<button class="button is-danger is-small is-outlined btn-card-delete"><span class="icon is-small"><i class="fa-solid fa-trash"></i></span><span>Supprimer</span></button>' : '') +
                         '</div>';
                 }} else {{
                     card.innerHTML =
@@ -4484,9 +4486,9 @@ pub fn calendar_editor(
                         '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
                         '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' + qty + '" disabled></div></div>' +
                         '<div class="field"><div class="nightly-switch">' +
-                        '<span class="side-label' + (nightly ? '' : ' is-active') + '"><i class="fas fa-sun"></i> Journée</span>' +
+                        '<span class="side-label' + (nightly ? '' : ' is-active') + '"><i class="fa-solid fa-sun"></i> Journée</span>' +
                         '<label class="switch"><input type="checkbox" class="nightly-cb"' + (nightly ? ' checked' : '') + ' disabled><span class="check"></span></label>' +
-                        '<span class="side-label' + (nightly ? ' is-active' : '') + '"><i class="fas fa-moon"></i> Nocturne</span>' +
+                        '<span class="side-label' + (nightly ? ' is-active' : '') + '"><i class="fa-solid fa-moon"></i> Nocturne</span>' +
                         '</div></div>';
                 }}
 
@@ -4684,14 +4686,14 @@ pub fn login_page(prefix: &str) -> String {
                     <div class="card">
                         <div class="card-content">
                             <h2 class="title is-4 has-text-centered">
-                                <span class="icon"><i class="fas fa-sign-in-alt"></i></span>
+                                <span class="icon"><i class="fa-solid fa-right-to-bracket"></i></span>
                                 Connexion
                             </h2>
                             <div class="field">
                                 <label class="label">Rechercher votre nom</label>
                                 <div class="control has-icons-left">
                                     <input class="input" type="text" id="search-input" placeholder="Tapez au moins 4 caractères..." autocomplete="off">
-                                    <span class="icon is-left"><i class="fas fa-search"></i></span>
+                                    <span class="icon is-left"><i class="fa-solid fa-magnifying-glass"></i></span>
                                 </div>
                                 <p class="help">Entrez votre prénom ou nom de famille</p>
                             </div>
@@ -4700,12 +4702,12 @@ pub fn login_page(prefix: &str) -> String {
                             <div id="confirm-box" style="display:none" class="notification is-info is-light mt-4">
                                 <p id="confirm-text"></p>
                                 <button class="button is-primary mt-3" id="send-btn">
-                                    <span class="icon"><i class="fas fa-envelope"></i></span>
+                                    <span class="icon"><i class="fa-solid fa-envelope"></i></span>
                                     <span>Envoyer le lien de connexion</span>
                                 </button>
                             </div>
                             <div id="success-box" style="display:none" class="notification is-success is-light mt-4">
-                                <p><span class="icon"><i class="fas fa-check"></i></span> Un email de connexion a été envoyé. Vérifiez votre boîte de réception.</p>
+                                <p><span class="icon"><i class="fa-solid fa-check"></i></span> Un email de connexion a été envoyé. Vérifiez votre boîte de réception.</p>
                             </div>
                             <div id="error-box" style="display:none" class="notification is-danger is-light mt-4">
                                 <p id="error-text"></p>
@@ -4873,7 +4875,7 @@ pub fn audit_page(
         r#"    <section class="section">
         <div class="container is-fluid">
             <h1 class="title is-4">
-                <span class="icon mr-2"><i class="fas fa-clipboard-list"></i></span>
+                <span class="icon mr-2"><i class="fa-solid fa-clipboard-list"></i></span>
                 Journal d'audit
             </h1>
             <div class="table-container">
@@ -4918,11 +4920,11 @@ pub fn validation_page(pending: &[(Staff, Atelier)], prefix: &str) -> String {
                 <td>
                     <div class="buttons are-small">
                         <button class="button is-success" onclick="doValidate('{staff_id}', '{atelier_id}', true)">
-                            <span class="icon"><i class="fas fa-check"></i></span>
+                            <span class="icon"><i class="fa-solid fa-check"></i></span>
                             <span>Valider</span>
                         </button>
                         <button class="button is-danger is-outlined" onclick="doValidate('{staff_id}', '{atelier_id}', false)">
-                            <span class="icon"><i class="fas fa-times"></i></span>
+                            <span class="icon"><i class="fa-solid fa-xmark"></i></span>
                             <span>Refuser</span>
                         </button>
                     </div>
@@ -4989,7 +4991,7 @@ async function doValidate(staffId, atelierId, accept) {{
             </nav>
 
             <h1 class="title is-4">
-                <span class="icon mr-2"><i class="fas fa-user-check"></i></span>
+                <span class="icon mr-2"><i class="fa-solid fa-user-check"></i></span>
                 Demandes en attente de validation
             </h1>
             <div class="table-container">
@@ -5033,7 +5035,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
                         <label class="label">Photographe</label>
                         <div class="control has-icons-left">
                             <input class="input" type="text" id="photographer-search" placeholder="Rechercher un bénévole (4 car. min)" autocomplete="off">
-                            <span class="icon is-left"><i class="fas fa-user"></i></span>
+                            <span class="icon is-left"><i class="fa-solid fa-user"></i></span>
                         </div>
                         <nav class="panel" id="photographer-results" style="display:none;max-height:200px;overflow-y:auto;margin-top:0"></nav>
                         <p class="help" id="photographer-selected" style="display:none">
@@ -5062,13 +5064,13 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
                                 <div class="field">
                                     <div class="control has-icons-left">
                                         <input class="input" type="email" id="new-staff-email" placeholder="Email">
-                                        <span class="icon is-left"><i class="fas fa-envelope"></i></span>
+                                        <span class="icon is-left"><i class="fa-solid fa-envelope"></i></span>
                                     </div>
                                 </div>
                                 <div class="field">
                                     <div class="control has-icons-left">
                                         <input class="input" type="tel" id="new-staff-phone" placeholder="Téléphone">
-                                        <span class="icon is-left"><i class="fas fa-phone"></i></span>
+                                        <span class="icon is-left"><i class="fa-solid fa-phone"></i></span>
                                     </div>
                                 </div>
                                 <div class="field">
@@ -5088,7 +5090,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
                                     <input class="file-input" type="file" name="photo" accept="image/*" required>
                                     <span class="file-cta">
                                         <span class="file-icon">
-                                            <i class="fas fa-upload"></i>
+                                            <i class="fa-solid fa-upload"></i>
                                         </span>
                                         <span class="file-label">
                                             Choisir un fichier...
@@ -5102,7 +5104,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
                     <div class="field">
                         <div class="control">
                             <button type="submit" class="button is-primary" id="upload-btn" disabled>
-                                <span class="icon"><i class="fas fa-cloud-upload-alt"></i></span>
+                                <span class="icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
                                 <span>Télécharger</span>
                             </button>
                         </div>
@@ -5135,7 +5137,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
                 r#"<footer class="card-footer">
                     <form action="{url}" method="post" style="width:100%" onsubmit="return confirm('Supprimer cette photo ?')">
                         <button type="submit" class="card-footer-item has-text-danger" style="border:none;background:none;cursor:pointer;width:100%">
-                            <span class="icon"><i class="fas fa-trash"></i></span>
+                            <span class="icon"><i class="fa-solid fa-trash"></i></span>
                             <span>Supprimer</span>
                         </button>
                     </form>
@@ -5154,7 +5156,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
             )
         } else {
             format!(
-                r#"<span class="icon is-large has-text-link"><i class="fas {icon} fa-4x"></i></span>"#,
+                r#"<span class="icon is-large has-text-link"><i class="fa-solid {icon} fa-4x"></i></span>"#,
                 icon = icon,
             )
         };
@@ -5203,7 +5205,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
             </nav>
 
             <h1 class="title is-4">
-                <span class="icon mr-2"><i class="fas fa-images"></i></span>
+                <span class="icon mr-2"><i class="fa-solid fa-images"></i></span>
                 Gestion des photos
             </h1>
 
@@ -5299,7 +5301,7 @@ pub fn photo_page(prefix: &str, photos: &[(Photo, String)], is_admin: bool) -> S
                         const createLink = document.createElement('a');
                         createLink.className = 'panel-block has-text-info';
                         createLink.href = '#';
-                        createLink.innerHTML = '<span class="icon"><i class="fas fa-plus"></i></span> Créer un nouveau bénévole';
+                        createLink.innerHTML = '<span class="icon"><i class="fa-solid fa-plus"></i></span> Créer un nouveau bénévole';
                         createLink.addEventListener('click', function(e) {{
                             e.preventDefault();
                             createBox.style.display = 'block';
