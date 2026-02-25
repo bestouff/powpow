@@ -446,12 +446,12 @@ async fn list_staff(
         }
     };
 
-    // Sort staff list: chiefs first, then by name
+    // Sort staff list: chiefs or gods first, then by name
     let mut staff_list = staff_list;
     staff_list.sort_by(|(staff_a, _), (staff_b, _)| {
-        let a_is_chief = roles.iter().any(|r| r.staff == staff_a.id && r.chief);
-        let b_is_chief = roles.iter().any(|r| r.staff == staff_b.id && r.chief);
-        match (a_is_chief, b_is_chief) {
+        let a_priority = staff_a.is_god || roles.iter().any(|r| r.staff == staff_a.id && r.chief);
+        let b_priority = staff_b.is_god || roles.iter().any(|r| r.staff == staff_b.id && r.chief);
+        match (a_priority, b_priority) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
             _ => staff_a.last_name.cmp(&staff_b.last_name),
