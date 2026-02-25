@@ -306,6 +306,31 @@ pub async fn has_staff_for_membership(
     Ok(exists)
 }
 
+/// Returns the set of all (`helloasso_item_id`, season) pairs from the payments table.
+/// Used to batch-check which memberships have already been imported, avoiding N+1 queries.
+pub async fn get_all_imported_item_ids(
+    pool: &PgPool,
+) -> Result<std::collections::HashSet<(i64, i16)>> {
+    let rows = sqlx::query(
+        r"
+        SELECT helloasso_item_id, season FROM payments
+        ",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let set = rows
+        .iter()
+        .map(|row| {
+            let item_id: i64 = row.get("helloasso_item_id");
+            let season: i16 = row.get("season");
+            (item_id, season)
+        })
+        .collect();
+
+    Ok(set)
+}
+
 pub async fn get_membership_by_item_id(
     pool: &PgPool,
     helloasso_item_id: i64,

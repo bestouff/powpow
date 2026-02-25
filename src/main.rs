@@ -293,8 +293,12 @@ async fn list_users(
     let search = params.get("search").filter(|s| !s.is_empty());
     let only_not_imported = params.get("filter").is_some_and(|f| f == "not_imported");
 
-    match database::get_all_memberships_filtered(&state.db, search.map(String::as_str)).await {
-        Ok(memberships_with_users) => {
+    let imported_result = database::get_all_imported_item_ids(&state.db).await;
+    let memberships_result =
+        database::get_all_memberships_filtered(&state.db, search.map(String::as_str)).await;
+
+    match (memberships_result, imported_result) {
+        (Ok(memberships_with_users), Ok(imported_set)) => {
             // Transform memberships to include staff import status and count stats
             let mut memberships_with_status = Vec::new();
             let mut total_count = 0;
@@ -312,14 +316,8 @@ async fn list_users(
                     get_current_season()
                 };
 
-                // Check if staff exists for this membership+season
-                let has_staff = database::has_staff_for_membership(
-                    &state.db,
-                    membership.helloasso_item_id,
-                    season,
-                )
-                .await
-                .unwrap_or(false);
+                // Check if staff exists for this membership+season (batch lookup)
+                let has_staff = imported_set.contains(&(membership.helloasso_item_id, season));
 
                 // Update stats
                 total_count += 1;
@@ -402,7 +400,7 @@ async fn list_users(
                 &prefix,
             ))
         }
-        Err(e) => {
+        (Err(e), _) | (_, Err(e)) => {
             error!("Error fetching memberships: {}", e);
             Html(format!("<p>Error loading memberships: {}</p>", e))
         }
