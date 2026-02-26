@@ -16,6 +16,7 @@ use axum::{
 };
 use axum_extra::extract::cookie::{Key, SignedCookieJar};
 use chrono::{Datelike, TimeDelta};
+use maud::html;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -278,14 +279,14 @@ async fn index(
         .await
         .unwrap_or_default();
 
-    Html(templates::index(
+    templates::index(
         &prefix,
         staff.as_ref(),
         current_season,
         has_paid,
         &chief_ateliers,
         &upcoming,
-    ))
+    )
 }
 
 async fn list_users(
@@ -394,7 +395,7 @@ async fn list_users(
                 }
             });
 
-            Html(templates::membership_list_with_filters(
+            templates::membership_list_with_filters(
                 memberships_with_status,
                 search.cloned(),
                 only_not_imported,
@@ -403,11 +404,11 @@ async fn list_users(
                 not_imported_count,
                 get_current_season(),
                 &prefix,
-            ))
+            )
         }
         (Err(e), _) | (_, Err(e)) => {
             error!("Error fetching memberships: {}", e);
-            Html(format!("<p>Error loading memberships: {}</p>", e))
+            html! { p { "Error loading memberships: " (e) } }
         }
     }
 }
@@ -431,7 +432,7 @@ async fn list_staff(
         Ok(list) => list,
         Err(e) => {
             error!("Error fetching staff: {}", e);
-            return Html(format!("<p>Error loading staff: {}</p>", e));
+            return html! { p { "Error loading staff: " (e) } };
         }
     };
 
@@ -439,7 +440,7 @@ async fn list_staff(
         Ok(list) => list,
         Err(e) => {
             error!("Error fetching ateliers: {}", e);
-            return Html(format!("<p>Error loading ateliers: {}</p>", e));
+            return html! { p { "Error loading ateliers: " (e) } };
         }
     };
 
@@ -447,7 +448,7 @@ async fn list_staff(
         Ok(list) => list,
         Err(e) => {
             error!("Error fetching roles: {}", e);
-            return Html(format!("<p>Error loading roles: {}</p>", e));
+            return html! { p { "Error loading roles: " (e) } };
         }
     };
 
@@ -463,14 +464,14 @@ async fn list_staff(
         }
     });
 
-    Html(templates::staff_list(
+    templates::staff_list(
         staff_list,
         &ateliers,
         &roles,
         current_season,
         &prefix,
         show_contact,
-    ))
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -529,17 +530,13 @@ async fn view_person(
     let staff = match database::get_staff_by_id(&state.db, id).await {
         Ok(Some(s)) => s,
         Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Html("<p>Staff not found</p>".to_string()),
-            )
-                .into_response();
+            return (StatusCode::NOT_FOUND, html! { p { "Staff not found" } }).into_response();
         }
         Err(e) => {
             error!("Error fetching staff: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error: {}</p>", e)),
+                html! { p { "Error: " (e) } },
             )
                 .into_response();
         }
@@ -574,7 +571,7 @@ async fn view_person(
             error!("Error fetching ateliers: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error: {}</p>", e)),
+                html! { p { "Error: " (e) } },
             )
                 .into_response();
         }
@@ -587,7 +584,7 @@ async fn view_person(
             error!("Error fetching roles: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error: {}</p>", e)),
+                html! { p { "Error: " (e) } },
             )
                 .into_response();
         }
@@ -691,7 +688,7 @@ async fn view_person(
         Vec::new()
     };
 
-    Html(templates::person_detail(
+    templates::person_detail(
         &staff,
         &ateliers,
         &roles,
@@ -703,7 +700,7 @@ async fn view_person(
         &todos,
         &payment_history,
         &person_calendar,
-    ))
+    )
     .into_response()
 }
 
@@ -1121,17 +1118,13 @@ async fn calendar_view(
     let atelier = match database::get_atelier_by_slug(&state.db, &slug).await {
         Ok(Some(a)) => a,
         Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Html("<p>Atelier not found</p>".to_string()),
-            )
-                .into_response();
+            return (StatusCode::NOT_FOUND, html! { p { "Atelier not found" } }).into_response();
         }
         Err(e) => {
             error!("Error fetching atelier: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error: {}</p>", e)),
+                html! { p { "Error: " (e) } },
             )
                 .into_response();
         }
@@ -1148,7 +1141,7 @@ async fn calendar_view(
             error!("Error fetching needs: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error: {}</p>", e)),
+                html! { p { "Error: " (e) } },
             )
                 .into_response();
         }
@@ -1160,7 +1153,7 @@ async fn calendar_view(
             error!("Error fetching staff: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error: {}</p>", e)),
+                html! { p { "Error: " (e) } },
             )
                 .into_response();
         }
@@ -1172,7 +1165,7 @@ async fn calendar_view(
             error!("Error fetching ateliers: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error: {}</p>", e)),
+                html! { p { "Error: " (e) } },
             )
                 .into_response();
         }
@@ -1186,7 +1179,7 @@ async fn calendar_view(
             error!("Error fetching presence: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error: {}</p>", e)),
+                html! { p { "Error: " (e) } },
             )
                 .into_response();
         }
@@ -1204,7 +1197,7 @@ async fn calendar_view(
         .await
         .unwrap_or_default();
 
-    Html(templates::calendar(
+    templates::calendar(
         &atelier,
         &needs,
         &staff_list,
@@ -1214,7 +1207,7 @@ async fn calendar_view(
         me.as_ref().map(|s| s.id),
         me.as_ref().is_some_and(|s| s.is_admin),
         &opening_days,
-    ))
+    )
     .into_response()
 }
 
@@ -1545,7 +1538,7 @@ async fn calendar_landing(
         Ok(a) => a,
         Err(e) => {
             error!("Error fetching ateliers: {}", e);
-            return Html(format!("<p>Error: {}</p>", e)).into_response();
+            return html! { p { "Error: " (e) } }.into_response();
         }
     };
 
@@ -1579,7 +1572,7 @@ async fn calendar_landing(
 
     let is_admin = staff.as_ref().is_some_and(|s| s.is_admin || s.is_god);
 
-    Html(templates::calendar_editor(
+    templates::calendar_editor(
         &ateliers,
         &editable_ids,
         &future_needs,
@@ -1587,7 +1580,7 @@ async fn calendar_landing(
         staff.is_some(),
         is_admin,
         &opening_days,
-    ))
+    )
     .into_response()
 }
 
@@ -1861,16 +1854,13 @@ async fn get_user(
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
     match database::get_user_by_email(&state.db, email).await {
-        Ok(Some(user)) => (StatusCode::OK, Html(templates::user_detail(user, &prefix))),
-        Ok(None) => (
-            StatusCode::NOT_FOUND,
-            Html("<p>User not found</p>".to_string()),
-        ),
+        Ok(Some(user)) => (StatusCode::OK, templates::user_detail(user, &prefix)),
+        Ok(None) => (StatusCode::NOT_FOUND, html! { p { "User not found" } }),
         Err(e) => {
             error!("Error fetching user: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error loading user: {}</p>", e)),
+                html! { p { "Error loading user: " (e) } },
             )
         }
     }
@@ -1899,9 +1889,7 @@ async fn import_staff(
             if already_imported {
                 return (
                     StatusCode::OK,
-                    Html(templates::already_imported_page(
-                        membership, season, &prefix,
-                    )),
+                    templates::already_imported_page(membership, season, &prefix),
                 );
             }
 
@@ -1927,25 +1915,25 @@ async fn import_staff(
             // Always allow creating a new staff (two people can have the same name)
             (
                 StatusCode::OK,
-                Html(templates::import_staff_form(
+                templates::import_staff_form(
                     membership,
                     season,
                     candidates,
                     payer_email.as_deref(),
                     false,
                     &prefix,
-                )),
+                ),
             )
         }
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Html("<p>Membership not found</p>".to_string()),
+            html! { p { "Membership not found" } },
         ),
         Err(e) => {
             error!("Error fetching membership: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error loading membership: {}</p>", e)),
+                html! { p { "Error loading membership: " (e) } },
             )
         }
     }
@@ -1977,14 +1965,14 @@ async fn do_import_staff(
         Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
-                Html("<p>Membership not found</p>".to_string()),
+                html! { p { "Membership not found" } },
             );
         }
         Err(e) => {
             error!("Error fetching membership: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Error loading membership: {}</p>", e)),
+                html! { p { "Error loading membership: " (e) } },
             );
         }
     };
@@ -2017,10 +2005,7 @@ async fn do_import_staff(
                 .as_ref()
                 .and_then(|s| s.parse::<uuid::Uuid>().ok())
             else {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Html("<p>Invalid staff ID</p>".to_string()),
-                );
+                return (StatusCode::BAD_REQUEST, html! { p { "Invalid staff ID" } });
             };
             database::update_staff_with_payment(
                 &state.db,
@@ -2036,10 +2021,7 @@ async fn do_import_staff(
             .await
         }
         _ => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Html("<p>Invalid action</p>".to_string()),
-            );
+            return (StatusCode::BAD_REQUEST, html! { p { "Invalid action" } });
         }
     };
 
@@ -2059,10 +2041,10 @@ async fn do_import_staff(
             // Redirect back to users page with filter to show remaining not-imported memberships
             (
                 StatusCode::SEE_OTHER,
-                Html(format!(
-                    r#"<meta http-equiv="refresh" content="0;url={}/users"><p>Redirecting...</p>"#,
-                    prefix
-                )),
+                html! {
+                    meta http-equiv="refresh" content=(format!("0;url={}/users", prefix)) {}
+                    p { "Redirecting..." }
+                },
             )
         }
         Err(e) => {
@@ -2071,31 +2053,31 @@ async fn do_import_staff(
                 // Race condition: someone else already imported this membership
                 (
                     StatusCode::CONFLICT,
-                    Html(templates::import_result(
+                    templates::import_result(
                         false,
                         "Cette adhésion a déjà été importée par quelqu'un d'autre.",
                         &prefix,
-                    )),
+                    ),
                 )
             } else if error_msg.contains("DUPLICATE_NAME") {
                 // A staff with this name already exists
                 (
                     StatusCode::CONFLICT,
-                    Html(templates::import_result(
+                    templates::import_result(
                         false,
                         "Un staff avec ce nom existe déjà. Utilisez l'option \"Mettre à jour\" pour ajouter une adhésion à un staff existant.",
                         &prefix,
-                    )),
+                    ),
                 )
             } else {
                 error!("Error importing staff: {}", e);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Html(templates::import_result(
+                    templates::import_result(
                         false,
                         &format!("Erreur lors de l'import: {}", e),
                         &prefix,
-                    )),
+                    ),
                 )
             }
         }
@@ -2112,7 +2094,7 @@ async fn list_cash(
     let show_form = params.get("form").is_some_and(|f| f == "1");
 
     if show_form {
-        return Html(templates::cash_form(&prefix));
+        return templates::cash_form(&prefix);
     }
 
     let current_season = get_current_season();
@@ -2133,15 +2115,11 @@ async fn list_cash(
                 other => other,
             });
 
-            Html(templates::cash_list(
-                payments_with_status,
-                current_season,
-                &prefix,
-            ))
+            templates::cash_list(payments_with_status, current_season, &prefix)
         }
         Err(e) => {
             error!("Error fetching cash payments: {}", e);
-            Html(format!("<p>Error loading cash payments: {}</p>", e))
+            html! { p { "Error loading cash payments: " (e) } }
         }
     }
 }
@@ -2173,7 +2151,7 @@ async fn create_cash(
             error!("Invalid date format: {}", e);
             return (
                 StatusCode::BAD_REQUEST,
-                Html(format!("<p>Date invalide: {}</p>", e)),
+                html! { p { "Date invalide: " (e) } },
             );
         }
     };
@@ -2229,17 +2207,17 @@ async fn create_cash(
 
             (
                 StatusCode::SEE_OTHER,
-                Html(format!(
-                    r#"<meta http-equiv="refresh" content="0;url={}/cash"><p>Redirecting...</p>"#,
-                    prefix
-                )),
+                html! {
+                    meta http-equiv="refresh" content=(format!("0;url={}/cash", prefix)) {}
+                    p { "Redirecting..." }
+                },
             )
         }
         Err(e) => {
             error!("Error creating cash payment: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Erreur: {}</p>", e)),
+                html! { p { "Erreur: " (e) } },
             )
         }
     }
@@ -2256,16 +2234,13 @@ async fn import_cash(
     let cash = match database::get_cash_by_id(&state.db, cash_id).await {
         Ok(Some(c)) => c,
         Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Html("<p>Paiement non trouvé</p>".to_string()),
-            );
+            return (StatusCode::NOT_FOUND, html! { p { "Paiement non trouvé" } });
         }
         Err(e) => {
             error!("Error fetching cash payment: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Erreur: {}</p>", e)),
+                html! { p { "Erreur: " (e) } },
             );
         }
     };
@@ -2289,11 +2264,7 @@ async fn import_cash(
     if already_imported {
         return (
             StatusCode::OK,
-            Html(templates::import_result(
-                true,
-                "Ce paiement a déjà été importé.",
-                &prefix,
-            )),
+            templates::import_result(true, "Ce paiement a déjà été importé.", &prefix),
         );
     }
 
@@ -2310,9 +2281,7 @@ async fn import_cash(
 
     (
         StatusCode::OK,
-        Html(templates::cash_import_form(
-            &cash, season, candidates, &prefix,
-        )),
+        templates::cash_import_form(&cash, season, candidates, &prefix),
     )
 }
 
@@ -2340,16 +2309,13 @@ async fn do_import_cash(
     let cash = match database::get_cash_by_id(&state.db, cash_id).await {
         Ok(Some(c)) => c,
         Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Html("<p>Paiement non trouvé</p>".to_string()),
-            );
+            return (StatusCode::NOT_FOUND, html! { p { "Paiement non trouvé" } });
         }
         Err(e) => {
             error!("Error fetching cash payment: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Html(format!("<p>Erreur: {}</p>", e)),
+                html! { p { "Erreur: " (e) } },
             );
         }
     };
@@ -2372,11 +2338,7 @@ async fn do_import_cash(
     if already_imported {
         return (
             StatusCode::CONFLICT,
-            Html(templates::import_result(
-                false,
-                "Ce paiement a déjà été importé.",
-                &prefix,
-            )),
+            templates::import_result(false, "Ce paiement a déjà été importé.", &prefix),
         );
     }
 
@@ -2402,10 +2364,7 @@ async fn do_import_cash(
                 .as_ref()
                 .and_then(|s| s.parse::<uuid::Uuid>().ok())
             else {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Html("<p>Invalid staff ID</p>".to_string()),
-                );
+                return (StatusCode::BAD_REQUEST, html! { p { "Invalid staff ID" } });
             };
             database::update_staff_with_cash_payment(
                 &state.db,
@@ -2421,10 +2380,7 @@ async fn do_import_cash(
             .await
         }
         _ => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Html("<p>Action invalide</p>".to_string()),
-            );
+            return (StatusCode::BAD_REQUEST, html! { p { "Action invalide" } });
         }
     };
 
@@ -2443,10 +2399,10 @@ async fn do_import_cash(
             .await;
             (
                 StatusCode::SEE_OTHER,
-                Html(format!(
-                    r#"<meta http-equiv="refresh" content="0;url={}/cash"><p>Redirecting...</p>"#,
-                    prefix
-                )),
+                html! {
+                    meta http-equiv="refresh" content=(format!("0;url={}/cash", prefix)) {}
+                    p { "Redirecting..." }
+                },
             )
         }
         Err(e) => {
@@ -2454,21 +2410,21 @@ async fn do_import_cash(
             if error_msg.contains("ALREADY_IMPORTED") {
                 (
                     StatusCode::CONFLICT,
-                    Html(templates::import_result(
+                    templates::import_result(
                         false,
                         "Ce paiement a déjà été importé par quelqu'un d'autre.",
                         &prefix,
-                    )),
+                    ),
                 )
             } else {
                 error!("Error importing cash payment: {}", e);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Html(templates::import_result(
+                    templates::import_result(
                         false,
                         &format!("Erreur lors de l'import: {}", e),
                         &prefix,
-                    )),
+                    ),
                 )
             }
         }
@@ -2895,12 +2851,7 @@ async fn audit_page_handler(
         .await
         .unwrap_or_default();
 
-    Html(templates::audit_page(
-        &entries,
-        current_page,
-        total_pages.max(1),
-        &prefix,
-    ))
+    templates::audit_page(&entries, current_page, total_pages.max(1), &prefix)
 }
 
 async fn validation_page_handler(
@@ -2930,14 +2881,14 @@ async fn validation_page_handler(
         }
     };
 
-    Html(templates::validation_page(&pending, &prefix))
+    templates::validation_page(&pending, &prefix)
 }
 
 // --- Login / Session handlers ---
 
 async fn login_page(headers: HeaderMap) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-    Html(templates::login_page(&prefix))
+    templates::login_page(&prefix)
 }
 
 #[derive(Debug, Deserialize)]
@@ -3377,20 +3328,20 @@ async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
 
 async fn privacy_page(headers: HeaderMap) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-    Html(templates::static_page(
+    templates::static_page(
         &prefix,
         "Politique de Confidentialité",
         include_str!("../privacy.md"),
-    ))
+    )
 }
 
 async fn tos_page(headers: HeaderMap) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-    Html(templates::static_page(
+    templates::static_page(
         &prefix,
         "Conditions d'Utilisation",
         include_str!("../tos.md"),
-    ))
+    )
 }
 
 async fn api_get_stats(
@@ -4169,7 +4120,7 @@ async fn restore_page(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-    Html(templates::restore_page(&prefix))
+    templates::restore_page(&prefix)
 }
 
 // Database restore endpoint - accepts a SQL file upload and restores it (pure Rust)
@@ -4199,22 +4150,18 @@ async fn restore_database(
                 }
                 Err(e) => {
                     error!("Failed to read uploaded file: {}", e);
-                    return Html(templates::restore_result(
+                    return templates::restore_result(
                         &prefix,
                         false,
                         &format!("Erreur de lecture du fichier: {}", e),
-                    ));
+                    );
                 }
             }
         }
     }
 
     if sql_content.is_empty() {
-        return Html(templates::restore_result(
-            &prefix,
-            false,
-            "Aucun fichier reçu",
-        ));
+        return templates::restore_result(&prefix, false, "Aucun fichier reçu");
     }
 
     info!(
@@ -4226,30 +4173,22 @@ async fn restore_database(
         Ok(s) => s,
         Err(e) => {
             error!("Uploaded file is not valid UTF-8: {}", e);
-            return Html(templates::restore_result(
+            return templates::restore_result(
                 &prefix,
                 false,
                 "Le fichier n'est pas un fichier SQL valide (encodage UTF-8 invalide)",
-            ));
+            );
         }
     };
 
     match database::restore_from_sql(&state.db, sql_str).await {
         Ok(()) => {
             info!("Database restore completed successfully");
-            Html(templates::restore_result(
-                &prefix,
-                true,
-                "Base de données restaurée avec succès!",
-            ))
+            templates::restore_result(&prefix, true, "Base de données restaurée avec succès!")
         }
         Err(e) => {
             error!("Database restore failed: {}", e);
-            Html(templates::restore_result(
-                &prefix,
-                false,
-                &format!("Erreur de restauration: {}", e),
-            ))
+            templates::restore_result(&prefix, false, &format!("Erreur de restauration: {}", e))
         }
     }
 }
@@ -4292,10 +4231,10 @@ async fn photo_page(
     let prefix = get_prefix(&headers);
 
     match database::get_all_photos(&state.db).await {
-        Ok(photos) => Html(templates::photo_page(&prefix, &photos, staff.is_admin)),
+        Ok(photos) => templates::photo_page(&prefix, &photos, staff.is_admin),
         Err(e) => {
             error!("Failed to get photos: {}", e);
-            Html(templates::photo_page(&prefix, &[], false))
+            templates::photo_page(&prefix, &[], false)
         }
     }
 }
