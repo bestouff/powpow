@@ -1,0 +1,10 @@
+/target
+Cargo.lock
+.env
+.planning
+AGENTS.md
+random_data
+essais
+secrets
+*.deb
+TODO.md
