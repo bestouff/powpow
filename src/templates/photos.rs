@@ -1,6 +1,6 @@
-use super::{page, NavKind};
+use super::{NavKind, page};
 use crate::models::PhotoMeta;
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) -> Markup {
     let content = html! {

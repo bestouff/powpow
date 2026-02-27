@@ -1,7 +1,7 @@
-use super::{capitalize_words, page, NavKind};
+use super::{NavKind, capitalize_words, page};
 use crate::models::{Atelier, Need, Staff};
 use chrono::Datelike;
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 use std::collections::HashMap;
 
 #[allow(
@@ -403,11 +403,7 @@ pub fn calendar_editor(
     // Sub-column count for a day
     let subcols = |d: &chrono::NaiveDate| -> usize {
         let (has_day, has_night) = day_types.get(d).copied().unwrap_or((false, false));
-        if has_day && has_night {
-            4
-        } else {
-            2
-        }
+        if has_day && has_night { 4 } else { 2 }
     };
 
     // Opening day map

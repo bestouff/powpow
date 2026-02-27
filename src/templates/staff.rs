@@ -1,7 +1,7 @@
-use super::{capitalize_words, format_phone_international, page, NavKind, TodoItem};
+use super::{NavKind, TodoItem, capitalize_words, format_phone_international, page};
 use crate::models::{Atelier, Role, Staff};
 use chrono::Datelike;
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 
 pub fn staff_list(
     staff_with_seasons: Vec<(Staff, Option<i16>)>,

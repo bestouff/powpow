@@ -1,10 +1,10 @@
 use super::{
-    capitalize_words, escape_html, format_phone_international, page, render_import_form,
-    ImportContext, NavKind,
+    ImportContext, NavKind, capitalize_words, escape_html, format_phone_international, page,
+    render_import_form,
 };
 use crate::models::{Cash, StaffWithSeason};
 use chrono::Datelike;
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 pub fn cash_list(cash_payments: Vec<(Cash, bool)>, current_season: i16, prefix: &str) -> Markup {
     let p = prefix;

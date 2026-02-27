@@ -1,6 +1,6 @@
-use super::{calendar::render_upcoming_week, page, NavKind};
+use super::{NavKind, calendar::render_upcoming_week, page};
 use crate::models::{Atelier, Staff};
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 pub fn index(
     prefix: &str,

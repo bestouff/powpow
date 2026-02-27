@@ -1,9 +1,9 @@
 use super::{
-    capitalize_words, escape_html, format_phone_international, page, render_import_form,
-    ImportContext, NavKind,
+    ImportContext, NavKind, capitalize_words, escape_html, format_phone_international, page,
+    render_import_form,
 };
 use crate::models::{Membership, MembershipWithStatus, StaffWithSeason, User};
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 #[allow(clippy::too_many_arguments)]
 pub fn membership_list_with_filters(

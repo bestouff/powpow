@@ -1,6 +1,6 @@
-use super::{page, NavKind};
+use super::{NavKind, page};
 use crate::models::{Atelier, Staff};
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 pub fn restore_page(prefix: &str) -> Markup {
     let p = prefix;

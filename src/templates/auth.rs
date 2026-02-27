@@ -1,5 +1,5 @@
-use super::{page, NavKind};
-use maud::{html, Markup};
+use super::{NavKind, page};
+use maud::{Markup, html};
 
 pub fn login_page(prefix: &str) -> Markup {
     let content = html! {

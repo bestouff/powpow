@@ -21,14 +21,9 @@ pub use photos::photo_page;
 pub use staff::{person_detail, staff_list};
 pub use static_pages::static_page;
 
-use crate::models::{
-    Atelier, Cash, Membership, MembershipWithStatus, Need, PhotoMeta, Role, Staff, StaffMatchType,
-    StaffWithSeason, User,
-};
-use chrono::Datelike;
+use crate::models::{StaffMatchType, StaffWithSeason};
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 use phonenumber::Mode;
-use std::collections::HashMap;
 use std::sync::RwLock;
 
 /// Global photo-of-the-day URL + photographer name, updated when photos change.

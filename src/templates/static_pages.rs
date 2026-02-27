@@ -1,5 +1,5 @@
-use super::{escape_html, page, NavKind};
-use maud::{html, Markup, PreEscaped};
+use super::{NavKind, escape_html, page};
+use maud::{Markup, PreEscaped, html};
 
 fn simple_md_to_html(md: &str) -> String {
     let mut html = String::new();
