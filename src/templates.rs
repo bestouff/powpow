@@ -713,42 +713,47 @@ pub fn already_imported_page(membership: Membership, season: i16, prefix: &str) 
     )
 }
 
-pub fn import_staff_form(
-    membership: Membership,
-    season: i16,
-    candidates: Vec<StaffWithSeason>,
-    payer_email: Option<&str>,
-    name_already_exists: bool,
-    prefix: &str,
-) -> Markup {
-    let beneficiary_first =
-        capitalize_words(membership.beneficiary_first_name.as_deref().unwrap_or(""));
-    let beneficiary_last =
-        capitalize_words(membership.beneficiary_last_name.as_deref().unwrap_or(""));
-    let beneficiary_name = format!("{} {}", beneficiary_first, beneficiary_last)
-        .trim()
-        .to_string();
+/// Shared context for rendering an import form (membership or cash).
+struct ImportContext {
+    /// Capitalized first name from the source data.
+    first_name: String,
+    /// Capitalized last name from the source data.
+    last_name: String,
+    /// Primary email from the source (beneficiary / cash).
+    primary_email: String,
+    /// Optional secondary payer email (membership only).
+    payer_email: String,
+    /// Default email to pre-fill when there is only one choice.
+    default_email: String,
+    /// Formatted phone number.
+    phone: String,
+    /// Default comment pre-filled in the comment textarea.
+    default_comment: String,
+    /// Whether this is a donation (affects double-subscription label).
+    is_donation: bool,
+    /// Whether creating a new staff is disallowed (name already exists).
+    allow_create: bool,
+    /// Radio value for the "source" name choice ("membership" / "cash").
+    name_choice_value: &'static str,
+    /// Label for the source name choice ("De l'adhésion:" / "Du paiement:").
+    name_choice_label: &'static str,
+    /// Page title in the browser tab.
+    page_title: &'static str,
+    /// Heading shown at the top of the page.
+    page_heading: &'static str,
+    /// Detail box title ("Détails de l'Adhésion" / "Détails du paiement").
+    detail_title: &'static str,
+    /// Back-link target path suffix ("/users" / "/cash").
+    back_suffix: &'static str,
+    /// Active nav item ("" / "cash").
+    nav_active: &'static str,
+    /// Rows for the left-column detail table: (label, value).
+    detail_rows: Vec<(&'static str, String)>,
+}
 
-    let membership_email = membership.email.as_deref().unwrap_or("").to_lowercase();
-    let payer_email = payer_email.unwrap_or("").to_lowercase();
-    let default_email = if membership_email.is_empty() {
-        &payer_email
-    } else {
-        &membership_email
-    };
-    let phone = format_phone_international(membership.phone.as_deref().unwrap_or(""));
-    let comment = membership.comment.as_deref().unwrap_or("");
-    let item_name = membership.item_name.as_deref().unwrap_or("N/A");
-    let amount = membership.amount.map_or_else(
-        || "N/A".to_string(),
-        |a| format!("{:.2}\u{20ac}", a as f32 / 100.0),
-    );
-    let order_date = membership
-        .order_date
-        .map_or_else(|| "N/A".to_string(), |d| d.format("%d/%m/%Y").to_string());
-
-    let is_donation = membership.item_type.as_deref() == Some("Donation");
-
+/// Shared rendering for both membership and cash import forms.
+#[allow(clippy::too_many_lines)]
+fn render_import_form(ctx: &ImportContext, candidates: &[StaffWithSeason], prefix: &str) -> Markup {
     let has_exact_match = candidates.iter().any(|c| {
         matches!(
             c.match_type,
@@ -760,18 +765,20 @@ pub fn import_staff_form(
         .iter()
         .any(|c| c.match_type == StaffMatchType::DoubleSubscription);
 
-    let recommend_double_subscription = is_donation && has_double_subscription;
-    let recommend_create =
-        !has_exact_match && !recommend_double_subscription && !name_already_exists;
-    let allow_create = !name_already_exists;
+    let recommend_double_subscription = ctx.is_donation && has_double_subscription;
+    let recommend_create = !has_exact_match && !recommend_double_subscription && ctx.allow_create;
+    let allow_create = ctx.allow_create;
 
     let mut is_first = !recommend_create && !recommend_double_subscription;
     let mut is_first_double_subscription = recommend_double_subscription;
     let mut option_index = 0usize;
 
+    let primary_email = &ctx.primary_email;
+    let payer_email = &ctx.payer_email;
+
     // Render candidate options
     let candidates_markup = html! {
-        @for candidate in &candidates {
+        @for candidate in candidates {
             @let staff = &candidate.staff;
             @let match_label = match candidate.match_type {
                 StaffMatchType::ExactBoth => "Email et nom identiques",
@@ -781,7 +788,7 @@ pub fn import_staff_form(
                 StaffMatchType::SimilarEmail => "Email similaire",
                 StaffMatchType::SimilarName => "Nom similaire",
                 StaffMatchType::DoubleSubscription => {
-                    if is_donation { "Adhésion + don détecté" } else { "Double adhésion probable" }
+                    if ctx.is_donation { "Adhésion + don détecté" } else { "Double adhésion probable" }
                 },
             };
             @let season_info = candidate.latest_season.map_or_else(
@@ -803,11 +810,11 @@ pub fn import_staff_form(
             } else {
                 ("is-light", None, "var(--bulma-border)")
             };
-            @let names_match = beneficiary_first.to_lowercase() == staff.first_name.to_lowercase()
-                && beneficiary_last.to_lowercase() == staff.last_name.to_lowercase();
+            @let names_match = ctx.first_name.to_lowercase() == staff.first_name.to_lowercase()
+                && ctx.last_name.to_lowercase() == staff.last_name.to_lowercase();
             @let staff_email_lower = staff.email.to_lowercase();
-            @let membership_email_lower = membership_email.to_lowercase();
-            @let payer_email_lower = payer_email.to_lowercase();
+            @let primary_lower = primary_email.to_lowercase();
+            @let payer_lower = payer_email.to_lowercase();
             @let bg_color = if option_index.is_multiple_of(2) { "var(--bulma-scheme-main)" } else { "var(--bulma-scheme-main-bis)" };
 
             div .box.mb-4.candidate-card style=(format!("--card-border:{};--card-bg:{}", border_color, bg_color)) {
@@ -834,16 +841,16 @@ pub fn import_staff_form(
 
                     // Name choice
                     @if names_match {
-                        input type="hidden" name="first_name" value=(beneficiary_first);
-                        input type="hidden" name="last_name" value=(beneficiary_last);
+                        input type="hidden" name="first_name" value=(ctx.first_name);
+                        input type="hidden" name="last_name" value=(ctx.last_name);
                     } @else {
                         div .field {
                             label .label { "Garder le prénom et nom" }
                             div .control {
                                 label .radio {
-                                    input type="radio" name="name_choice" value="membership" checked
-                                        onchange=(format!("updateNameFields(this.form, '{}', '{}')", beneficiary_first, beneficiary_last));
-                                    " De l'adhésion: " strong { (beneficiary_first) " " (beneficiary_last) }
+                                    input type="radio" name="name_choice" value=(ctx.name_choice_value) checked
+                                        onchange=(format!("updateNameFields(this.form, '{}', '{}')", ctx.first_name, ctx.last_name));
+                                    " " (ctx.name_choice_label) " " strong { (ctx.first_name) " " (ctx.last_name) }
                                 }
                                 br;
                                 label .radio {
@@ -853,30 +860,30 @@ pub fn import_staff_form(
                                 }
                             }
                         }
-                        input type="hidden" name="first_name" value=(beneficiary_first);
-                        input type="hidden" name="last_name" value=(beneficiary_last);
+                        input type="hidden" name="first_name" value=(ctx.first_name);
+                        input type="hidden" name="last_name" value=(ctx.last_name);
                     }
 
                     // Email choice - collect unique emails
                     @let unique_emails = {
                         let mut emails: Vec<(&str, &str, &str)> = Vec::new();
-                        if !membership_email.is_empty() {
-                            emails.push(("membership", "Du bénéficiaire", &membership_email));
+                        if !primary_email.is_empty() {
+                            emails.push((ctx.name_choice_value, "Du bénéficiaire", primary_email));
                         }
-                        if !payer_email.is_empty() && payer_email_lower != membership_email_lower {
-                            emails.push(("payer", "Du payeur", &payer_email));
+                        if !payer_email.is_empty() && payer_lower != primary_lower {
+                            emails.push(("payer", "Du payeur", payer_email));
                         }
-                        if staff_email_lower != membership_email_lower && staff_email_lower != payer_email_lower {
+                        if staff_email_lower != primary_lower && staff_email_lower != payer_lower {
                             emails.push(("staff", "Du staff", &staff.email));
                         }
                         emails
                     };
 
                     @if unique_emails.len() <= 1 {
-                        @let email_value = if !membership_email.is_empty() {
-                            &membership_email
+                        @let email_value = if !primary_email.is_empty() {
+                            primary_email.as_str()
                         } else if !payer_email.is_empty() {
-                            &payer_email
+                            payer_email.as_str()
                         } else {
                             &staff.email
                         };
@@ -896,16 +903,16 @@ pub fn import_staff_form(
                                 }
                             }
                         }
-                        @let default_email_val = unique_emails.first().map_or(default_email.as_str(), |(_, _, d)| *d);
+                        @let default_email_val = unique_emails.first().map_or(ctx.default_email.as_str(), |(_, _, d)| *d);
                         input type="hidden" name="email" value=(default_email_val);
                     }
 
-                    input type="hidden" name="phone" value=(phone);
+                    input type="hidden" name="phone" value=(ctx.phone);
 
                     div .field {
                         label .label { "Commentaire" }
                         div .control {
-                            textarea .textarea name="comment" rows="2" { (comment) }
+                            textarea .textarea name="comment" rows="2" { (ctx.default_comment) }
                         }
                     }
 
@@ -920,8 +927,6 @@ pub fn import_staff_form(
                 }
             }
 
-            // Side-effect: advance mutable state after rendering each candidate
-            // We use a dummy let to execute this
             @let () = {
                 is_first = false;
                 if candidate.match_type == StaffMatchType::DoubleSubscription {
@@ -968,7 +973,7 @@ pub fn import_staff_form(
                         div .field {
                             label .label { "Prénom" }
                             div .control {
-                                input .input type="text" name="first_name" value=(beneficiary_first);
+                                input .input type="text" name="first_name" value=(ctx.first_name);
                             }
                         }
                     }
@@ -976,21 +981,21 @@ pub fn import_staff_form(
                         div .field {
                             label .label { "Nom" }
                             div .control {
-                                input .input type="text" name="last_name" value=(beneficiary_last);
+                                input .input type="text" name="last_name" value=(ctx.last_name);
                             }
                         }
                     }
                 }
 
                 // Email choice for create form
-                @if !membership_email.is_empty() && !payer_email.is_empty() && membership_email != payer_email {
+                @if !primary_email.is_empty() && !payer_email.is_empty() && primary_email != payer_email {
                     div .field {
                         label .label { "Email" }
                         div .control {
                             label .radio {
-                                input type="radio" name="email_choice" value="membership" checked
-                                    onchange=(format!("document.getElementById('create_email').value='{}'", membership_email));
-                                " Du bénéficiaire: " strong { (membership_email) }
+                                input type="radio" name="email_choice" value=(ctx.name_choice_value) checked
+                                    onchange=(format!("document.getElementById('create_email').value='{}'", primary_email));
+                                " Du bénéficiaire: " strong { (primary_email) }
                             }
                             br;
                             label .radio {
@@ -999,9 +1004,9 @@ pub fn import_staff_form(
                                 " Du payeur: " strong { (payer_email) }
                             }
                         }
-                        input type="hidden" #create_email name="email" value=(membership_email);
+                        input type="hidden" #create_email name="email" value=(primary_email);
                     }
-                } @else if membership_email.is_empty() && !payer_email.is_empty() {
+                } @else if primary_email.is_empty() && !payer_email.is_empty() {
                     div .field {
                         label .label { "Email (du payeur)" }
                         div .control {
@@ -1012,7 +1017,7 @@ pub fn import_staff_form(
                     div .field {
                         label .label { "Email" }
                         div .control {
-                            input .input type="email" name="email" value=(default_email);
+                            input .input type="email" name="email" value=(ctx.default_email);
                         }
                     }
                 }
@@ -1020,14 +1025,14 @@ pub fn import_staff_form(
                 div .field {
                     label .label { "Téléphone" }
                     div .control {
-                        input .input type="tel" name="phone" value=(phone);
+                        input .input type="tel" name="phone" value=(ctx.phone);
                     }
                 }
 
                 div .field {
                     label .label { "Commentaire" }
                     div .control {
-                        textarea .textarea name="comment" rows="2" { (comment) }
+                        textarea .textarea name="comment" rows="2" { (ctx.default_comment) }
                     }
                 }
 
@@ -1054,23 +1059,15 @@ pub fn import_staff_form(
 
     let total_options = candidates.len() + usize::from(allow_create);
 
-    let membership_email_display = if membership_email.is_empty() {
-        "N/A"
-    } else {
-        &membership_email
-    };
-
-    let extra_head = html! {};
-
     let content = html! {
         section .section {
             div .container.is-fluid {
                 div .level.mb-5 {
                     div .level-left {
-                        h1 .title.is-3 { "Importer un Staff" }
+                        h1 .title.is-3 { (ctx.page_heading) }
                     }
                     div .level-right {
-                        a href=(format!("{prefix}/users")) .button.is-light {
+                        a .button.is-light href=(format!("{prefix}{}", ctx.back_suffix)) {
                             span .icon { i .fa-solid.fa-arrow-left {} }
                             span { "Retour" }
                         }
@@ -1080,18 +1077,13 @@ pub fn import_staff_form(
                 div .columns {
                     div .column.is-5 {
                         div .box {
-                            h2 .title.is-4.mb-4 { "Détails de l'Adhésion" }
+                            h2 .title.is-4.mb-4 { (ctx.detail_title) }
                             div .content {
                                 table .table.is-fullwidth {
                                     tbody {
-                                        tr { th { "Bénéficiaire" } td { strong { (beneficiary_name) } } }
-                                        tr { th { "Email bénéficiaire" } td { (membership_email_display) } }
-                                        tr { th { "Email payeur" } td { (payer_email) } }
-                                        tr { th { "Téléphone" } td { (phone) } }
-                                        tr { th { "Article" } td { (item_name) } }
-                                        tr { th { "Montant" } td { (amount) } }
-                                        tr { th { "Date" } td { (order_date) } }
-                                        tr { th { "Saison" } td { span .tag.is-info.is-medium { (season) } } }
+                                        @for (label, value) in &ctx.detail_rows {
+                                            tr { th { (label) } td { (PreEscaped(value)) } }
+                                        }
                                     }
                                 }
                             }
@@ -1115,14 +1107,96 @@ pub fn import_staff_form(
     };
 
     page(
-        "Importer Staff - AGHIL",
+        ctx.page_title,
         prefix,
         &NavKind::Standard,
-        "",
-        extra_head,
+        ctx.nav_active,
+        html! {},
         content,
         html! {},
     )
+}
+
+pub fn import_staff_form(
+    membership: Membership,
+    season: i16,
+    candidates: Vec<StaffWithSeason>,
+    payer_email: Option<&str>,
+    name_already_exists: bool,
+    prefix: &str,
+) -> Markup {
+    let beneficiary_first =
+        capitalize_words(membership.beneficiary_first_name.as_deref().unwrap_or(""));
+    let beneficiary_last =
+        capitalize_words(membership.beneficiary_last_name.as_deref().unwrap_or(""));
+
+    let membership_email = membership.email.as_deref().unwrap_or("").to_lowercase();
+    let payer = payer_email.unwrap_or("").to_lowercase();
+    let default_email = if membership_email.is_empty() {
+        payer.clone()
+    } else {
+        membership_email.clone()
+    };
+    let phone = format_phone_international(membership.phone.as_deref().unwrap_or(""));
+    let comment = membership.comment.as_deref().unwrap_or("").to_string();
+
+    let item_name = membership.item_name.as_deref().unwrap_or("N/A");
+    let amount = membership.amount.map_or_else(
+        || "N/A".to_string(),
+        |a| format!("{:.2}\u{20ac}", a as f32 / 100.0),
+    );
+    let order_date = membership
+        .order_date
+        .map_or_else(|| "N/A".to_string(), |d| d.format("%d/%m/%Y").to_string());
+    let is_donation = membership.item_type.as_deref() == Some("Donation");
+
+    let beneficiary_name = format!("{beneficiary_first} {beneficiary_last}")
+        .trim()
+        .to_string();
+    let membership_email_display = if membership_email.is_empty() {
+        "N/A".to_string()
+    } else {
+        membership_email.clone()
+    };
+
+    let detail_rows = vec![
+        (
+            "Bénéficiaire",
+            format!("<strong>{}</strong>", escape_html(&beneficiary_name)),
+        ),
+        ("Email bénéficiaire", escape_html(&membership_email_display)),
+        ("Email payeur", escape_html(&payer)),
+        ("Téléphone", escape_html(&phone)),
+        ("Article", escape_html(item_name)),
+        ("Montant", escape_html(&amount)),
+        ("Date", escape_html(&order_date)),
+        (
+            "Saison",
+            format!("<span class=\"tag is-info is-medium\">{season}</span>"),
+        ),
+    ];
+
+    let ctx = ImportContext {
+        first_name: beneficiary_first,
+        last_name: beneficiary_last,
+        primary_email: membership_email,
+        payer_email: payer,
+        default_email,
+        phone,
+        default_comment: comment,
+        is_donation,
+        allow_create: !name_already_exists,
+        name_choice_value: "membership",
+        name_choice_label: "De l'adhésion:",
+        page_title: "Importer Staff - AGHIL",
+        page_heading: "Importer un Staff",
+        detail_title: "Détails de l'Adhésion",
+        back_suffix: "/users",
+        nav_active: "",
+        detail_rows,
+    };
+
+    render_import_form(&ctx, &candidates, prefix)
 }
 
 pub fn user_detail(user: User, prefix: &str) -> Markup {
@@ -2276,7 +2350,7 @@ pub fn cash_import_form(
     let beneficiary_first = capitalize_words(&cash.first_name);
     let beneficiary_last = capitalize_words(&cash.last_name);
     let cash_email = cash.email.as_deref().unwrap_or("").to_lowercase();
-    let default_email = &cash_email;
+    let default_email = cash_email.clone();
     let phone = cash
         .phone
         .as_deref()
@@ -2295,305 +2369,51 @@ pub fn cash_import_form(
         "Espèces"
     };
 
-    let has_exact_match = candidates.iter().any(|c| {
-        matches!(
-            c.match_type,
-            StaffMatchType::ExactBoth | StaffMatchType::ExactEmail | StaffMatchType::ExactName
-        )
-    });
-    let recommend_create = !has_exact_match;
-
-    let mut is_first = !recommend_create;
-    let mut option_index = 0usize;
-
-    let candidates_markup = html! {
-        @for candidate in &candidates {
-            @let staff = &candidate.staff;
-            @let match_label = match candidate.match_type {
-                StaffMatchType::ExactBoth => "Email et nom identiques",
-                StaffMatchType::ExactName => "Nom identique",
-                StaffMatchType::ExactEmail => "Email identique",
-                StaffMatchType::PayerEmailMatch => "Email payeur identique",
-                StaffMatchType::SimilarEmail => "Email similaire",
-                StaffMatchType::SimilarName => "Nom similaire",
-                StaffMatchType::DoubleSubscription => "Double adhésion probable",
-            };
-            @let season_info = candidate.latest_season.map_or_else(
-                || "Aucune saison".to_string(),
-                |s| format!("Dernière saison: {}", s),
-            );
-            @let is_exact_match = matches!(
-                candidate.match_type,
-                StaffMatchType::ExactBoth | StaffMatchType::ExactEmail | StaffMatchType::ExactName
-            );
-            @let (highlight, recommended_tag, border_color) = if candidate.match_type == StaffMatchType::DoubleSubscription {
-                ("is-danger", Some(("is-danger", "Double adhésion")), "var(--bulma-danger)")
-            } else if is_first && is_exact_match {
-                ("is-primary", Some(("is-success", "Probable meilleure option")), "var(--bulma-primary)")
-            } else if is_exact_match {
-                ("is-info", Some(("is-warning", "Option envisageable")), "var(--bulma-info)")
-            } else {
-                ("is-light", None, "var(--bulma-border)")
-            };
-            @let names_match = beneficiary_first.to_lowercase() == staff.first_name.to_lowercase()
-                && beneficiary_last.to_lowercase() == staff.last_name.to_lowercase();
-            @let staff_email_lower = staff.email.to_lowercase();
-            @let bg_color = if option_index.is_multiple_of(2) { "var(--bulma-scheme-main)" } else { "var(--bulma-scheme-main-bis)" };
-
-            div .box.mb-4.candidate-card style=(format!("--card-border:{};--card-bg:{}", border_color, bg_color)) {
-                form method="POST" {
-                    input type="hidden" name="action" value="update";
-                    input type="hidden" name="staff_id" value=(staff.id);
-
-                    div .level.mb-3 {
-                        div .level-left {
-                            span class={"tag " (highlight)} { (match_label) }
-                            @if let Some((tag_class, tag_text)) = recommended_tag {
-                                span class={"tag " (tag_class) " ml-2"} { (tag_text) }
-                            }
-                        }
-                        div .level-right {
-                            span .tag.is-info.is-light { (season_info) }
-                        }
-                    }
-
-                    p .mb-3 {
-                        strong { "Staff existant:" }
-                        " " (staff.first_name) " " (staff.last_name) " <" (staff.email) ">"
-                    }
-
-                    // Name choice
-                    @if names_match {
-                        input type="hidden" name="first_name" value=(beneficiary_first);
-                        input type="hidden" name="last_name" value=(beneficiary_last);
-                    } @else {
-                        div .field {
-                            label .label { "Garder le prénom et nom" }
-                            div .control {
-                                label .radio {
-                                    input type="radio" name="name_choice" value="cash" checked
-                                        onchange=(format!("updateNameFields(this.form, '{}', '{}')", beneficiary_first, beneficiary_last));
-                                    " Du paiement: " strong { (beneficiary_first) " " (beneficiary_last) }
-                                }
-                                br;
-                                label .radio {
-                                    input type="radio" name="name_choice" value="staff"
-                                        onchange=(format!("updateNameFields(this.form, '{}', '{}')", staff.first_name, staff.last_name));
-                                    " Du staff: " strong { (staff.first_name) " " (staff.last_name) }
-                                }
-                            }
-                        }
-                        input type="hidden" name="first_name" value=(beneficiary_first);
-                        input type="hidden" name="last_name" value=(beneficiary_last);
-                    }
-
-                    // Email choice
-                    @if cash_email.is_empty() || cash_email == staff_email_lower {
-                        @let email_value = if cash_email.is_empty() { &staff.email } else { &cash_email };
-                        input type="hidden" name="email" value=(email_value);
-                    } @else {
-                        div .field {
-                            label .label { "Garder l'email" }
-                            div .control {
-                                label .radio {
-                                    input type="radio" name="email_choice" value="cash" checked
-                                        onchange=(format!("updateEmailField(this.form, '{}')", cash_email));
-                                    " Du paiement: " strong { (cash_email) }
-                                }
-                                br;
-                                label .radio {
-                                    input type="radio" name="email_choice" value="staff"
-                                        onchange=(format!("updateEmailField(this.form, '{}')", staff.email));
-                                    " Du staff: " strong { (staff.email) }
-                                }
-                            }
-                        }
-                        input type="hidden" name="email" value=(cash_email);
-                    }
-
-                    input type="hidden" name="phone" value=(phone);
-
-                    div .field {
-                        label .label { "Commentaire" }
-                        div .control {
-                            textarea .textarea name="comment" rows="2" {}
-                        }
-                    }
-
-                    div .field {
-                        div .control {
-                            button type="submit" class={"button " (highlight) " is-fullwidth"} {
-                                span .icon { i .fa-solid.fa-arrows-rotate {} }
-                                span { "Mettre à jour ce staff" }
-                            }
-                        }
-                    }
-                }
-            }
-
-            @let () = {
-                is_first = false;
-                option_index += 1;
-            };
-        }
-    };
-
-    let create_highlight = if recommend_create {
-        "is-primary"
-    } else {
-        "is-light"
-    };
-    let create_border = if recommend_create {
-        "var(--bulma-primary)"
-    } else {
-        "var(--bulma-border)"
-    };
-    let create_bg_color = if option_index.is_multiple_of(2) {
-        "var(--bulma-scheme-main)"
-    } else {
-        "var(--bulma-scheme-main-bis)"
-    };
-
-    let create_markup = html! {
-        div .box.mb-4.candidate-card style=(format!("--card-border:{};--card-bg:{}", create_border, create_bg_color)) {
-            form method="POST" {
-                input type="hidden" name="action" value="create";
-
-                div .level.mb-3 {
-                    div .level-left {
-                        span class={"tag " (create_highlight)} { "Nouveau staff" }
-                        @if recommend_create {
-                            span .tag.is-success.ml-2 { "Probable meilleure option" }
-                        }
-                    }
-                }
-
-                div .columns {
-                    div .column {
-                        div .field {
-                            label .label { "Prénom" }
-                            div .control {
-                                input .input type="text" name="first_name" value=(beneficiary_first);
-                            }
-                        }
-                    }
-                    div .column {
-                        div .field {
-                            label .label { "Nom" }
-                            div .control {
-                                input .input type="text" name="last_name" value=(beneficiary_last);
-                            }
-                        }
-                    }
-                }
-
-                div .field {
-                    label .label { "Email" }
-                    div .control {
-                        input .input type="email" name="email" value=(default_email);
-                    }
-                }
-
-                div .field {
-                    label .label { "Téléphone" }
-                    div .control {
-                        input .input type="tel" name="phone" value=(phone);
-                    }
-                }
-
-                div .field {
-                    label .label { "Commentaire" }
-                    div .control {
-                        textarea .textarea name="comment" rows="2" {}
-                    }
-                }
-
-                div .field {
-                    div .control {
-                        button type="submit" class={"button " (create_highlight) " is-fullwidth"} {
-                            span .icon { i .fa-solid.fa-plus {} }
-                            span { "Créer un nouveau staff" }
-                        }
-                    }
-                }
-            }
-        }
-    };
-
-    let options_markup = if recommend_create {
-        html! { (create_markup) (candidates_markup) }
-    } else {
-        html! { (candidates_markup) (create_markup) }
-    };
-
-    let total_options = candidates.len() + 1;
     let email_display = if cash_email.is_empty() {
-        "N/A"
+        "N/A".to_string()
     } else {
-        &cash_email
+        cash_email.clone()
+    };
+    let beneficiary_name = format!("{beneficiary_first} {beneficiary_last}");
+
+    let detail_rows = vec![
+        (
+            "Nom",
+            format!("<strong>{}</strong>", escape_html(&beneficiary_name)),
+        ),
+        ("Email", escape_html(&email_display)),
+        ("Téléphone", escape_html(&phone)),
+        ("Moyen", escape_html(method_label)),
+        ("Type", escape_html(type_label)),
+        ("Montant", escape_html(&amount)),
+        ("Date", escape_html(&date)),
+        (
+            "Saison",
+            format!("<span class=\"tag is-info is-medium\">{season}</span>"),
+        ),
+    ];
+
+    let ctx = ImportContext {
+        first_name: beneficiary_first,
+        last_name: beneficiary_last,
+        primary_email: cash_email,
+        payer_email: String::new(),
+        default_email,
+        phone,
+        default_comment: String::new(),
+        is_donation: false,
+        allow_create: true,
+        name_choice_value: "cash",
+        name_choice_label: "Du paiement:",
+        page_title: "Importer paiement - AGHIL",
+        page_heading: "Importer un paiement",
+        detail_title: "Détails du paiement",
+        back_suffix: "/cash",
+        nav_active: "cash",
+        detail_rows,
     };
 
-    let content = html! {
-        section .section {
-            div .container.is-fluid {
-                div .level.mb-5 {
-                    div .level-left {
-                        h1 .title.is-3 { "Importer un paiement" }
-                    }
-                    div .level-right {
-                        a href=(format!("{prefix}/cash")) .button.is-light {
-                            span .icon { i .fa-solid.fa-arrow-left {} }
-                            span { "Retour" }
-                        }
-                    }
-                }
-
-                div .columns {
-                    div .column.is-5 {
-                        div .box {
-                            h2 .title.is-4.mb-4 { "Détails du paiement" }
-                            div .content {
-                                table .table.is-fullwidth {
-                                    tbody {
-                                        tr { th { "Nom" } td { strong { (beneficiary_first) " " (beneficiary_last) } } }
-                                        tr { th { "Email" } td { (email_display) } }
-                                        tr { th { "Téléphone" } td { (phone) } }
-                                        tr { th { "Moyen" } td { (method_label) } }
-                                        tr { th { "Type" } td { (type_label) } }
-                                        tr { th { "Montant" } td { (amount) } }
-                                        tr { th { "Date" } td { (date) } }
-                                        tr { th { "Saison" } td { span .tag.is-info.is-medium { (season) } } }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    div .column.is-7 {
-                        h2 .title.is-4.mb-4 { "Options d'import" }
-                        @if total_options > 1 {
-                            div .notification.is-danger.mb-4 {
-                                span .icon { i .fa-solid.fa-triangle-exclamation {} }
-                                strong { "Attention" }
-                                ", il y a plusieurs possibilités, examinez-les bien avant de choisir la bonne."
-                            }
-                        }
-                        (options_markup)
-                    }
-                }
-            }
-        }
-    };
-
-    page(
-        "Importer paiement - AGHIL",
-        prefix,
-        &NavKind::Standard,
-        "cash",
-        html! {},
-        content,
-        html! {},
-    )
+    render_import_form(&ctx, &candidates, prefix)
 }
 
 #[allow(
