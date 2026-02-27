@@ -1,0 +1,11 @@
+pub mod admin;
+pub mod auth;
+pub mod background;
+pub mod calendar;
+pub mod cash;
+pub mod home;
+pub mod membership;
+pub mod photos;
+pub mod staff;
+pub mod static_pages;
+pub mod sync;
