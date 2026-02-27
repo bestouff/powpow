@@ -116,14 +116,14 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str) -> Markup {
                           style=[admin_hide.then_some("display:none")] {
                             span .icon.mr-1 { i .fa-solid.fa-ticket {} }
                             "Adhésions"
-                            span .nav-badge data-badge="users" style="display:none" {}
+                            span .nav-badge.d-none data-badge="users" {}
                         }
                         a .navbar-item.navbar-admin .is-active[active == "cash"]
                           href={(p) "/cash"}
                           style=[admin_hide.then_some("display:none")] {
                             span .icon.mr-1 { i .fa-solid.fa-money-bill-wave {} }
                             "Espèces / Chèques"
-                            span .nav-badge data-badge="cash" style="display:none" {}
+                            span .nav-badge.d-none data-badge="cash" {}
                         }
                         a .navbar-item.navbar-admin .is-active[active == "staff"]
                           href={(p) "/staff"}
@@ -139,18 +139,7 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str) -> Markup {
                 }
             }
         }
-        (PreEscaped(
-            "<script>\
-            document.addEventListener('DOMContentLoaded',function(){\
-                var burger=document.querySelector('.navbar-burger');\
-                var menu=document.getElementById(burger.dataset.target);\
-                burger.addEventListener('click',function(){\
-                    burger.classList.toggle('is-active');\
-                    menu.classList.toggle('is-active');\
-                });\
-            });\
-            </script>"
-        ))
+
     }
 }
 
@@ -198,50 +187,17 @@ fn page(
                 link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css";
                 link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.2.0/css/fontawesome.min.css";
                 link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.2.0/css/solid.min.css";
+                link rel="stylesheet" href={(p) "/static/powpow.css"};
                 @if let Some(ref bg_css) = photo_bg_css {
                     style { (PreEscaped(bg_css)) }
                 }
-                style {
-                    (PreEscaped("\
-                        .navbar-item{position:relative;}\
-                        .nav-badge{background:var(--bulma-danger);color:var(--bulma-scheme-main);\
-                        border-radius:999px;min-width:18px;height:18px;font-size:0.65rem;\
-                        font-weight:bold;display:inline-flex;align-items:center;\
-                        justify-content:center;padding:0 4px;position:absolute;\
-                        top:6px;right:-2px;line-height:1;\
-                        box-shadow:0 0 0 2px var(--bulma-navbar-background-color,#363636);}\
-                        .button .nav-badge{position:static;margin-left:6px;box-shadow:none;}\
-                    "))
-                }
                 (extra_head)
             }
-            body {
+            body data-prefix=(p) {
                 (nav)
                 (content)
                 (extra_scripts)
-                (PreEscaped(format!(
-                    "<script>\
-                    fetch('{p}/api/badge-counts').then(r=>r.json()).then(d=>{{\
-                        document.querySelectorAll('.nav-badge').forEach(b=>{{\
-                            const c=d[b.dataset.badge];\
-                            if(c>0){{b.textContent=c;b.style.display='';}}\
-                        }});\
-                    }}).catch(()=>{{}});\
-                    </script>"
-                )))
-                (PreEscaped(format!(
-                    "<script>\
-                    fetch('{p}/api/me').then(r=>{{if(r.ok)return r.json();throw 0;}}).then(d=>{{\
-                        const b=document.getElementById('login-btn');\
-                        if(b){{b.innerHTML='<i class=\"fa-solid fa-user\"></i>&nbsp;'+d.first_name+' '+d.last_name;\
-                        b.href='{p}/person/'+d.id;\
-                        const lo=document.createElement('a');lo.className='navbar-item';\
-                        lo.href='{p}/logout';lo.innerHTML='<i class=\"fa-solid fa-right-from-bracket\"></i>';\
-                        b.parentNode.insertBefore(lo,b.nextSibling);}}\
-                        if(d.is_admin){{document.querySelectorAll('.navbar-admin').forEach(el=>el.style.display='');}}\
-                    }}).catch(()=>{{}});\
-                    </script>"
-                )))
+                script defer src={(p) "/static/powpow.js"} {}
                 footer .footer.py-4 {
                     div .content.has-text-centered {
                         p .is-size-7.has-text-grey {
@@ -273,9 +229,7 @@ pub fn index(
     let p = prefix;
     let season_display = format!("{}-{}", current_season - 1, current_season);
 
-    let extra_head = html! {
-        style { (PreEscaped(".week-day{padding:0.5rem 0;border-bottom:1px solid var(--bulma-border-weak);display:flex;align-items:center;gap:0.4rem;}")) }
-    };
+    let extra_head = html! {};
 
     let content = html! {
         // Hero
@@ -354,8 +308,7 @@ pub fn index(
         // Upcoming week
         section .section.py-4 {
             div .container.is-fluid {
-                a .box href={(p) "/calendar"}
-                  style="display:block;text-decoration:none;color:inherit;" {
+                a .box.box-link href={(p) "/calendar"} {
                     h3 .title.is-5.mb-3 {
                         span .icon.mr-2 { i .fa-solid.fa-calendar-week {} }
                         "Semaine à venir"
@@ -379,12 +332,12 @@ pub fn index(
                                 a .button.is-primary href={(p) "/users"} {
                                     span .icon { i .fa-solid.fa-ticket {} }
                                     span { "Adhésions HelloAsso" }
-                                    span .nav-badge data-badge="users" style="display:none" {}
+                                    span .nav-badge.d-none data-badge="users" {}
                                 }
                                 a .button.is-primary.is-light href={(p) "/cash"} {
                                     span .icon { i .fa-solid.fa-money-bill-wave {} }
                                     span { "Espèces / Chèques" }
-                                    span .nav-badge data-badge="cash" style="display:none" {}
+                                    span .nav-badge.d-none data-badge="cash" {}
                                 }
                             }
                         }
@@ -486,15 +439,7 @@ pub fn membership_list_with_filters(
         "is-light"
     };
 
-    let extra_head = html! {
-        style { (PreEscaped("\
-            .table-container{overflow-x:auto;}\
-            .stat-card{transition:transform 0.2s,box-shadow 0.2s;cursor:pointer;}\
-            .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.15);}\
-            .stat-card.is-active{border:3px solid var(--bulma-link);}\
-            .stat-number{font-size:2.5rem;font-weight:bold;line-height:1;}\
-        ")) }
-    };
+    let extra_head = html! {};
 
     let content = html! {
         section .section {
@@ -670,13 +615,7 @@ pub fn membership_list_with_filters(
         }
     };
 
-    let extra_scripts = html! {
-        (PreEscaped("<script>\
-            document.getElementById('searchInput').addEventListener('keypress',function(e){\
-                if(e.key==='Enter'){document.getElementById('filterForm').submit();}\
-            });\
-        </script>"))
-    };
+    let extra_scripts = html! {};
 
     page(
         "Liste des Adhésions - HelloAsso",
@@ -720,7 +659,7 @@ pub fn already_imported_page(membership: Membership, season: i16, prefix: &str) 
                                 "Cette adhésion a déjà été importée dans le système pour la saison " (season) "."
                             }
 
-                            div .box style="background-color: var(--bulma-scheme-main-bis);" {
+                            div .box.box-alt-bg {
                                 h2 .title.is-5.mb-4 { "Détails de l'adhésion" }
                                 table .table.is-fullwidth {
                                     tbody {
@@ -871,7 +810,7 @@ pub fn import_staff_form(
             @let payer_email_lower = payer_email.to_lowercase();
             @let bg_color = if option_index.is_multiple_of(2) { "var(--bulma-scheme-main)" } else { "var(--bulma-scheme-main-bis)" };
 
-            div .box.mb-4 style=(format!("border: 2px solid {}; background-color: {};", border_color, bg_color)) {
+            div .box.mb-4.candidate-card style=(format!("--card-border:{};--card-bg:{}", border_color, bg_color)) {
                 form method="POST" {
                     input type="hidden" name="action" value="update";
                     input type="hidden" name="staff_id" value=(staff.id);
@@ -1011,7 +950,7 @@ pub fn import_staff_form(
     };
 
     let create_markup = html! {
-        div .box.mb-4 style=(format!("border: 2px solid {}; background-color: {};", create_border, create_bg_color)) {
+        div .box.mb-4.candidate-card style=(format!("--card-border:{};--card-bg:{}", create_border, create_bg_color)) {
             form method="POST" {
                 input type="hidden" name="action" value="create";
 
@@ -1121,17 +1060,7 @@ pub fn import_staff_form(
         &membership_email
     };
 
-    let extra_head = html! {
-        (PreEscaped(r#"<script>
-        function updateNameFields(form, firstName, lastName) {
-            form.querySelector('input[name="first_name"]').value = firstName;
-            form.querySelector('input[name="last_name"]').value = lastName;
-        }
-        function updateEmailField(form, email) {
-            form.querySelector('input[name="email"]').value = email;
-        }
-    </script>"#))
-    };
+    let extra_head = html! {};
 
     let content = html! {
         section .section {
@@ -1244,8 +1173,7 @@ pub fn user_detail(user: User, prefix: &str) -> Markup {
                     div .columns {
                         div .column.is-4 {
                             div .has-text-centered {
-                                div .avatar-circle.is-size-1.mb-4
-                                    style="width: 120px; height: 120px; margin: 0 auto;" {
+                                div .avatar-circle.is-size-1.mb-4.user-avatar {
                                     span .icon.is-large { i .fa-solid.fa-user.fa-3x {} }
                                 }
                                 h2 .title.is-4 { (full_name) }
@@ -1400,14 +1328,7 @@ pub fn restore_page(prefix: &str) -> Markup {
         }
     };
 
-    let extra_scripts = html! {
-        (PreEscaped("<script>\
-            function updateFileName(input) {\
-                var fileName = input.files[0] ? input.files[0].name : 'Aucun fichier sélectionné';\
-                document.getElementById('file-name').textContent = fileName;\
-            }\
-        </script>"))
-    };
+    let extra_scripts = html! {};
 
     page(
         "Restaurer la base de données - AGHIL",
@@ -1531,21 +1452,7 @@ pub fn staff_list(
     let p = prefix;
     let staff_count = staff_with_seasons.len();
 
-    let extra_head = html! {
-        style { (PreEscaped("\
-            .table-container{overflow:auto;max-height:calc(100vh - 300px);}\
-            .atelier-col{border-left:1px solid var(--bulma-border) !important;\
-            border-right:1px solid var(--bulma-border) !important;}\
-            thead th{vertical-align:bottom !important;position:sticky;top:0;\
-            background:var(--bulma-scheme-main) !important;z-index:10;}\
-            th.atelier-col{background:var(--bulma-scheme-main) !important;\
-            padding:8px 4px !important;min-width:30px;max-width:30px;}\
-            th.atelier-col .vertical-text{writing-mode:vertical-rl;\
-            text-orientation:mixed;font-size:0.85em;line-height:1.2;}\
-            tr.inactive-staff{opacity:0.4;}\
-            @media screen and (min-width:769px){.table td,.table th{white-space:nowrap;}}\
-        ")) }
-    };
+    let extra_head = html! {};
 
     let content = html! {
         section .section {
@@ -1739,32 +1646,11 @@ pub fn person_detail(
         }
     }
 
-    let extra_head = html! {
-        style {
-            (PreEscaped("\
-                .atelier-checkbox { width: 1.25rem; height: 1.25rem; }\
-                .checkbox:hover { background-color: var(--bulma-background); border-radius: 4px; padding: 0.5rem; margin: -0.5rem; }\
-                .notification.is-loading { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100; min-width: 300px; }\
-                .pcal-scroll { overflow-x: auto; }\
-                .pcal-table { border-collapse: collapse; white-space: nowrap; }\
-                .pcal-table th, .pcal-table td { border: 1px solid var(--bulma-border); padding: 0.3rem 0.4rem; vertical-align: middle; }\
-                .pcal-table thead th { background: var(--bulma-scheme-main-bis) !important; }\
-                .pcal-atelier-col { position: sticky; left: 0; z-index: 2; min-width: 140px; background: var(--bulma-scheme-main); }\
-                .pcal-table thead th.pcal-atelier-col { z-index: 3; background: var(--bulma-scheme-main-bis) !important; }\
-                .pcal-sunday { background: var(--bulma-link-light) !important; }\
-                .pcal-cell.pcal-active { background: var(--bulma-success) !important; color: var(--bulma-success-invert); }\
-                .pcal-day-col { min-width: 70px; }\
-                .pcal-day-name { font-size: 0.75rem; }\
-                .pcal-day-date { font-size: 0.85rem; font-weight: 600; }\
-                .pcal-check { display: inline-flex; align-items: center; gap: 1px; margin: 0 2px; cursor: pointer; font-size: 0.7rem; }\
-                .pcal-check input { width: 1rem; height: 1rem; margin: 0; }\
-                .pcal-cell { white-space: nowrap; }\
-            "))
-        }
-    };
+    let extra_head = html! {};
 
     let content = html! {
         div #notification-container {}
+        div .d-none #person-data data-staff-id=(staff.id) {}
 
         section .section {
             div .container.is-fluid {
@@ -1778,12 +1664,12 @@ pub fn person_detail(
 
                 // Todo box
                 @if !todos.is_empty() {
-                    div .box.mb-4 style="border-left: 4px solid var(--bulma-danger);" {
+                    div .box.mb-4.box-danger-accent {
                         h2 .title.is-5 {
                             span .icon.has-text-danger { i .fa-solid.fa-clipboard-list {} }
                             "\u{00a0}À faire"
                         }
-                        ul .ml-2 style="list-style:none;" {
+                        ul .ml-2.is-unstyled {
                             @for item in todos {
                                 li .mb-2 {
                                     span .{"icon has-text-" (item.color)} { i class={"fa-solid " (item.icon)} {} }
@@ -2145,307 +2031,7 @@ pub fn person_detail(
         }
     };
 
-    let extra_scripts = html! {
-        (PreEscaped(format!(r#"<script>
-        const staffId = "{staff_id}";
-        const prefix = "{p}";
-
-        function showNotification(message, type) {{
-            const container = document.getElementById('notification-container');
-            const notification = document.createElement('div');
-            notification.className = `notification is-${{type}} is-loading`;
-            notification.innerHTML = `
-                <button class="delete"></button>
-                ${{message}}
-            `;
-            container.appendChild(notification);
-
-            notification.querySelector('.delete').addEventListener('click', () => {{
-                notification.remove();
-            }});
-
-            setTimeout(() => notification.remove(), 3000);
-        }}
-
-        document.querySelectorAll('.atelier-checkbox').forEach(checkbox => {{
-            checkbox.addEventListener('change', async function() {{
-                const atelierId = this.dataset.atelierId;
-                const checked = this.checked;
-
-                try {{
-                    const response = await fetch(`${{prefix}}/api/person/${{staffId}}/role`, {{
-                        method: 'POST',
-                        headers: {{
-                            'Content-Type': 'application/json'
-                        }},
-                        body: JSON.stringify({{
-                            atelier_id: atelierId,
-                            add: checked
-                        }})
-                    }});
-
-                    if (!response.ok) {{
-                        const error = await response.text();
-                        throw new Error(error);
-                    }}
-
-                    showNotification(
-                        checked ? 'Atelier ajouté' : 'Atelier retiré',
-                        'success'
-                    );
-                    setTimeout(() => location.reload(), 500);
-                }} catch (error) {{
-                    console.error('Error:', error);
-                    showNotification('Erreur: ' + error.message, 'danger');
-                    this.checked = !checked;
-                }}
-            }});
-        }});
-    </script>"#,
-            staff_id = staff.id,
-            p = p,
-        )))
-
-        // Admin scripts
-        @if is_admin {
-            (PreEscaped(r#"<script>
-        // Handle validated checkbox changes
-        document.querySelectorAll('.role-validated-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', async function() {
-                const atelierId = this.dataset.atelierId;
-                const checked = this.checked;
-
-                try {
-                    const response = await fetch(`${prefix}/api/person/${staffId}/role`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            atelier_id: atelierId,
-                            validated: checked
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const error = await response.text();
-                        throw new Error(error);
-                    }
-
-                    showNotification(
-                        checked ? 'Rôle validé' : 'Validation retirée',
-                        'success'
-                    );
-                } catch (error) {
-                    console.error('Error:', error);
-                    showNotification('Erreur: ' + error.message, 'danger');
-                    this.checked = !checked;
-                }
-            });
-        });
-
-        // Handle chief checkbox changes
-        document.querySelectorAll('.role-chief-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', async function() {
-                const atelierId = this.dataset.atelierId;
-                const checked = this.checked;
-
-                const validatedCheckbox = document.querySelector(`.role-validated-checkbox[data-atelier-id="${atelierId}"]`);
-
-                try {
-                    const response = await fetch(`${prefix}/api/person/${staffId}/role`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            atelier_id: atelierId,
-                            chief: checked
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const error = await response.text();
-                        throw new Error(error);
-                    }
-
-                    if (validatedCheckbox) {
-                        if (checked) {
-                            validatedCheckbox.checked = true;
-                            validatedCheckbox.disabled = true;
-                        } else {
-                            validatedCheckbox.disabled = false;
-                        }
-                    }
-
-                    showNotification(
-                        checked ? 'Défini comme chef' : 'Chef retiré',
-                        'success'
-                    );
-                } catch (error) {
-                    console.error('Error:', error);
-                    showNotification('Erreur: ' + error.message, 'danger');
-                    this.checked = !checked;
-                }
-            });
-        });
-
-        // Handle admin/god checkboxes
-        document.getElementById('admin-cb').addEventListener('change', async function() {
-            const adminCb = document.getElementById('admin-cb');
-            const godCb = document.getElementById('god-cb');
-            if (!this.checked) {
-                godCb.checked = false;
-            }
-            try {
-                const response = await fetch(`${prefix}/api/admin/flags`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ staff_id: staffId, is_admin: adminCb.checked, is_god: godCb.checked })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    adminCb.checked = data.is_admin;
-                    godCb.checked = data.is_god;
-                    showNotification('Droits mis à jour', 'success');
-                } else {
-                    showNotification('Erreur: ' + (data.error || 'Inconnue'), 'danger');
-                    location.reload();
-                }
-            } catch (error) {
-                showNotification('Erreur réseau: ' + error.message, 'danger');
-                location.reload();
-            }
-        });
-
-        document.getElementById('god-cb').addEventListener('change', async function() {
-            const adminCb = document.getElementById('admin-cb');
-            const godCb = document.getElementById('god-cb');
-            if (this.checked) {
-                adminCb.checked = true;
-            }
-            try {
-                const response = await fetch(`${prefix}/api/admin/flags`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ staff_id: staffId, is_admin: adminCb.checked, is_god: godCb.checked })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    adminCb.checked = data.is_admin;
-                    godCb.checked = data.is_god;
-                    showNotification('Droits mis à jour', 'success');
-                } else {
-                    showNotification('Erreur: ' + (data.error || 'Inconnue'), 'danger');
-                    location.reload();
-                }
-            } catch (error) {
-                showNotification('Erreur réseau: ' + error.message, 'danger');
-                location.reload();
-            }
-        });
-
-        // Handle comment save
-        document.getElementById('save-comment-btn').addEventListener('click', async function() {
-            const comment = document.getElementById('comment-input').value;
-            const btn = this;
-            btn.classList.add('is-loading');
-
-            try {
-                const response = await fetch(`${prefix}/api/person/${staffId}/comment`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ comment: comment })
-                });
-
-                if (!response.ok) {
-                    const error = await response.text();
-                    throw new Error(error);
-                }
-
-                showNotification('Commentaire enregistré', 'success');
-            } catch (error) {
-                console.error('Error:', error);
-                showNotification('Erreur: ' + error.message, 'danger');
-            } finally {
-                btn.classList.remove('is-loading');
-            }
-        });
-    </script>"#))
-        }
-
-        // Contact scripts
-        @if can_edit_contact && show_contact {
-            (PreEscaped(r"<script>
-        document.getElementById('save-contact-btn').addEventListener('click', async function() {
-            if (!confirm('Attention à bien vérifier avant de confirmer !')) return;
-            const email = document.getElementById('edit-email').value;
-            const phone = document.getElementById('edit-phone').value;
-            const btn = this;
-            btn.classList.add('is-loading');
-
-            try {
-                const response = await fetch(`${prefix}/api/person/${staffId}/contact`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ email: email, phone: phone || null })
-                });
-
-                if (!response.ok) {
-                    const error = await response.text();
-                    throw new Error(error);
-                }
-
-                location.reload();
-            } catch (error) {
-                console.error('Error:', error);
-                showNotification('Erreur: ' + error.message, 'danger');
-            } finally {
-                btn.classList.remove('is-loading');
-            }
-        });
-    </script>"))
-        }
-
-        // Calendar presence toggle scripts
-        @if is_self && !person_calendar.is_empty() {
-            (PreEscaped(r"<script>
-        document.querySelectorAll('.pcal-presence-cb').forEach(cb => {
-            cb.addEventListener('change', async function() {
-                const needId = this.dataset.need;
-                const staffIdVal = this.dataset.staff;
-                const half = this.dataset.half;
-                const value = this.checked;
-
-                try {
-                    const response = await fetch(`${prefix}/api/calendar/toggle`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ needs_id: needId, staff_id: staffIdVal, half: half, value: value })
-                    });
-
-                    if (!response.ok) {
-                        const body = await response.json().catch(() => ({}));
-                        throw new Error(body.error || 'Erreur serveur');
-                    }
-
-                    const cell = this.closest('td');
-                    const anyChecked = Array.from(cell.querySelectorAll('.pcal-presence-cb')).some(c => c.checked);
-                    cell.classList.toggle('pcal-active', anyChecked);
-                } catch (error) {
-                    console.error('Error:', error);
-                    showNotification('Erreur: ' + error.message, 'danger');
-                    this.checked = !value;
-                }
-            });
-        });
-    </script>"))
-        }
-    };
+    let extra_scripts = html! {};
 
     let title = format!("{} {} - AGHIL", staff.first_name, staff.last_name);
     page(
@@ -2754,7 +2340,7 @@ pub fn cash_import_form(
             @let staff_email_lower = staff.email.to_lowercase();
             @let bg_color = if option_index.is_multiple_of(2) { "var(--bulma-scheme-main)" } else { "var(--bulma-scheme-main-bis)" };
 
-            div .box.mb-4 style=(format!("border: 2px solid {}; background-color: {};", border_color, bg_color)) {
+            div .box.mb-4.candidate-card style=(format!("--card-border:{};--card-bg:{}", border_color, bg_color)) {
                 form method="POST" {
                     input type="hidden" name="action" value="update";
                     input type="hidden" name="staff_id" value=(staff.id);
@@ -2869,7 +2455,7 @@ pub fn cash_import_form(
     };
 
     let create_markup = html! {
-        div .box.mb-4 style=(format!("border: 2px solid {}; background-color: {};", create_border, create_bg_color)) {
+        div .box.mb-4.candidate-card style=(format!("--card-border:{};--card-bg:{}", create_border, create_bg_color)) {
             form method="POST" {
                 input type="hidden" name="action" value="create";
 
@@ -2947,18 +2533,6 @@ pub fn cash_import_form(
         &cash_email
     };
 
-    let extra_head = html! {
-        (PreEscaped(r#"<script>
-        function updateNameFields(form, firstName, lastName) {
-            form.querySelector('input[name="first_name"]').value = firstName;
-            form.querySelector('input[name="last_name"]').value = lastName;
-        }
-        function updateEmailField(form, email) {
-            form.querySelector('input[name="email"]').value = email;
-        }
-    </script>"#))
-    };
-
     let content = html! {
         section .section {
             div .container.is-fluid {
@@ -3016,7 +2590,7 @@ pub fn cash_import_form(
         prefix,
         &NavKind::Standard,
         "cash",
-        extra_head,
+        html! {},
         content,
         html! {},
     )
@@ -3060,42 +2634,6 @@ pub fn calendar(
     // Build a lookup map for opening days
     let opening_map: std::collections::HashMap<chrono::NaiveDate, &crate::models::OpeningDay> =
         opening_days.iter().map(|od| (od.day, od)).collect();
-
-    let extra_head = html! {
-        style {
-            (PreEscaped("\
-                .cal-scroll { overflow-x: auto; max-height: 85vh; }\
-                .cal-table { border-collapse: collapse; white-space: nowrap; }\
-                .cal-table th, .cal-table td { border: 1px solid var(--bulma-border); padding: 0.3rem 0.4rem; vertical-align: middle; }\
-                .cal-table thead { position: sticky; top: 0; z-index: 4; }\
-                .cal-table thead th { background: var(--bulma-scheme-main-bis) !important; }\
-                .cal-name-col { position: sticky; left: 0; z-index: 2; min-width: 150px; }\
-                .cal-table thead th.cal-name-col { z-index: 5; background: var(--bulma-scheme-main-bis) !important; }\
-                .cal-table tbody tr:nth-child(odd) td { background: var(--bulma-scheme-main); }\
-                .cal-table tbody tr:nth-child(even) td { background: var(--bulma-background); }\
-                .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: var(--bulma-scheme-main); }\
-                .cal-table tbody tr:nth-child(even) td.cal-name-col { background: var(--bulma-background); }\
-                .cal-sunday { background: var(--bulma-link-light) !important; }\
-                .cal-complete { background: var(--bulma-success-light) !important; }\
-                .cal-danger { background: var(--bulma-danger-light) !important; }\
-                .cal-cell.cal-active { background: var(--bulma-success) !important; color: var(--bulma-success-invert); }\
-                .cal-day-col { min-width: 70px; }\
-                .cal-day-name { font-size: 0.75rem; }\
-                .cal-day-date { font-size: 0.85rem; font-weight: 600; }\
-                .cal-day-count { font-size: 0.7rem; font-weight: bold; }\
-                .cal-check { display: inline-flex; align-items: center; gap: 1px; margin: 0 2px; cursor: pointer; font-size: 0.7rem; }\
-                .cal-check input { width: 1rem; height: 1rem; margin: 0; }\
-                .cal-cell { white-space: nowrap; }\
-                .cal-me td.cal-name-col { background: var(--bulma-warning) !important; font-weight: 600; }\
-                .notification.is-loading { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100; min-width: 300px; }\
-                .atelier-nav { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 1rem; }\
-                .atelier-nav a { padding: 0.4rem 0.75rem; border-radius: 4px; background: var(--bulma-background); color: var(--bulma-text); text-decoration: none; font-size: 0.9rem; }\
-                .atelier-nav a.is-active { background: var(--bulma-link); color: var(--bulma-link-invert); font-weight: 600; }\
-                .atelier-nav a:hover:not(.is-active) { background: var(--bulma-scheme-main-ter); }\
-                .cal-opening-row td { background: var(--bulma-scheme-main-bis) !important; }\
-            "))
-        }
-    };
 
     let content = html! {
         div #notification-container {}
@@ -3235,103 +2773,15 @@ pub fn calendar(
         }
     };
 
-    let extra_scripts = html! {
-        (PreEscaped(format!(r#"<script>
-        const prefix = "{p}";
-
-        function showNotification(message, type) {{
-            const container = document.getElementById('notification-container');
-            const notification = document.createElement('div');
-            notification.className = `notification is-${{type}} is-loading`;
-            notification.innerHTML = `<button class="delete"></button>${{message}}`;
-            container.appendChild(notification);
-            notification.querySelector('.delete').addEventListener('click', () => notification.remove());
-            setTimeout(() => notification.remove(), 3000);
-        }}
-
-        document.querySelectorAll('.presence-cb').forEach(cb => {{
-            cb.addEventListener('change', async function() {{
-                const needId = this.dataset.need;
-                const staffId = this.dataset.staff;
-                const half = this.dataset.half;
-                const value = this.checked;
-
-                try {{
-                    const response = await fetch(`${{prefix}}/api/calendar/toggle`, {{
-                        method: 'POST',
-                        headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{ needs_id: needId, staff_id: staffId, half: half, value: value }})
-                    }});
-
-                    if (!response.ok) {{
-                        if (response.status === 403) {{
-                            throw new Error('Vous ne pouvez modifier que votre propre disponibilité');
-                        }}
-                        const body = await response.json().catch(() => ({{}}));
-                        throw new Error(body.error || 'Erreur serveur');
-                    }}
-
-                    const cell = this.closest('td');
-                    const anyChecked = Array.from(cell.querySelectorAll('.presence-cb')).some(c => c.checked);
-                    cell.classList.toggle('cal-active', anyChecked);
-
-                    const colIndex = cell.cellIndex;
-                    const table = this.closest('table');
-                    const th = table.querySelector(`thead tr th:nth-child(${{colIndex + 1}})`);
-                    if (th) {{
-                        let filledFirst = 0, filledSecond = 0;
-                        table.querySelectorAll(`tbody tr`).forEach(row => {{
-                            const c = row.cells[colIndex];
-                            if (c) {{
-                                const cbs = c.querySelectorAll('.presence-cb');
-                                cbs.forEach(cb => {{
-                                    if (cb.checked && cb.dataset.half === 'first') filledFirst++;
-                                    if (cb.checked && cb.dataset.half === 'second') filledSecond++;
-                                }});
-                            }}
-                        }});
-                        const countEl = th.querySelector('.cal-day-count');
-                        if (countEl) {{
-                            const spans = countEl.querySelectorAll('span');
-                            if (spans.length === 2) {{
-                                const qtyMatch = spans[0].textContent.match(/\/(\d+)/);
-                                const qty = qtyMatch ? parseInt(qtyMatch[1]) : 0;
-                                const firstLabel = spans[0].textContent.replace(/\d+\/\d+/, '').trim();
-                                const secondLabel = spans[1].textContent.replace(/\d+\/\d+/, '').trim();
-                                spans[0].textContent = `${{firstLabel}} ${{filledFirst}}/${{qty}}`;
-                                spans[1].textContent = `${{secondLabel}} ${{filledSecond}}/${{qty}}`;
-                                spans[0].className = filledFirst >= qty ? 'has-text-success' : 'has-text-danger';
-                                spans[1].className = filledSecond >= qty ? 'has-text-success' : 'has-text-danger';
-                                const isComplete = filledFirst >= qty && filledSecond >= qty;
-                                th.classList.toggle('cal-complete', isComplete);
-                                table.querySelectorAll('tbody tr').forEach(row => {{
-                                    const c = row.cells[colIndex];
-                                    if (c) c.classList.toggle('cal-complete', isComplete);
-                                }});
-                            }}
-                        }}
-                    }}
-                }} catch (error) {{
-                    console.error('Error:', error);
-                    showNotification('Erreur: ' + error.message, 'danger');
-                    this.checked = !value;
-                }}
-            }});
-        }});
-    </script>"#,
-            p = p,
-        )))
-    };
-
     let title = format!("Planning {} - AGHIL", atelier.name);
     page(
         &title,
         p,
         &NavKind::Standard,
         "",
-        extra_head,
+        html! {},
         content,
-        extra_scripts,
+        html! {},
     )
 }
 
@@ -3577,61 +3027,12 @@ pub fn calendar_editor(
 
     let extra_head = html! {
         link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/css/bulma-calendar.min.css";
-        style {
-            (PreEscaped("\
-                .calendar-links { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.2rem; }\
-                .cal-scroll { overflow-x: auto; max-height: 85vh; }\
-                .cal-table { border-collapse: collapse; white-space: nowrap; }\
-                .cal-table th, .cal-table td { border: 1px solid var(--bulma-border); padding: 0.3rem 0.5rem; vertical-align: middle; }\
-                .cal-table thead { position: sticky; top: 0; z-index: 4; }\
-                .cal-table thead th { background: var(--bulma-scheme-main-bis) !important; text-align: center; }\
-                .cal-name-col { position: sticky; left: 0; z-index: 2; min-width: 150px; }\
-                .cal-table thead th.cal-name-col { z-index: 5; background: var(--bulma-scheme-main-bis) !important; text-align: left; }\
-                .cal-table tbody tr:nth-child(odd) td { background: var(--bulma-scheme-main); }\
-                .cal-table tbody tr:nth-child(even) td { background: var(--bulma-background); }\
-                .cal-table tbody tr:nth-child(odd) td.cal-name-col { background: var(--bulma-scheme-main); }\
-                .cal-table tbody tr:nth-child(even) td.cal-name-col { background: var(--bulma-background); }\
-                .cal-table .day-start { border-left: 2.5px solid var(--bulma-grey-light) !important; }\
-                .cal-table td.day-cell { cursor: pointer; }\
-                .cal-table td.day-cell:hover { background: var(--bulma-link-light) !important; }\
-                .cal-table td.cell-ok { color: var(--bulma-success-dark); font-weight: 600; background: var(--bulma-success-light) !important; }\
-                .cal-table td.cell-deficit { color: var(--bulma-danger-dark); font-weight: 600; background: var(--bulma-danger-light) !important; }\
-                .notification.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100; min-width: 300px; }\
-                .atelier-cards { display: flex; flex-wrap: wrap; gap: 1rem; }\
-                .atelier-card { border: 1px solid var(--bulma-border); border-radius: 6px; padding: 1rem; min-width: 220px; flex: 1 1 220px; max-width: 320px; background: var(--bulma-scheme-main); transition: border-color 0.2s, box-shadow 0.2s; }\
-                .atelier-card.has-need { border-color: var(--bulma-link); box-shadow: 0 0 0 1px var(--bulma-link); }\
-                .atelier-card .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.6rem; }\
-                .atelier-card .field { margin-bottom: 0.5rem; }\
-                .atelier-card .card-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }\
-                .nightly-switch { display: flex; align-items: center; gap: 0.5rem; user-select: none; }\
-                .nightly-switch .side-label { font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem; color: var(--bulma-grey); }\
-                .nightly-switch .side-label.is-active { color: var(--bulma-text); font-weight: 600; }\
-                label.switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; }\
-                label.switch input[type=\"checkbox\"] { position: absolute; opacity: 0; width: 0; height: 0; }\
-                label.switch .check { position: relative; display: inline-block; width: 2.75em; height: 1.5em; background: var(--bulma-warning); border-radius: 1em; transition: background 0.3s; flex-shrink: 0; border: 1px solid transparent; }\
-                label.switch .check::before { content: \"\"; position: absolute; top: 0.15em; left: 0.15em; width: 1.15em; height: 1.15em; background: var(--bulma-scheme-main); border-radius: 50%; transition: transform 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }\
-                label.switch input[type=\"checkbox\"]:checked + .check { background: var(--bulma-link); }\
-                label.switch input[type=\"checkbox\"]:checked + .check::before { transform: translateX(1.25em); }\
-                label.switch input[type=\"checkbox\"]:disabled + .check { opacity: 0.5; cursor: not-allowed; }\
-                .datetimepicker .datepicker-body .datepicker-dates .datepicker-days .datepicker-date .date-item.has-need { background-color: var(--bulma-link) !important; color: var(--bulma-link-invert) !important; font-weight: bold; border-color: var(--bulma-link) !important; }\
-                .datetimepicker .datepicker-body .datepicker-dates .datepicker-days .datepicker-date .date-item.has-need:hover { background-color: var(--bulma-link-dark) !important; border-color: var(--bulma-link-dark) !important; color: var(--bulma-link-invert) !important; }\
-                .datetimepicker .datepicker-body .datepicker-dates .datepicker-days .datepicker-date .date-item.has-need.is-active { background-color: var(--bulma-link-active) !important; border-color: var(--bulma-link-active) !important; }\
-                #add-modal .datetimepicker { position: relative; z-index: 1; }\
-                #add-modal .modal-card-body { overflow: visible; }\
-                #opening-day-modal .datetimepicker { position: relative; z-index: 1; }\
-                #opening-day-modal .modal-card-body { overflow: visible; }\
-                .editor-columns { display: flex; gap: 2rem; flex-wrap: wrap; align-items: flex-start; }\
-                .editor-left { flex: 0 0 auto; }\
-                .editor-right { flex: 1 1 400px; min-width: 300px; }\
-                .cal-opening-row td { background: var(--bulma-scheme-main-bis) !important; }\
-                .opening-tag { cursor: pointer; }\
-                .opening-tag:hover { filter: brightness(0.9); }\
-            "))
-        }
     };
 
     let content = html! {
         div #notification-container {}
+        script #ateliers-data type="application/json" { (PreEscaped(&ateliers_json)) }
+        script #editable-data type="application/json" { (PreEscaped(&editable_json)) }
 
         section .section.pt-4.pb-4 {
             div .container.is-fluid {
@@ -3643,7 +3044,7 @@ pub fn calendar_editor(
                 // Calendar links section
                 @if logged_in {
                     div .calendar-links {
-                        span .has-text-grey.mr-1 style="line-height:2rem;" { "Plannings :" }
+                        span .has-text-grey.mr-1.cal-label { "Plannings :" }
                         @for a in all_ateliers {
                             a .tag.is-medium.is-link.is-light href={(p) "/calendar/" (a.slug)} {
                                 span .icon { i class={"fa-solid fa-" (a.icon)} {} }
@@ -3714,7 +3115,7 @@ pub fn calendar_editor(
                                             };
                                             @let day_str = d.format("%Y-%m-%d").to_string();
                                             @if is_admin && od.status == crate::models::OpeningDayStatus::Reserved {
-                                                span class={"tag " (tag_class) " opening-tag"} style="cursor:pointer" data-day=(day_str) { (tag_label) }
+                                                span class={"tag " (tag_class) " opening-tag is-clickable"} data-day=(day_str) { (tag_label) }
                                             } @else {
                                                 span class={"tag " (tag_class)} { (tag_label) }
                                             }
@@ -3786,7 +3187,7 @@ pub fn calendar_editor(
         // Modal: day editor (opened by clicking a cell)
         div .modal #day-modal {
             div .modal-background {}
-            div .modal-card style="max-width:900px;width:95vw;" {
+            div .modal-card.modal-card-wide {
                 header .modal-card-head {
                     p .modal-card-title #day-modal-title { "\u{2014}" }
                     button .delete aria-label="close" #close-day-modal {}
@@ -3800,7 +3201,7 @@ pub fn calendar_editor(
         // Modal: add needs via calendar picker
         div .modal #add-modal {
             div .modal-background {}
-            div .modal-card style="max-width:900px;width:95vw;" {
+            div .modal-card.modal-card-wide {
                 header .modal-card-head {
                     p .modal-card-title { "Modifier des besoins en bénévoles" }
                     button .delete aria-label="close" #close-add-modal {}
@@ -3811,7 +3212,7 @@ pub fn calendar_editor(
                             input type="date" #calendar-widget;
                         }
                         div .editor-right {
-                            div #add-edit-panel style="display:none;" {
+                            div #add-edit-panel .d-none {
                                 h2 .subtitle.is-5.mb-3 #add-panel-title { "\u{2014}" }
                                 div .atelier-cards #add-atelier-cards {}
                             }
@@ -3828,7 +3229,7 @@ pub fn calendar_editor(
         // Modal: add opening day via calendar picker
         div .modal #opening-day-modal {
             div .modal-background {}
-            div .modal-card style="max-width:500px;width:90vw;" {
+            div .modal-card.modal-card-medium {
                 header .modal-card-head {
                     p .modal-card-title { "Ajouter un jour d'ouverture" }
                     button .delete aria-label="close" #close-opening-day-modal {}
@@ -3837,7 +3238,7 @@ pub fn calendar_editor(
                     div .has-text-centered {
                         input type="date" #opening-day-picker;
                     }
-                    div .mt-4.has-text-centered #opening-day-confirm style="display:none;" {
+                    div .mt-4.has-text-centered.d-none #opening-day-confirm {
                         p .mb-3 #opening-day-confirm-text {}
                         button .button.is-info #opening-day-submit {
                             span .icon { i .fa-solid.fa-check {} }
@@ -3851,7 +3252,7 @@ pub fn calendar_editor(
         // Modal: Go / NoGo for a reserved opening day
         div .modal #gonogo-modal {
             div .modal-background {}
-            div .modal-card style="max-width:400px;" {
+            div .modal-card.modal-card-small {
                 header .modal-card-head {
                     p .modal-card-title #gonogo-title { "\u{2014}" }
                     button .delete aria-label="close" #close-gonogo-modal {}
@@ -3878,373 +3279,6 @@ pub fn calendar_editor(
 
     let extra_scripts = html! {
         script src="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/js/bulma-calendar.min.js" {}
-        (PreEscaped(format!(r#"<script>
-    (function() {{
-        const prefix = "{p}";
-        const ateliers = {ateliers_json};
-        const editableAteliers = new Set({editable_json});
-
-        function showNotification(message, type) {{
-            const container = document.getElementById('notification-container');
-            const notification = document.createElement('div');
-            notification.className = 'notification is-' + type + ' toast';
-            notification.innerHTML = '<button class="delete"></button>' + message;
-            container.appendChild(notification);
-            notification.querySelector('.delete').addEventListener('click', function() {{ notification.remove(); }});
-            setTimeout(function() {{ notification.remove(); }}, 3000);
-        }}
-
-        function formatDateTitle(dayStr) {{
-            const parts = dayStr.split('-');
-            const dt = new Date(parts[0], parts[1] - 1, parts[2]);
-            const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-            const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-            return dayNames[dt.getDay()] + ' ' + dt.getDate() + ' ' + monthNames[dt.getMonth()] + ' ' + dt.getFullYear();
-        }}
-
-        function renderCardsInto(container, targetDay, dayNeedsMap) {{
-            container.innerHTML = '';
-            for (const atelier of ateliers) {{
-                const existing = dayNeedsMap[atelier.id] || null;
-                const hasNeed = !!existing;
-                const qty = existing ? existing.quantity : 0;
-                const nightly = existing ? existing.nightly : atelier.default_nightly;
-
-                const canEdit = editableAteliers.has(atelier.id);
-                const card = document.createElement('div');
-                card.className = 'atelier-card' + (hasNeed ? ' has-need' : '');
-                card.dataset.atelierId = atelier.id;
-
-                if (canEdit) {{
-                    card.innerHTML =
-                        '<div class="card-title">' + atelier.name + '</div>' +
-                        '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
-                        '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' + qty + '"></div></div>' +
-                        '<div class="field"><div class="nightly-switch">' +
-                        '<span class="side-label' + (nightly ? '' : ' is-active') + '" data-role="day"><i class="fa-solid fa-sun"></i> Journée</span>' +
-                        '<label class="switch"><input type="checkbox" class="nightly-cb"' + (nightly ? ' checked' : '') + '><span class="check"></span></label>' +
-                        '<span class="side-label' + (nightly ? ' is-active' : '') + '" data-role="night"><i class="fa-solid fa-moon"></i> Nocturne</span>' +
-                        '</div></div>' +
-                        '<div class="card-actions">' +
-                        '<button class="button is-primary is-small btn-card-save"><span class="icon is-small"><i class="fa-solid fa-floppy-disk"></i></span><span>' + (hasNeed ? 'Modifier' : 'Créer') + '</span></button>' +
-                        (hasNeed ? '<button class="button is-danger is-small is-outlined btn-card-delete"><span class="icon is-small"><i class="fa-solid fa-trash"></i></span><span>Supprimer</span></button>' : '') +
-                        '</div>';
-                }} else {{
-                    card.innerHTML =
-                        '<div class="card-title">' + atelier.name + '</div>' +
-                        '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
-                        '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' + qty + '" disabled></div></div>' +
-                        '<div class="field"><div class="nightly-switch">' +
-                        '<span class="side-label' + (nightly ? '' : ' is-active') + '"><i class="fa-solid fa-sun"></i> Journée</span>' +
-                        '<label class="switch"><input type="checkbox" class="nightly-cb"' + (nightly ? ' checked' : '') + ' disabled><span class="check"></span></label>' +
-                        '<span class="side-label' + (nightly ? ' is-active' : '') + '"><i class="fa-solid fa-moon"></i> Nocturne</span>' +
-                        '</div></div>';
-                }}
-
-                if (canEdit) {{
-                    var cb = card.querySelector('.nightly-cb');
-                    var lblDay = card.querySelector('[data-role="day"]');
-                    var lblNight = card.querySelector('[data-role="night"]');
-                    function syncLabels() {{
-                        lblDay.classList.toggle('is-active', !cb.checked);
-                        lblNight.classList.toggle('is-active', cb.checked);
-                    }}
-                    cb.addEventListener('change', syncLabels);
-                    lblDay.addEventListener('click', function() {{ cb.checked = false; syncLabels(); }});
-                    lblNight.addEventListener('click', function() {{ cb.checked = true; syncLabels(); }});
-
-                    card.querySelector('.btn-card-save').addEventListener('click', async function() {{
-                        const q = parseInt(card.querySelector('.card-qty').value);
-                        const n = cb.checked;
-                        if (!q || q < 1) {{ showNotification('Quantité invalide', 'warning'); return; }}
-                        try {{
-                            const resp = await fetch(prefix + '/api/calendar/needs', {{
-                                method: 'POST',
-                                headers: {{ 'Content-Type': 'application/json' }},
-                                body: JSON.stringify({{ atelier_id: atelier.id, day: targetDay, quantity: q, nightly: n }})
-                            }});
-                            if (!resp.ok) throw new Error(await resp.text());
-                            showNotification(atelier.name + ' enregistré', 'success');
-                            location.reload();
-                        }} catch (err) {{
-                            showNotification('Erreur: ' + err.message, 'danger');
-                        }}
-                    }});
-
-                    const delBtn = card.querySelector('.btn-card-delete');
-                    if (delBtn) {{
-                        delBtn.addEventListener('click', async function() {{
-                            if (!confirm('Supprimer le besoin pour ' + atelier.name + '\u00a0? Les présences associées seront aussi supprimées.')) return;
-                            try {{
-                                const resp = await fetch(prefix + '/api/calendar/needs', {{
-                                    method: 'DELETE',
-                                    headers: {{ 'Content-Type': 'application/json' }},
-                                    body: JSON.stringify({{ atelier_id: atelier.id, day: targetDay }})
-                                }});
-                                if (!resp.ok) throw new Error(await resp.text());
-                                showNotification(atelier.name + ' supprimé', 'success');
-                                location.reload();
-                            }} catch (err) {{
-                                showNotification('Erreur: ' + err.message, 'danger');
-                            }}
-                        }});
-                    }}
-                }}
-
-                container.appendChild(card);
-            }}
-        }}
-
-        // ========== 1. Table cell click → day-editor modal ==========
-        const dayModal = document.getElementById('day-modal');
-        document.querySelectorAll('.cal-table td.day-cell').forEach(function(cell) {{
-            cell.addEventListener('click', function() {{
-                const day = cell.dataset.day;
-                document.getElementById('day-modal-title').textContent = formatDateTitle(day);
-                dayModal.classList.add('is-active');
-                fetch(prefix + '/api/calendar/needs-by-day?day=' + day)
-                    .then(function(r) {{ if (!r.ok) throw new Error(); return r.json(); }})
-                    .then(function(needs) {{
-                        var map = {{}};
-                        for (var i = 0; i < needs.length; i++) map[needs[i].atelier] = needs[i];
-                        renderCardsInto(document.getElementById('day-atelier-cards'), day, map);
-                    }})
-                    .catch(function(err) {{ showNotification('Erreur chargement', 'danger'); }});
-            }});
-        }});
-        document.getElementById('close-day-modal').addEventListener('click', function() {{ dayModal.classList.remove('is-active'); }});
-        dayModal.querySelector('.modal-background').addEventListener('click', function() {{ dayModal.classList.remove('is-active'); }});
-
-        // ========== 2. "Ajouter" button → calendar-picker modal ==========
-        const addModal = document.getElementById('add-modal');
-        let calendarInitialised = false;
-        let needDaysSet = new Set();
-        let addSelectedDay = null;
-
-        document.getElementById('open-add-modal').addEventListener('click', function() {{
-            addModal.classList.add('is-active');
-            if (!calendarInitialised) {{
-                calendarInitialised = true;
-                requestAnimationFrame(function() {{ initCalendar(); }});
-            }} else {{
-                fetchNeedDays();
-            }}
-        }});
-        document.getElementById('close-add-modal').addEventListener('click', function() {{ addModal.classList.remove('is-active'); }});
-        addModal.querySelector('.modal-background').addEventListener('click', function() {{ addModal.classList.remove('is-active'); }});
-
-        function initCalendar() {{
-            const calendars = bulmaCalendar.attach('#calendar-widget', {{
-                displayMode: 'inline',
-                type: 'date',
-                lang: 'fr',
-                dateFormat: 'YYYY-MM-DD',
-                showHeader: false,
-                showFooter: false,
-            }});
-            if (calendars.length > 0) {{
-                calendars[0].on('select', function(e) {{
-                    const dt = e.data.date.start;
-                    if (dt) {{
-                        const y = dt.getFullYear();
-                        const m = String(dt.getMonth() + 1).padStart(2, '0');
-                        const d = String(dt.getDate()).padStart(2, '0');
-                        addSelectedDay = y + '-' + m + '-' + d;
-                        fetchAddDayNeeds();
-                    }}
-                }});
-            }}
-
-            const calContainer = addModal.querySelector('.datetimepicker') || document.querySelector('#calendar-widget').parentElement;
-            if (calContainer) {{
-                const observer = new MutationObserver(function() {{ highlightDates(); }});
-                observer.observe(calContainer, {{ childList: true, subtree: true }});
-            }}
-
-            fetchNeedDays();
-        }}
-
-        function fetchAddDayNeeds() {{
-            document.getElementById('add-no-selection').style.display = 'none';
-            document.getElementById('add-edit-panel').style.display = '';
-            document.getElementById('add-panel-title').textContent = formatDateTitle(addSelectedDay);
-            fetch(prefix + '/api/calendar/needs-by-day?day=' + addSelectedDay)
-                .then(function(r) {{ if (!r.ok) throw new Error(); return r.json(); }})
-                .then(function(needs) {{
-                    var map = {{}};
-                    for (var i = 0; i < needs.length; i++) map[needs[i].atelier] = needs[i];
-                    renderCardsInto(document.getElementById('add-atelier-cards'), addSelectedDay, map);
-                }})
-                .catch(function(err) {{ showNotification('Erreur chargement', 'danger'); }});
-        }}
-
-        function fetchNeedDays() {{
-            fetch(prefix + '/api/calendar/need-days')
-                .then(function(r) {{ if (!r.ok) throw new Error(); return r.json(); }})
-                .then(function(days) {{
-                    needDaysSet = new Set(days);
-                    highlightDates();
-                }})
-                .catch(function(err) {{ console.error('Error fetching need days:', err); }});
-        }}
-
-        function highlightDates() {{
-            addModal.querySelectorAll('.date-item.has-need').forEach(function(el) {{ el.classList.remove('has-need'); }});
-            const monthEl = addModal.querySelector('.datepicker-nav-month');
-            const yearEl = addModal.querySelector('.datepicker-nav-year');
-            if (!monthEl || !yearEl) return;
-            var frMonths = {{'janvier':0,'février':1,'fevrier':1,'mars':2,'avril':3,'mai':4,'juin':5,
-                             'juillet':6,'août':7,'aout':7,'septembre':8,'octobre':9,'novembre':10,'décembre':11,'decembre':11}};
-            const month = frMonths[monthEl.textContent.trim().toLowerCase()];
-            const year = parseInt(yearEl.textContent.trim());
-            if (month === undefined || isNaN(year)) return;
-            addModal.querySelectorAll('.datepicker-body .datepicker-date').forEach(function(dc) {{
-                if (dc.classList.contains('is-disabled') || !dc.classList.contains('is-current-month')) return;
-                const btn = dc.querySelector('.date-item');
-                if (!btn) return;
-                const dayNum = parseInt(btn.textContent);
-                if (!dayNum || isNaN(dayNum)) return;
-                const dateKey = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
-                if (needDaysSet.has(dateKey)) btn.classList.add('has-need');
-            }});
-        }}
-
-        // ========== Section 3: Opening day modal ==========
-        const openingDayModal = document.getElementById('opening-day-modal');
-        const openingDayBtn = document.getElementById('open-add-opening-day-modal');
-        const openingDayConfirm = document.getElementById('opening-day-confirm');
-        const openingDayConfirmText = document.getElementById('opening-day-confirm-text');
-        const openingDaySubmit = document.getElementById('opening-day-submit');
-        const closeOpeningDayModal = document.getElementById('close-opening-day-modal');
-        let openingCalendarInit = false;
-        let openingSelectedDay = null;
-
-        if (openingDayBtn) {{
-            openingDayBtn.addEventListener('click', function() {{
-                openingDayModal.classList.add('is-active');
-                openingSelectedDay = null;
-                if (openingDayConfirm) openingDayConfirm.style.display = 'none';
-                if (!openingCalendarInit) {{
-                    openingCalendarInit = true;
-                    requestAnimationFrame(function() {{ initOpeningCalendar(); }});
-                }}
-            }});
-        }}
-
-        function initOpeningCalendar() {{
-            const cals = bulmaCalendar.attach('#opening-day-picker', {{
-                displayMode: 'inline',
-                type: 'date',
-                lang: 'fr',
-                dateFormat: 'YYYY-MM-DD',
-                showHeader: false,
-                showFooter: false,
-            }});
-            if (cals.length > 0) {{
-                cals[0].on('select', function(e) {{
-                    const dt = e.data.date.start;
-                    if (dt) {{
-                        const y = dt.getFullYear();
-                        const m = String(dt.getMonth() + 1).padStart(2, '0');
-                        const d = String(dt.getDate()).padStart(2, '0');
-                        openingSelectedDay = y + '-' + m + '-' + d;
-                        openingDayConfirmText.textContent = 'Jour d\'ouverture le ' + formatDateTitle(openingSelectedDay) + ' ?';
-                        openingDayConfirm.style.display = 'block';
-                    }}
-                }});
-            }}
-        }}
-
-        if (openingDaySubmit) {{
-            openingDaySubmit.addEventListener('click', function() {{
-                if (!openingSelectedDay) return;
-                openingDaySubmit.classList.add('is-loading');
-                fetch(prefix + '/api/calendar/opening-day', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify({{day: openingSelectedDay}})
-                }}).then(function(resp) {{
-                    if (!resp.ok) return resp.json().then(function(d) {{ throw new Error(d.error || 'Erreur'); }});
-                    return resp.json();
-                }}).then(function(data) {{
-                    showNotification('Jour d\'ouverture le ' + formatDateTitle(openingSelectedDay) + ' (' + data.needs_created + ' besoins)', 'success');
-                    setTimeout(function() {{ location.reload(); }}, 800);
-                }}).catch(function(err) {{
-                    showNotification(err.message, 'danger');
-                    openingDaySubmit.classList.remove('is-loading');
-                }});
-            }});
-        }}
-
-        if (closeOpeningDayModal) {{
-            closeOpeningDayModal.addEventListener('click', function() {{
-                openingDayModal.classList.remove('is-active');
-            }});
-        }}
-        if (openingDayModal) {{
-            openingDayModal.querySelector('.modal-background').addEventListener('click', function() {{
-                openingDayModal.classList.remove('is-active');
-            }});
-        }}
-
-        // ========== Section 4: Go / NoGo modal ==========
-        const gonogoModal = document.getElementById('gonogo-modal');
-        const gonogoTitle = document.getElementById('gonogo-title');
-        const closeGonogoModal = document.getElementById('close-gonogo-modal');
-        const gonogoCancel = document.getElementById('gonogo-cancel');
-        const gonogoGo = document.getElementById('gonogo-go');
-        const gonogoNogo = document.getElementById('gonogo-nogo');
-        let gonogoDay = '';
-
-        document.querySelectorAll('.opening-tag').forEach(function(tag) {{
-            tag.addEventListener('click', function() {{
-                gonogoDay = tag.dataset.day;
-                gonogoTitle.textContent = formatDateTitle(gonogoDay);
-                gonogoModal.classList.add('is-active');
-            }});
-        }});
-
-        function closeGonogo() {{
-            gonogoModal.classList.remove('is-active');
-            gonogoDay = '';
-        }}
-
-        if (closeGonogoModal) closeGonogoModal.addEventListener('click', closeGonogo);
-        if (gonogoCancel) gonogoCancel.addEventListener('click', closeGonogo);
-        if (gonogoModal) {{
-            gonogoModal.querySelector('.modal-background').addEventListener('click', closeGonogo);
-        }}
-
-        function sendGonogoStatus(status) {{
-            if (!gonogoDay) return;
-            const btn = status === 'validated' ? gonogoGo : gonogoNogo;
-            btn.classList.add('is-loading');
-            fetch(prefix + '/api/calendar/opening-day/status', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{day: gonogoDay, status: status}})
-            }}).then(function(resp) {{
-                if (!resp.ok) return resp.json().then(function(d) {{ throw new Error(d.error || 'Erreur'); }});
-                return resp.json();
-            }}).then(function() {{
-                const label = status === 'validated' ? 'Confirmé' : 'Annulé';
-                showNotification(label + ' : ' + formatDateTitle(gonogoDay), status === 'validated' ? 'success' : 'warning');
-                setTimeout(function() {{ location.reload(); }}, 800);
-            }}).catch(function(err) {{
-                showNotification(err.message, 'danger');
-                btn.classList.remove('is-loading');
-            }});
-        }}
-
-        if (gonogoGo) gonogoGo.addEventListener('click', function() {{ sendGonogoStatus('validated'); }});
-        if (gonogoNogo) gonogoNogo.addEventListener('click', function() {{ sendGonogoStatus('canceled'); }});
-
-    }})();
-    </script>"#,
-            p = p,
-            ateliers_json = ateliers_json,
-            editable_json = editable_json,
-        )))
     };
 
     page(
@@ -4259,8 +3293,6 @@ pub fn calendar_editor(
 }
 
 pub fn login_page(prefix: &str) -> Markup {
-    let p = prefix;
-
     let content = html! {
         section .section {
             div .container {
@@ -4282,21 +3314,21 @@ pub fn login_page(prefix: &str) -> Markup {
                                     }
                                     p .help { "Entrez votre prénom ou nom de famille" }
                                 }
-                                nav .panel #results-panel style="display:none" {}
-                                div #confirm-box style="display:none" .notification.is-info.is-light.mt-4 {
+                                nav .panel.d-none #results-panel {}
+                                div #confirm-box .d-none.notification.is-info.is-light.mt-4 {
                                     p #confirm-text {}
                                     button .button.is-primary.mt-3 #send-btn {
                                         span .icon { i .fa-solid.fa-envelope {} }
                                         span { "Envoyer le lien de connexion" }
                                     }
                                 }
-                                div #success-box style="display:none" .notification.is-success.is-light.mt-4 {
+                                div #success-box .d-none.notification.is-success.is-light.mt-4 {
                                     p {
                                         span .icon { i .fa-solid.fa-check {} }
                                         " Un email de connexion a été envoyé. Vérifiez votre boîte de réception."
                                     }
                                 }
-                                div #error-box style="display:none" .notification.is-danger.is-light.mt-4 {
+                                div #error-box .d-none.notification.is-danger.is-light.mt-4 {
                                     p #error-text {}
                                 }
                             }
@@ -4307,93 +3339,7 @@ pub fn login_page(prefix: &str) -> Markup {
         }
     };
 
-    let extra_scripts = html! {
-        (PreEscaped(format!(
-            "<script>\
-            (function(){{\
-                var prefix='{p}';\
-                var input=document.getElementById('search-input');\
-                var panel=document.getElementById('results-panel');\
-                var confirmBox=document.getElementById('confirm-box');\
-                var confirmText=document.getElementById('confirm-text');\
-                var sendBtn=document.getElementById('send-btn');\
-                var successBox=document.getElementById('success-box');\
-                var errorBox=document.getElementById('error-box');\
-                var errorText=document.getElementById('error-text');\
-                var debounceTimer=null;\
-                var selectedStaff=null;\
-                input.addEventListener('input',function(){{\
-                    clearTimeout(debounceTimer);\
-                    confirmBox.style.display='none';\
-                    successBox.style.display='none';\
-                    errorBox.style.display='none';\
-                    selectedStaff=null;\
-                    var q=input.value.trim();\
-                    if(q.length<4){{panel.style.display='none';panel.innerHTML='';return;}}\
-                    debounceTimer=setTimeout(function(){{\
-                        fetch(prefix+'/api/staff/search?q='+encodeURIComponent(q))\
-                            .then(function(r){{return r.json();}})\
-                            .then(function(data){{\
-                                panel.innerHTML='';\
-                                if(data.length===0){{\
-                                    panel.innerHTML='<p class=\"panel-block\">Aucun résultat</p>';\
-                                }}else{{\
-                                    data.forEach(function(s){{\
-                                        var a=document.createElement('a');\
-                                        a.className='panel-block';\
-                                        a.textContent=s.first_name+' '+s.last_name;\
-                                        a.href='#';\
-                                        a.addEventListener('click',function(e){{\
-                                            e.preventDefault();\
-                                            selectedStaff=s;\
-                                            confirmText.textContent='Envoyer un email de connexion à '+s.first_name+' '+s.last_name+' ?';\
-                                            confirmBox.style.display='block';\
-                                            successBox.style.display='none';\
-                                            errorBox.style.display='none';\
-                                        }});\
-                                        panel.appendChild(a);\
-                                    }});\
-                                }}\
-                                panel.style.display='block';\
-                            }})\
-                            .catch(function(){{\
-                                panel.innerHTML='<p class=\"panel-block\">Erreur de recherche</p>';\
-                                panel.style.display='block';\
-                            }});\
-                    }},300);\
-                }});\
-                sendBtn.addEventListener('click',function(){{\
-                    if(!selectedStaff)return;\
-                    sendBtn.classList.add('is-loading');\
-                    errorBox.style.display='none';\
-                    fetch(prefix+'/api/login/send',{{\
-                        method:'POST',\
-                        headers:{{'Content-Type':'application/json'}},\
-                        body:JSON.stringify({{staff_id:selectedStaff.id}})\
-                    }})\
-                    .then(function(r){{return r.json();}})\
-                    .then(function(data){{\
-                        sendBtn.classList.remove('is-loading');\
-                        if(data.success){{\
-                            confirmBox.style.display='none';\
-                            panel.style.display='none';\
-                            successBox.style.display='block';\
-                            input.value='';\
-                        }}else{{\
-                            errorText.textContent=data.error||'Erreur inconnue';\
-                            errorBox.style.display='block';\
-                        }}\
-                    }})\
-                    .catch(function(){{\
-                        sendBtn.classList.remove('is-loading');\
-                        errorText.textContent='Erreur réseau';\
-                        errorBox.style.display='block';\
-                    }});\
-                }});\
-            }})();\
-            </script>"
-        )))
-    };
+    let extra_scripts = html! {};
 
     page(
         "Connexion - AGHIL",
@@ -4440,7 +3386,7 @@ pub fn audit_page(
                             @for e in entries {
                                 @let ts = e.created_at.with_timezone(&chrono::Local).format("%d/%m/%Y %H:%M").to_string();
                                 tr {
-                                    td .is-size-7 style="white-space:nowrap" { (ts) }
+                                    td .is-size-7.is-nowrap { (ts) }
                                     td { (e.staff_name) }
                                     td { (e.operation) }
                                     td .is-size-7 { (e.detail) }
@@ -4542,38 +3488,7 @@ pub fn validation_page(pending: &[(Staff, Atelier)], prefix: &str) -> Markup {
         }
     };
 
-    let script = html! {
-        (PreEscaped(format!(r#"<script>
-async function doValidate(staffId, atelierId, accept) {{
-    const row = document.getElementById('row-' + staffId + '-' + atelierId);
-    if (!row) return;
-    try {{
-        if (accept) {{
-            const r = await fetch('{prefix}/api/person/' + staffId + '/role', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ atelier_id: atelierId, validated: true }})
-            }});
-            if (!r.ok) throw new Error('Erreur validation');
-        }} else {{
-            const r = await fetch('{prefix}/api/person/' + staffId + '/role', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ atelier_id: atelierId, add: false }})
-            }});
-            if (!r.ok) throw new Error('Erreur suppression');
-        }}
-        row.remove();
-        const tbody = document.querySelector('tbody');
-        if (tbody && tbody.children.length === 0) {{
-            tbody.innerHTML = '<tr><td colspan="3" class="has-text-centered has-text-grey-light py-5">Aucune demande en attente de validation</td></tr>';
-        }}
-    }} catch (e) {{
-        alert(e.message || 'Erreur');
-    }}
-}}
-</script>"#)))
-    };
+    let script = html! {};
 
     page(
         "Validations - AGHIL",
@@ -4614,14 +3529,13 @@ pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) 
                                         autocomplete="off";
                                     span .icon.is-left { i .fa-solid.fa-user {} }
                                 }
-                                nav .panel #photographer-results
-                                    style="display:none;max-height:200px;overflow-y:auto;margin-top:0" {}
-                                p .help #photographer-selected style="display:none" {
+                                nav .panel.search-dropdown #photographer-results {}
+                                p .help.d-none #photographer-selected {
                                     span .tag.is-success.is-medium #photographer-selected-tag {}
-                                    a #photographer-clear .ml-2 style="cursor:pointer" { "Changer" }
+                                    a #photographer-clear .ml-2.is-clickable { "Changer" }
                                 }
                             }
-                            div #create-staff-box style="display:none" .notification.is-light.mt-2.mb-4 {
+                            div #create-staff-box .d-none.notification.is-light.mt-2.mb-4 {
                                 p .mb-2 { strong { "Créer un nouveau bénévole" } }
                                 div .field.is-horizontal {
                                     div .field-body {
@@ -4658,7 +3572,7 @@ pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) 
                                         }
                                     }
                                 }
-                                p .help.is-danger #create-staff-error style="display:none" {}
+                                p .help.is-danger.d-none #create-staff-error {}
                             }
                             div .field {
                                 label .label { "Photo" }
@@ -4709,8 +3623,7 @@ pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) 
                                     figure .image.is-4by3 {
                                         a href=(photo_url) target="_blank" {
                                             @if photo.mime_type.starts_with("image/") {
-                                                img src=(photo_url) alt=(format!("Photo par {photographer_name}"))
-                                                    style="object-fit:cover;width:100%;height:100%";
+                                                img .image-cover src=(photo_url) alt=(format!("Photo par {photographer_name}"));
                                             } @else {
                                                 span .icon.is-large.has-text-link {
                                                     i class={"fa-solid " (icon) " fa-4x"} {}
@@ -4728,11 +3641,10 @@ pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) 
                                 }
                                 @if is_admin {
                                     footer .card-footer {
-                                        form action=(format!("{}/photos/{}/delete", prefix, photo.id))
-                                            method="post" style="width:100%"
+                                        form .is-fullwidth action=(format!("{}/photos/{}/delete", prefix, photo.id))
+                                            method="post"
                                             onsubmit="return confirm('Supprimer cette photo ?')" {
-                                            button type="submit" .card-footer-item.has-text-danger
-                                                style="border:none;background:none;cursor:pointer;width:100%" {
+                                            button type="submit" .card-footer-item.has-text-danger.button-unstyled {
                                                 span .icon { i .fa-solid.fa-trash {} }
                                                 span { "Supprimer" }
                                             }
@@ -4747,168 +3659,7 @@ pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) 
         }
     };
 
-    let script = html! {
-        (PreEscaped(format!(r#"<script>
-    document.querySelectorAll('input[type="file"]').forEach(input => {{
-        input.addEventListener('change', function(e) {{
-            const fileName = e.target.files[0] ? e.target.files[0].name : 'Aucun fichier sélectionné';
-            const fileNameSpan = e.target.closest('.file').querySelector('.file-name');
-            if (fileNameSpan) fileNameSpan.textContent = fileName;
-        }});
-    }});
-
-    (function() {{
-        const prefix = '{prefix}';
-        const searchInput = document.getElementById('photographer-search');
-        if (!searchInput) return;
-
-        const resultsPanel = document.getElementById('photographer-results');
-        const hiddenInput = document.getElementById('photographer_id');
-        const selectedBox = document.getElementById('photographer-selected');
-        const selectedTag = document.getElementById('photographer-selected-tag');
-        const clearBtn = document.getElementById('photographer-clear');
-        const createBox = document.getElementById('create-staff-box');
-        const createBtn = document.getElementById('create-staff-btn');
-        const createError = document.getElementById('create-staff-error');
-        const uploadBtn = document.getElementById('upload-btn');
-        let debounceTimer = null;
-
-        function selectStaff(id, name) {{
-            hiddenInput.value = id;
-            selectedTag.textContent = name;
-            selectedBox.style.display = 'block';
-            searchInput.style.display = 'none';
-            resultsPanel.style.display = 'none';
-            createBox.style.display = 'none';
-            uploadBtn.disabled = false;
-        }}
-
-        if (clearBtn) clearBtn.addEventListener('click', function() {{
-            hiddenInput.value = '';
-            selectedBox.style.display = 'none';
-            searchInput.style.display = '';
-            searchInput.value = '';
-            searchInput.focus();
-            uploadBtn.disabled = true;
-        }});
-
-        searchInput.addEventListener('input', function() {{
-            clearTimeout(debounceTimer);
-            resultsPanel.style.display = 'none';
-            resultsPanel.innerHTML = '';
-            createBox.style.display = 'none';
-            const q = searchInput.value.trim();
-            if (q.length < 4) return;
-
-            debounceTimer = setTimeout(function() {{
-                fetch(prefix + '/api/staff/search?q=' + encodeURIComponent(q))
-                    .then(r => r.json())
-                    .then(data => {{
-                        resultsPanel.innerHTML = '';
-                        if (data.length === 0) {{
-                            resultsPanel.innerHTML = '<p class="panel-block">Aucun résultat</p>';
-                        }} else {{
-                            data.forEach(function(s) {{
-                                const a = document.createElement('a');
-                                a.className = 'panel-block';
-                                a.textContent = s.first_name + ' ' + s.last_name;
-                                a.href = '#';
-                                a.addEventListener('click', function(e) {{
-                                    e.preventDefault();
-                                    selectStaff(s.id, s.first_name + ' ' + s.last_name);
-                                }});
-                                resultsPanel.appendChild(a);
-                            }});
-                        }}
-                        const createLink = document.createElement('a');
-                        createLink.className = 'panel-block has-text-info';
-                        createLink.href = '#';
-                        createLink.innerHTML = '<span class="icon"><i class="fa-solid fa-plus"></i></span> Créer un nouveau bénévole';
-                        createLink.addEventListener('click', function(e) {{
-                            e.preventDefault();
-                            createBox.style.display = 'block';
-                            createError.style.display = 'none';
-                        }});
-                        resultsPanel.appendChild(createLink);
-                        resultsPanel.style.display = 'block';
-                    }})
-                    .catch(function() {{
-                        resultsPanel.innerHTML = '<p class="panel-block">Erreur de recherche</p>';
-                        resultsPanel.style.display = 'block';
-                    }});
-            }}, 300);
-        }});
-
-        if (createBtn) createBtn.addEventListener('click', function() {{
-            const first = document.getElementById('new-staff-first').value.trim();
-            const last = document.getElementById('new-staff-last').value.trim();
-            const email = document.getElementById('new-staff-email').value.trim();
-            const phone = document.getElementById('new-staff-phone').value.trim();
-            if (!first || !last) {{
-                createError.textContent = 'Prénom et nom requis';
-                createError.style.display = 'block';
-                return;
-            }}
-            createBtn.disabled = true;
-            createError.style.display = 'none';
-            fetch(prefix + '/api/staff/create-minimal', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{first_name: first, last_name: last, email: email || undefined, phone: phone || undefined}})
-            }})
-            .then(r => {{
-                if (r.status === 409) return r.json().then(d => {{ throw new Error(d.error); }});
-                if (!r.ok) return r.json().then(d => {{ throw new Error(d.error || 'Erreur serveur'); }});
-                return r.json();
-            }})
-            .then(s => {{
-                selectStaff(s.id, s.first_name + ' ' + s.last_name);
-                createBtn.disabled = false;
-            }})
-            .catch(function(err) {{
-                createError.textContent = err.message;
-                createError.style.display = 'block';
-                createBtn.disabled = false;
-            }});
-        }});
-
-        const form = document.getElementById('photo-upload-form');
-        if (form) form.addEventListener('submit', function(e) {{
-            e.preventDefault();
-            if (!hiddenInput.value) {{
-                alert('Veuillez sélectionner un photographe');
-                return;
-            }}
-            const fileInput = form.querySelector('input[type="file"]');
-            if (!fileInput.files.length) {{
-                alert('Veuillez sélectionner une photo');
-                return;
-            }}
-            uploadBtn.disabled = true;
-            uploadBtn.querySelector('span:last-child').textContent = 'Envoi en cours...';
-            const formData = new FormData(form);
-            fetch(form.action, {{
-                method: 'POST',
-                body: formData,
-                credentials: 'same-origin'
-            }}).then(function(r) {{
-                if (r.redirected) {{
-                    window.location.href = r.url;
-                    return;
-                }}
-                if (!r.ok) {{
-                    return r.text().then(function(t) {{ throw new Error('Erreur ' + r.status + ': ' + t.substring(0, 200)); }});
-                }}
-                window.location.href = prefix + '/photos';
-            }}).catch(function(err) {{
-                alert('Échec upload: ' + err.message);
-                uploadBtn.disabled = false;
-                uploadBtn.querySelector('span:last-child').textContent = 'Télécharger';
-            }});
-        }});
-    }})();
-    </script>"#)))
-    };
+    let script = html! {};
 
     page(
         "Photos - AGHIL",
@@ -5004,7 +3755,7 @@ pub fn static_page(prefix: &str, title: &str, markdown: &str) -> Markup {
 
     let content = html! {
         section .section {
-            div .container style="max-width:800px" {
+            div .container.container-narrow {
                 nav .breadcrumb aria-label="breadcrumbs" {
                     ul {
                         li { a href={(p) "/"} { "Accueil" } }

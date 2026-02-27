@@ -7,6 +7,7 @@ WORKDIR /app
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY static ./static
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Builder stage - build dependencies (cached) then app
@@ -19,6 +20,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Now copy source and build the application
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY static ./static
 COPY migrations ./migrations
 COPY privacy.md tos.md ./
 RUN cargo build --release

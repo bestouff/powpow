@@ -37,6 +37,9 @@ use helloasso::HelloAssoClient;
 use mailchimp::MailchimpClient;
 use models::User;
 
+const POWPOW_CSS: &str = include_str!("../static/powpow.css");
+const POWPOW_JS: &str = include_str!("../static/powpow.js");
+
 /// Extract the URL prefix from X-Forwarded-Prefix header
 fn get_prefix(headers: &HeaderMap) -> String {
     headers
@@ -212,6 +215,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/photos/upload", post(upload_photo))
         .route("/photos/{id}", get(display_photo))
         .route("/photos/{id}/delete", post(delete_photo))
+        .route("/static/powpow.css", get(serve_css))
+        .route("/static/powpow.js", get(serve_js))
         .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
@@ -4381,6 +4386,25 @@ async fn delete_photo(
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
+}
+
+async fn serve_css() -> impl IntoResponse {
+    Response::builder()
+        .header(header::CONTENT_TYPE, "text/css; charset=utf-8")
+        .header(header::CACHE_CONTROL, "public, max-age=3600")
+        .body(Body::from(POWPOW_CSS))
+        .unwrap()
+}
+
+async fn serve_js() -> impl IntoResponse {
+    Response::builder()
+        .header(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )
+        .header(header::CACHE_CONTROL, "public, max-age=3600")
+        .body(Body::from(POWPOW_JS))
+        .unwrap()
 }
 
 #[cfg(test)]

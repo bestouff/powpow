@@ -1,0 +1,384 @@
+/* PowPow — extracted styles */
+
+/* === Navbar badges (from page()) === */
+.navbar-item { position: relative; }
+.nav-badge {
+  background: var(--bulma-danger);
+  color: var(--bulma-scheme-main);
+  border-radius: 999px;
+  min-width: 18px;
+  height: 18px;
+  font-size: 0.65rem;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  position: absolute;
+  top: 6px;
+  right: -2px;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--bulma-navbar-background-color, #363636);
+}
+.button .nav-badge {
+  position: static;
+  margin-left: 6px;
+  box-shadow: none;
+}
+
+/* === Week-day (from index()) === */
+.week-day {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--bulma-border-weak);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* === Stat cards (from membership_list_with_filters()) === */
+.stat-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.stat-card.is-active {
+  border: 3px solid var(--bulma-link);
+}
+.stat-number {
+  font-size: 2.5rem;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* === Staff list table (from staff_list()) === */
+.staff-table-container { overflow: auto; max-height: calc(100vh - 300px); }
+.atelier-col {
+  border-left: 1px solid var(--bulma-border) !important;
+  border-right: 1px solid var(--bulma-border) !important;
+}
+.staff-table thead th {
+  vertical-align: bottom !important;
+  position: sticky;
+  top: 0;
+  background: var(--bulma-scheme-main) !important;
+  z-index: 10;
+}
+th.atelier-col {
+  background: var(--bulma-scheme-main) !important;
+  padding: 8px 4px !important;
+  min-width: 30px;
+  max-width: 30px;
+}
+th.atelier-col .vertical-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 0.85em;
+  line-height: 1.2;
+}
+tr.inactive-staff { opacity: 0.4; }
+@media screen and (min-width: 769px) {
+  .staff-table .table td, .staff-table .table th { white-space: nowrap; }
+}
+
+/* === Personal calendar (from person_detail()) === */
+.atelier-checkbox { width: 1.25rem; height: 1.25rem; }
+.checkbox:hover {
+  background-color: var(--bulma-background);
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin: -0.5rem;
+}
+
+/* === Shared notification toast === */
+.notification.is-loading {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  min-width: 300px;
+}
+
+/* === Personal calendar table === */
+.pcal-scroll { overflow-x: auto; }
+.pcal-table { border-collapse: collapse; white-space: nowrap; }
+.pcal-table th, .pcal-table td {
+  border: 1px solid var(--bulma-border);
+  padding: 0.3rem 0.4rem;
+  vertical-align: middle;
+}
+.pcal-table thead th { background: var(--bulma-scheme-main-bis) !important; }
+.pcal-atelier-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 140px;
+  background: var(--bulma-scheme-main);
+}
+.pcal-table thead th.pcal-atelier-col {
+  z-index: 3;
+  background: var(--bulma-scheme-main-bis) !important;
+}
+.pcal-sunday { background: var(--bulma-link-light) !important; }
+.pcal-cell.pcal-active {
+  background: var(--bulma-success) !important;
+  color: var(--bulma-success-invert);
+}
+.pcal-day-col { min-width: 70px; }
+.pcal-day-name { font-size: 0.75rem; }
+.pcal-day-date { font-size: 0.85rem; font-weight: 600; }
+.pcal-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin: 0 2px;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+.pcal-check input { width: 1rem; height: 1rem; margin: 0; }
+.pcal-cell { white-space: nowrap; }
+
+/* === Calendar view (from calendar()) === */
+.cal-scroll { overflow-x: auto; max-height: 85vh; }
+.cal-table { border-collapse: collapse; white-space: nowrap; }
+.cal-table th, .cal-table td {
+  border: 1px solid var(--bulma-border);
+  padding: 0.3rem 0.4rem;
+  vertical-align: middle;
+}
+.cal-table thead { position: sticky; top: 0; z-index: 4; }
+.cal-table thead th { background: var(--bulma-scheme-main-bis) !important; }
+.cal-name-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 150px;
+}
+.cal-table thead th.cal-name-col {
+  z-index: 5;
+  background: var(--bulma-scheme-main-bis) !important;
+}
+.cal-table tbody tr:nth-child(odd) td { background: var(--bulma-scheme-main); }
+.cal-table tbody tr:nth-child(even) td { background: var(--bulma-background); }
+.cal-table tbody tr:nth-child(odd) td.cal-name-col { background: var(--bulma-scheme-main); }
+.cal-table tbody tr:nth-child(even) td.cal-name-col { background: var(--bulma-background); }
+.cal-sunday { background: var(--bulma-link-light) !important; }
+.cal-complete { background: var(--bulma-success-light) !important; }
+.cal-danger { background: var(--bulma-danger-light) !important; }
+.cal-cell.cal-active {
+  background: var(--bulma-success) !important;
+  color: var(--bulma-success-invert);
+}
+.cal-day-col { min-width: 70px; }
+.cal-day-name { font-size: 0.75rem; }
+.cal-day-date { font-size: 0.85rem; font-weight: 600; }
+.cal-day-count { font-size: 0.7rem; font-weight: bold; }
+.cal-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin: 0 2px;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+.cal-check input { width: 1rem; height: 1rem; margin: 0; }
+.cal-cell { white-space: nowrap; }
+.cal-me td.cal-name-col {
+  background: var(--bulma-warning) !important;
+  font-weight: 600;
+}
+.atelier-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+.atelier-nav a {
+  padding: 0.4rem 0.75rem;
+  border-radius: 4px;
+  background: var(--bulma-background);
+  color: var(--bulma-text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.atelier-nav a.is-active {
+  background: var(--bulma-link);
+  color: var(--bulma-link-invert);
+  font-weight: 600;
+}
+.atelier-nav a:hover:not(.is-active) { background: var(--bulma-scheme-main-ter); }
+.cal-opening-row td { background: var(--bulma-scheme-main-bis) !important; }
+
+/* === Calendar editor (from calendar_editor()) === */
+.calendar-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.2rem;
+}
+.cal-table .day-start { border-left: 2.5px solid var(--bulma-grey-light) !important; }
+.cal-table td.day-cell { cursor: pointer; }
+.cal-table td.day-cell:hover { background: var(--bulma-link-light) !important; }
+.cal-table td.cell-ok {
+  color: var(--bulma-success-dark);
+  font-weight: 600;
+  background: var(--bulma-success-light) !important;
+}
+.cal-table td.cell-deficit {
+  color: var(--bulma-danger-dark);
+  font-weight: 600;
+  background: var(--bulma-danger-light) !important;
+}
+.notification.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  min-width: 300px;
+}
+.atelier-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.atelier-card {
+  border: 1px solid var(--bulma-border);
+  border-radius: 6px;
+  padding: 1rem;
+  min-width: 220px;
+  flex: 1 1 220px;
+  max-width: 320px;
+  background: var(--bulma-scheme-main);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.atelier-card.has-need {
+  border-color: var(--bulma-link);
+  box-shadow: 0 0 0 1px var(--bulma-link);
+}
+.atelier-card .card-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.6rem;
+}
+.atelier-card .field { margin-bottom: 0.5rem; }
+.atelier-card .card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+.nightly-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+}
+.nightly-switch .side-label {
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--bulma-grey);
+}
+.nightly-switch .side-label.is-active {
+  color: var(--bulma-text);
+  font-weight: 600;
+}
+label.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+label.switch input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+label.switch .check {
+  position: relative;
+  display: inline-block;
+  width: 2.75em;
+  height: 1.5em;
+  background: var(--bulma-warning);
+  border-radius: 1em;
+  transition: background 0.3s;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+label.switch .check::before {
+  content: "";
+  position: absolute;
+  top: 0.15em;
+  left: 0.15em;
+  width: 1.15em;
+  height: 1.15em;
+  background: var(--bulma-scheme-main);
+  border-radius: 50%;
+  transition: transform 0.3s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+label.switch input[type="checkbox"]:checked + .check { background: var(--bulma-link); }
+label.switch input[type="checkbox"]:checked + .check::before { transform: translateX(1.25em); }
+label.switch input[type="checkbox"]:disabled + .check { opacity: 0.5; cursor: not-allowed; }
+
+/* Datepicker overrides */
+.datetimepicker .datepicker-body .datepicker-dates .datepicker-days .datepicker-date .date-item.has-need {
+  background-color: var(--bulma-link) !important;
+  color: var(--bulma-link-invert) !important;
+  font-weight: bold;
+  border-color: var(--bulma-link) !important;
+}
+.datetimepicker .datepicker-body .datepicker-dates .datepicker-days .datepicker-date .date-item.has-need:hover {
+  background-color: var(--bulma-link-dark) !important;
+  border-color: var(--bulma-link-dark) !important;
+  color: var(--bulma-link-invert) !important;
+}
+.datetimepicker .datepicker-body .datepicker-dates .datepicker-days .datepicker-date .date-item.has-need.is-active {
+  background-color: var(--bulma-link-active) !important;
+  border-color: var(--bulma-link-active) !important;
+}
+#add-modal .datetimepicker { position: relative; z-index: 1; }
+#add-modal .modal-card-body { overflow: visible; }
+#opening-day-modal .datetimepicker { position: relative; z-index: 1; }
+#opening-day-modal .modal-card-body { overflow: visible; }
+.editor-columns {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.editor-left { flex: 0 0 auto; }
+.editor-right { flex: 1 1 400px; min-width: 300px; }
+.opening-tag { cursor: pointer; }
+.opening-tag:hover { filter: brightness(0.9); }
+
+/* === Utility classes (replacing inline styles) === */
+.d-none { display: none; }
+.modal-card-wide { max-width: 900px; width: 95vw; }
+.modal-card-medium { max-width: 500px; width: 90vw; }
+.modal-card-small { max-width: 400px; }
+.is-clickable { cursor: pointer; }
+.box-link { display: block; text-decoration: none; color: inherit; }
+.box-alt-bg { background-color: var(--bulma-scheme-main-bis); }
+.box-danger-accent { border-left: 4px solid var(--bulma-danger); }
+.is-unstyled { list-style: none; }
+.cal-label { line-height: 2rem; }
+.is-nowrap { white-space: nowrap; }
+.search-dropdown { display: none; max-height: 200px; overflow-y: auto; margin-top: 0; }
+.image-cover { object-fit: cover; width: 100%; height: 100%; }
+.is-fullwidth { width: 100%; }
+.button-unstyled { border: none; background: none; cursor: pointer; width: 100%; }
+.container-narrow { max-width: 800px; }
+.user-avatar { width: 120px; height: 120px; margin: 0 auto; }
+
+/* === Candidate card with CSS custom properties === */
+.candidate-card {
+  border: 2px solid var(--card-border, var(--bulma-border));
+  background-color: var(--card-bg, transparent);
+}
