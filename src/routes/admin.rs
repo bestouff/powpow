@@ -20,9 +20,17 @@ use crate::{
 pub async fn admin_page_handler(
     RequireChief(staff): RequireChief,
     headers: HeaderMap,
+    State(state): State<AppState>,
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-    templates::admin_page(&prefix, staff.is_admin, staff.is_god)
+    let equipments = if staff.is_admin || staff.is_god {
+        database::get_all_equipments(&state.db)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    templates::admin_page(&prefix, staff.is_admin, staff.is_god, &equipments)
 }
 
 #[derive(Debug, Deserialize)]
@@ -475,5 +483,33 @@ fn csv_escape(field: &str) -> String {
         format!("\"{}\"", field.replace('"', "\"\""))
     } else {
         field.to_string()
+    }
+}
+
+// ── Equipment API ────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct SetEquipmentRequest {
+    in_service: bool,
+}
+
+pub async fn api_set_equipment(
+    RequireAdmin(_admin): RequireAdmin,
+    State(state): State<AppState>,
+    axum::extract::Path(equipment_id): axum::extract::Path<uuid::Uuid>,
+    Json(payload): Json<SetEquipmentRequest>,
+) -> impl IntoResponse {
+    match database::set_equipment_in_service(&state.db, equipment_id, payload.in_service).await {
+        Ok(new_value) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"in_service": new_value})),
+        ),
+        Err(e) => {
+            error!("Failed to update equipment: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
     }
 }

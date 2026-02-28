@@ -451,6 +451,44 @@ pub struct HelloAssoPagination {
     pub continuation_token: Option<String>,
 }
 
+// Equipment type enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "equipment_type", rename_all = "kebab-case")]
+pub enum EquipmentType {
+    SkiSlope,
+    SkiTow,
+}
+
+impl std::fmt::Display for EquipmentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SkiSlope => write!(f, "ski-slope"),
+            Self::SkiTow => write!(f, "ski-tow"),
+        }
+    }
+}
+
+// Equipment model
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_field_names)]
+pub struct Equipment {
+    pub id: uuid::Uuid,
+    pub name: String,
+    pub equipment_type: EquipmentType,
+    pub in_service: bool,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for Equipment {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(Equipment {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            equipment_type: row.try_get("equipment_type")?,
+            in_service: row.try_get("in_service")?,
+        })
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HelloAssoErrorResponse {

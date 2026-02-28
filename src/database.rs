@@ -1,6 +1,6 @@
 use crate::models::{
-    self, Atelier, Cash, Membership, Need, PaymentHistoryEntry, Photo, PhotoMeta, Role, Staff,
-    StaffMatchType, StaffWithSeason, User,
+    self, Atelier, Cash, Equipment, Membership, Need, PaymentHistoryEntry, Photo, PhotoMeta, Role,
+    Staff, StaffMatchType, StaffWithSeason, User,
 };
 use anyhow::Result;
 use chrono::Datelike;
@@ -2645,4 +2645,34 @@ pub async fn create_staff_minimal(
     .fetch_one(pool).await?;
 
     Ok(staff)
+}
+
+// ── Equipment functions ──────────────────────────────────────────────
+
+/// List all equipments, ordered by type then name.
+pub async fn get_all_equipments(pool: &PgPool) -> Result<Vec<Equipment>> {
+    let rows = sqlx::query_as::<_, Equipment>(
+        "SELECT id, name, equipment_type, in_service FROM equipments ORDER BY equipment_type, name",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// Set the `in_service` flag for a single equipment, returning the new value.
+pub async fn set_equipment_in_service(
+    pool: &PgPool,
+    equipment_id: uuid::Uuid,
+    in_service: bool,
+) -> Result<bool> {
+    let row =
+        sqlx::query("UPDATE equipments SET in_service = $1 WHERE id = $2 RETURNING in_service")
+            .bind(in_service)
+            .bind(equipment_id)
+            .fetch_optional(pool)
+            .await?;
+    match row {
+        Some(r) => Ok(r.try_get("in_service")?),
+        None => Err(anyhow::anyhow!("Equipment not found")),
+    }
 }

@@ -78,7 +78,29 @@ function initLoginCheck(prefix) {
             lo.href = prefix + '/logout'; lo.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i>';
             b.parentNode.insertBefore(lo, b.nextSibling);
         }
-        if (d.is_admin || d.is_chief) { document.querySelectorAll('.navbar-admin').forEach(function(el) { el.style.display = ''; }); }
+        if (d.is_admin || d.is_chief) { document.querySelectorAll('.navbar-admin').forEach(function(el) { el.style.display = '';     });
+}
+
+// --- Block: Equipment toggle ---
+function toggleEquipment(el) {
+    var id = el.dataset.id;
+    var prefix = el.dataset.prefix;
+    var inService = el.checked;
+    fetch(prefix + '/api/equipment/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ in_service: inService })
+    }).then(function(r) {
+        if (!r.ok) throw new Error('Erreur ' + r.status);
+        return r.json();
+    }).then(function(d) {
+        el.checked = d.in_service;
+    }).catch(function(err) {
+        // Revert on error
+        el.checked = !inService;
+        alert('Erreur: ' + err.message);
+    });
+}
     }).catch(function() {});
 }
 

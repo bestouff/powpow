@@ -10,7 +10,7 @@ use axum::{
     Json, Router,
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use axum_extra::extract::cookie::{Key, SignedCookieJar};
 use chrono::Datelike;
@@ -396,6 +396,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/stats", get(routes::admin::api_get_stats))
         .route("/api/debug/order", get(routes::admin::debug_first_order))
         .route("/api/badge-counts", get(routes::home::api_badge_counts))
+        .route(
+            "/api/equipment/{id}",
+            patch(routes::admin::api_set_equipment),
+        )
         .route("/calendar", get(routes::calendar::calendar_landing))
         .route("/calendar/", get(routes::calendar::calendar_landing))
         .route(
