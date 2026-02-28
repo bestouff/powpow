@@ -198,7 +198,7 @@ impl FromRequestParts<AppState> for RequireAdmin {
         let is_api = is_api_path(parts);
         let staff = authenticate(parts, state).await?;
 
-        if staff.is_admin {
+        if staff.is_admin || staff.is_god {
             Ok(RequireAdmin(staff))
         } else {
             Err(AuthError {

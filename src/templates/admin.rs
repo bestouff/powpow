@@ -300,8 +300,8 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                     }
                 }
 
-                // État des équipements (admin only)
-                @if is_admin {
+                // État des équipements (admin/god only)
+                @if is_admin || is_god {
                     section .section.py-4 {
                         div .box {
                             h3 .title.is-5.mb-3 {

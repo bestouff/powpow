@@ -78,7 +78,8 @@ function initLoginCheck(prefix) {
             lo.href = prefix + '/logout'; lo.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i>';
             b.parentNode.insertBefore(lo, b.nextSibling);
         }
-        if (d.is_admin || d.is_chief) { document.querySelectorAll('.navbar-admin').forEach(function(el) { el.style.display = '';     });
+        if (d.is_admin || d.is_chief) { document.querySelectorAll('.navbar-admin').forEach(function(el) { el.style.display = ''; }); }
+    }).catch(function() {});
 }
 
 // --- Block: Equipment toggle ---
@@ -100,8 +101,6 @@ function toggleEquipment(el) {
         el.checked = !inService;
         alert('Erreur: ' + err.message);
     });
-}
-    }).catch(function() {});
 }
 
 // --- Block 4: Search filter enter key ---
