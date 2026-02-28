@@ -8,6 +8,19 @@ use axum_extra::extract::cookie::SignedCookieJar;
 
 use crate::{AppState, database, get_current_season, get_prefix, templates};
 
+/// Resolve the caller from the session cookie, if any.
+async fn resolve_caller(jar: &SignedCookieJar, state: &AppState) -> Option<crate::models::Staff> {
+    let id = jar
+        .get("aghil_session")?
+        .value()
+        .parse::<uuid::Uuid>()
+        .ok()?;
+    database::get_staff_by_id(&state.db, id)
+        .await
+        .ok()
+        .flatten()
+}
+
 pub async fn index(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -70,7 +83,10 @@ pub async fn index(
     )
 }
 
-pub async fn api_badge_counts(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn api_badge_counts(
+    State(state): State<AppState>,
+    jar: SignedCookieJar,
+) -> impl IntoResponse {
     let current_season = get_current_season();
     let users = database::count_unimported_memberships(&state.db, current_season)
         .await
@@ -79,9 +95,36 @@ pub async fn api_badge_counts(State(state): State<AppState>) -> impl IntoRespons
         .await
         .unwrap_or(0);
 
+    // Compute validation count based on caller role
+    let caller = resolve_caller(&jar, &state).await;
+    let validations = match &caller {
+        Some(s) if s.is_admin || s.is_god => {
+            // Admins/gods see all pending validations
+            database::count_pending_validations(&state.db, None)
+                .await
+                .unwrap_or(0)
+        }
+        Some(s) => {
+            // Chiefs see only their ateliers' pending validations
+            let is_chief = database::is_chief(&state.db, s.id).await.unwrap_or(false);
+            if is_chief {
+                database::count_pending_validations(&state.db, Some(s.id))
+                    .await
+                    .unwrap_or(0)
+            } else {
+                0
+            }
+        }
+        None => 0,
+    };
+
+    let admin_total = users + cash + validations;
+
     Json(serde_json::json!({
         "users": users,
         "cash": cash,
+        "validations": validations,
+        "admin": admin_total,
     }))
 }
 

@@ -316,16 +316,24 @@ pub async fn api_me(State(state): State<AppState>, jar: SignedCookieJar) -> impl
     };
 
     match database::get_staff_by_id(&state.db, staff_id).await {
-        Ok(Some(staff)) => (
-            StatusCode::OK,
-            Json(serde_json::json!({
-                "id": staff.id,
-                "first_name": staff.first_name,
-                "last_name": staff.last_name,
-                "is_admin": staff.is_admin,
-                "is_god": staff.is_god,
-            })),
-        ),
+        Ok(Some(staff)) => {
+            let is_chief = staff.is_admin
+                || staff.is_god
+                || database::is_chief(&state.db, staff.id)
+                    .await
+                    .unwrap_or(false);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "id": staff.id,
+                    "first_name": staff.first_name,
+                    "last_name": staff.last_name,
+                    "is_admin": staff.is_admin,
+                    "is_god": staff.is_god,
+                    "is_chief": is_chief,
+                })),
+            )
+        }
         Ok(None) => (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!({"error": "Staff not found"})),

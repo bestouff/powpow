@@ -220,7 +220,7 @@ pub fn membership_list_with_filters(
         "Liste des Adhésions - HelloAsso",
         prefix,
         &NavKind::Full,
-        "users",
+        "admin",
         extra_head,
         content,
         extra_scripts,

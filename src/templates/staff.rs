@@ -151,7 +151,7 @@ pub fn staff_list(
         "Liste des Staff - AGHIL",
         prefix,
         &NavKind::Standard,
-        "staff",
+        "admin",
         extra_head,
         content,
         html! {},

@@ -212,7 +212,116 @@ pub fn audit_page(
         "Journal d'audit - AGHIL",
         prefix,
         &NavKind::Full,
-        "",
+        "admin",
+        html! {},
+        content,
+        html! {},
+    )
+}
+
+pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool) -> Markup {
+    let p = prefix;
+
+    let content = html! {
+        section .section {
+            div .container.is-fluid {
+                nav .breadcrumb aria-label="breadcrumbs" {
+                    ul {
+                        li { a href=(format!("{p}/")) { "Accueil" } }
+                        li .is-active { a href="#" aria-current="page" { "Administration" } }
+                    }
+                }
+
+                h1 .title.is-3 {
+                    span .icon.mr-2 { i .fa-solid.fa-screwdriver-wrench {} }
+                    "Administration"
+                }
+
+                // Gestion des adhésions (admin only)
+                @if is_admin {
+                    section .section.py-4 {
+                        div .box {
+                            h3 .title.is-5.mb-3 {
+                                span .icon.mr-2 { i .fa-solid.fa-ticket {} }
+                                "Gestion des adhésions"
+                            }
+                            div .buttons {
+                                a .button.is-primary href={(p) "/users"} {
+                                    span .icon { i .fa-solid.fa-ticket {} }
+                                    span { "Adhésions HelloAsso" }
+                                    span .nav-badge.d-none data-badge="users" {}
+                                }
+                                a .button.is-primary.is-light href={(p) "/cash"} {
+                                    span .icon { i .fa-solid.fa-money-bill-wave {} }
+                                    span { "Espèces / Chèques" }
+                                    span .nav-badge.d-none data-badge="cash" {}
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Gestion du staff (chief + admin)
+                section .section.py-4 {
+                    div .box {
+                        h3 .title.is-5.mb-3 {
+                            span .icon.mr-2 { i .fa-solid.fa-user-group {} }
+                            "Gestion du staff"
+                        }
+                        div .buttons {
+                            a .button.is-link href={(p) "/staff"} {
+                                span .icon { i .fa-solid.fa-user-group {} }
+                                span { "Voir le staff" }
+                            }
+                            a .button.is-link.is-light href={(p) "/validation"} {
+                                span .icon { i .fa-solid.fa-user-check {} }
+                                span { "Validations" }
+                                span .nav-badge.d-none data-badge="validations" {}
+                            }
+                            @if is_admin {
+                                a .button.is-light href={(p) "/export/mailchimp"} {
+                                    span .icon { i .fa-solid.fa-file-csv {} }
+                                    span { "Export Mailchimp" }
+                                }
+                                a .button.is-light href={(p) "/audit"} {
+                                    span .icon { i .fa-solid.fa-clipboard-list {} }
+                                    span { "Journal d'audit" }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Sauvegarde / Restauration (god only)
+                @if is_god {
+                    section .section.py-4 {
+                        div .box {
+                            h3 .title.is-5.mb-3 {
+                                span .icon.mr-2 { i .fa-solid.fa-database {} }
+                                "Sauvegarde / Restauration"
+                            }
+                            div .buttons {
+                                a .button.is-warning href={(p) "/backup"} {
+                                    span .icon { i .fa-solid.fa-download {} }
+                                    span { "Télécharger la sauvegarde" }
+                                }
+                                a .button.is-danger href={(p) "/restore"} {
+                                    span .icon { i .fa-solid.fa-upload {} }
+                                    span { "Restaurer" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    page(
+        "Administration - AGHIL",
+        prefix,
+        &NavKind::Standard,
+        "admin",
         html! {},
         content,
         html! {},

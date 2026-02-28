@@ -8,7 +8,7 @@ mod photos;
 mod staff;
 mod static_pages;
 
-pub use admin::{audit_page, restore_page, restore_result, validation_page};
+pub use admin::{admin_page, audit_page, restore_page, restore_result, validation_page};
 pub use auth::login_page;
 pub use calendar::{calendar, calendar_editor, render_upcoming_week_email};
 pub use cash::{cash_form, cash_import_form, cash_list};
@@ -97,8 +97,8 @@ fn capitalize_words(s: &str) -> String {
 }
 
 enum NavKind {
-    Full,      // Adhésions, Cash, Staff, API, Login
-    Standard,  // Adhésions, Cash, Staff, Login
+    Full,      // Administration, Login
+    Standard,  // Administration, Login
     LoginOnly, // Only Login button
     StaffOnly, // Only Staff-related items
 }
@@ -129,25 +129,12 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str) -> Markup {
                             span .icon.mr-1 { i .fa-solid.fa-calendar-days {} }
                             "Planning"
                         }
-                        a .navbar-item.navbar-admin .is-active[active == "users"]
-                          href={(p) "/users"}
+                        a .navbar-item.navbar-admin .is-active[active == "admin"]
+                          href={(p) "/admin"}
                           style=[admin_hide.then_some("display:none")] {
-                            span .icon.mr-1 { i .fa-solid.fa-ticket {} }
-                            "Adhésions"
-                            span .nav-badge.d-none data-badge="users" {}
-                        }
-                        a .navbar-item.navbar-admin .is-active[active == "cash"]
-                          href={(p) "/cash"}
-                          style=[admin_hide.then_some("display:none")] {
-                            span .icon.mr-1 { i .fa-solid.fa-money-bill-wave {} }
-                            "Espèces / Chèques"
-                            span .nav-badge.d-none data-badge="cash" {}
-                        }
-                        a .navbar-item.navbar-admin .is-active[active == "staff"]
-                          href={(p) "/staff"}
-                          style=[admin_hide.then_some("display:none")] {
-                            span .icon.mr-1 { i .fa-solid.fa-user-group {} }
-                            "Staff"
+                            span .icon.mr-1 { i .fa-solid.fa-screwdriver-wrench {} }
+                            "Administration"
+                            span .nav-badge.d-none data-badge="admin" {}
                         }
                         a .navbar-item #login-btn href={(p) "/login"} {
                             i .fa-solid.fa-right-to-bracket {}

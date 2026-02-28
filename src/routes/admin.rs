@@ -12,10 +12,18 @@ use tracing::error;
 
 use crate::{
     AppState,
-    auth::{RequireAdmin, RequireGod, RequireStaff},
+    auth::{RequireAdmin, RequireChief, RequireGod, RequireStaff},
     check_automation_token, database, get_prefix, resolve_staff_if_god, send_notification_email,
     templates,
 };
+
+pub async fn admin_page_handler(
+    RequireChief(staff): RequireChief,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let prefix = get_prefix(&headers);
+    templates::admin_page(&prefix, staff.is_admin, staff.is_god)
+}
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateAdminFlagsRequest {

@@ -356,6 +356,7 @@ async fn main() -> anyhow::Result<()> {
     // Build router
     let app = Router::new()
         .route("/", get(routes::home::index))
+        .route("/admin", get(routes::admin::admin_page_handler))
         .route("/users", get(routes::membership::list_users))
         .route("/users/{id}", get(routes::membership::get_user))
         .route("/staff", get(routes::staff::list_staff))

@@ -103,75 +103,13 @@ pub fn index(
         }
 
         @if let Some(staff) = staff {
-            // Admin sections
-            @if staff.is_admin {
+            // Admin / chief link
+            @if staff.is_admin || !chief_ateliers.is_empty() {
                 section .section.py-4 {
                     div .container.is-fluid {
-                        div .box {
-                            h3 .title.is-5.mb-3 {
-                                span .icon.mr-2 { i .fa-solid.fa-ticket {} }
-                                "Gestion des adhésions"
-                            }
-                            div .buttons {
-                                a .button.is-primary href={(p) "/users"} {
-                                    span .icon { i .fa-solid.fa-ticket {} }
-                                    span { "Adhésions HelloAsso" }
-                                    span .nav-badge.d-none data-badge="users" {}
-                                }
-                                a .button.is-primary.is-light href={(p) "/cash"} {
-                                    span .icon { i .fa-solid.fa-money-bill-wave {} }
-                                    span { "Espèces / Chèques" }
-                                    span .nav-badge.d-none data-badge="cash" {}
-                                }
-                            }
-                        }
-                    }
-                }
-                section .section.py-4 {
-                    div .container.is-fluid {
-                        div .box {
-                            h3 .title.is-5.mb-3 {
-                                span .icon.mr-2 { i .fa-solid.fa-user-group {} }
-                                "Gestion du staff"
-                            }
-                            div .buttons {
-                                a .button.is-link href={(p) "/staff"} {
-                                    span .icon { i .fa-solid.fa-user-group {} }
-                                    span { "Voir le staff" }
-                                }
-                                a .button.is-link.is-light href={(p) "/export/mailchimp"} {
-                                    span .icon { i .fa-solid.fa-file-csv {} }
-                                    span { "Export Mailchimp" }
-                                }
-                                a .button.is-light href={(p) "/audit"} {
-                                    span .icon { i .fa-solid.fa-clipboard-list {} }
-                                    span { "Journal d'audit" }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // God: backup/restore
-            @if staff.is_god {
-                section .section.py-4 {
-                    div .container.is-fluid {
-                        div .box {
-                            h3 .title.is-5.mb-3 {
-                                span .icon.mr-2 { i .fa-solid.fa-database {} }
-                                "Sauvegarde / Restauration"
-                            }
-                            div .buttons {
-                                a .button.is-warning href={(p) "/backup"} {
-                                    span .icon { i .fa-solid.fa-download {} }
-                                    span { "Télécharger la sauvegarde" }
-                                }
-                                a .button.is-danger href={(p) "/restore"} {
-                                    span .icon { i .fa-solid.fa-upload {} }
-                                    span { "Restaurer" }
-                                }
-                            }
+                        a .box.box-link href={(p) "/admin"} {
+                            span .icon.mr-2 { i .fa-solid.fa-screwdriver-wrench {} }
+                            strong { "Administration" }
                         }
                     }
                 }

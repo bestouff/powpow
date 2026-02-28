@@ -2243,6 +2243,30 @@ pub async fn count_pending_validations_for_chief(
     Ok(result)
 }
 
+/// Count total pending (unvalidated) role requests.
+/// If `staff_id` is Some, count only for ateliers where that staff is chief.
+/// If None, count all pending validations (for admins).
+pub async fn count_pending_validations(pool: &PgPool, staff_id: Option<uuid::Uuid>) -> Result<i64> {
+    let row = if let Some(sid) = staff_id {
+        sqlx::query(
+            r"
+            SELECT COUNT(*) as cnt
+            FROM roles r
+            WHERE r.validated = false
+            AND r.atelier IN (SELECT atelier FROM roles WHERE staff = $1 AND chief = true)
+            ",
+        )
+        .bind(sid)
+        .fetch_one(pool)
+        .await?
+    } else {
+        sqlx::query("SELECT COUNT(*) as cnt FROM roles WHERE validated = false")
+            .fetch_one(pool)
+            .await?
+    };
+    Ok(row.try_get("cnt")?)
+}
+
 /// Get pending (unvalidated) role requests with staff and atelier details.
 /// If `chief_of_ateliers` is Some, filter to those ateliers only (for chiefs).
 /// If None, return all pending validations (for admins).

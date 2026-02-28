@@ -62,7 +62,7 @@ function initBadgeCounts(prefix) {
     fetch(prefix + '/api/badge-counts').then(function(r) { return r.json(); }).then(function(d) {
         document.querySelectorAll('.nav-badge').forEach(function(b) {
             var c = d[b.dataset.badge];
-            if (c > 0) { b.textContent = c; b.style.display = ''; }
+            if (c > 0) { b.textContent = c; b.classList.remove('d-none'); }
         });
     }).catch(function() {});
 }
@@ -78,7 +78,7 @@ function initLoginCheck(prefix) {
             lo.href = prefix + '/logout'; lo.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i>';
             b.parentNode.insertBefore(lo, b.nextSibling);
         }
-        if (d.is_admin) { document.querySelectorAll('.navbar-admin').forEach(function(el) { el.style.display = ''; }); }
+        if (d.is_admin || d.is_chief) { document.querySelectorAll('.navbar-admin').forEach(function(el) { el.style.display = ''; }); }
     }).catch(function() {});
 }
 
