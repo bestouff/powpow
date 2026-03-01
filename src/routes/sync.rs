@@ -1,5 +1,6 @@
 use axum::{
     Json,
+    body::Bytes,
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Response},
@@ -25,6 +26,8 @@ fn get_custom_field_value(
         .and_then(|f| f.answer.clone())
 }
 
+/// Manual sync (GET): blocks until sync completes, returns HTML result.
+/// Used by admins clicking "Synchronisation manuelle" in the web UI.
 pub async fn sync_users(
     jar: SignedCookieJar,
     headers: HeaderMap,
@@ -69,6 +72,67 @@ pub async fn sync_users(
             .into_response()
         }
     }
+}
+
+/// Webhook handler (POST): returns 200 immediately, runs sync in background.
+/// `HelloAsso` sends a POST with a JSON notification body; we must respond
+/// quickly (200) or they will retry with exponential back-off.
+pub async fn sync_webhook(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    body: Bytes,
+) -> Response {
+    // Check auth: sync token only (webhooks have no session cookie)
+    if let Err(resp) =
+        check_automation_token(&params, &headers, &state.config.sync_token, "sync token")
+    {
+        return resp;
+    }
+
+    // Log the notification body for diagnostics
+    if let Ok(json) = std::str::from_utf8(&body) {
+        info!(
+            "HelloAsso notification received ({} bytes): {}",
+            body.len(),
+            json
+        );
+    } else {
+        info!(
+            "HelloAsso notification received ({} bytes, non-UTF8)",
+            body.len()
+        );
+    }
+
+    // Spawn the full sync in the background so we can return 200 immediately
+    tokio::spawn(async move {
+        info!("Background sync started (triggered by HelloAsso webhook)");
+        match sync_users_from_helloasso(&state).await {
+            Ok((user_count, membership_count)) => {
+                let _ = database::insert_audit(
+                    &state.db,
+                    None,
+                    "Automation (HelloAsso webhook)",
+                    "Synchronisation HelloAsso",
+                    &format!(
+                        "{} utilisateurs, {} adhésions",
+                        user_count, membership_count
+                    ),
+                )
+                .await;
+                info!(
+                    "Background sync complete: {} users, {} memberships",
+                    user_count, membership_count
+                );
+            }
+            Err(e) => {
+                error!("Background sync failed: {}", e);
+            }
+        }
+    });
+
+    // Return 200 immediately so HelloAsso considers the notification delivered
+    StatusCode::OK.into_response()
 }
 
 pub async fn api_sync_users(

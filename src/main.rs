@@ -379,7 +379,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "/sync",
-            get(routes::sync::sync_users).post(routes::sync::sync_users),
+            get(routes::sync::sync_users).post(routes::sync::sync_webhook),
         )
         .route("/export/mailchimp", get(routes::admin::export_mailchimp))
         .route("/backup", get(routes::admin::backup_database))
