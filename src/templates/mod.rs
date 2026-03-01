@@ -25,7 +25,7 @@ pub use photos::photo_page;
 pub use staff::{person_detail, staff_list};
 pub use static_pages::static_page;
 
-use crate::models::{ContentMap, StaffMatchType, StaffWithSeason};
+use crate::models::{ContentBlock, ContentMap, StaffMatchType, StaffWithSeason};
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 
 /// Short hex hash of embedded CSS+JS for cache-busting query params.
@@ -108,7 +108,7 @@ enum NavKind {
     StaffOnly, // Only Staff-related items
 }
 
-fn navbar(prefix: &str, kind: &NavKind, active: &str) -> Markup {
+fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBlock>) -> Markup {
     let admin_hide = matches!(kind, NavKind::LoginOnly);
     let p = prefix;
 
@@ -117,9 +117,16 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str) -> Markup {
             div .container.is-fluid {
                 div .navbar-brand {
                     a .navbar-item href={(p) "/"} {
-                        img src="https://station-ski-saint-hilaire.fr/wp-content/uploads/2016/09/logo_onepage_portfolio_text2-1-300x72.png"
-                            alt="Station de ski de Saint-Hilaire"
-                            style="max-height: 2.5rem;";
+                        @if let Some(b) = block {
+                            @if let Some(img_id) = b.image_id {
+                                img src=(format!("{p}/content-images/{img_id}"))
+                                    alt="Station de ski de Saint-Hilaire"
+                                    style="max-height: 2.5rem;";
+                            }
+                            @if !b.title.is_empty() {
+                                span .navbar-logo-title { (b.title) }
+                            }
+                        }
                     }
                     a .navbar-burger role="button" aria-label="menu" aria-expanded="false"
                       data-target="main-navbar" {
@@ -189,7 +196,8 @@ fn page_with_footer(
     footer_contents: Option<&ContentMap>,
 ) -> Markup {
     let p = prefix;
-    let nav = navbar(prefix, nav_kind, active);
+    let navbar_block = footer_contents.map(|c| c.get("navbar"));
+    let nav = navbar(prefix, nav_kind, active, navbar_block);
     let v = static_version();
 
     html! {

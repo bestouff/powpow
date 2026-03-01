@@ -58,10 +58,12 @@ pub fn index(
             div .hero-slides data-prefix=(p) data-photos=(photo_ids_json) {}
             div .hero-overlay {
                 div .hero-overlay-content {
-                    img .hero-logo
-                        src="https://station-ski-saint-hilaire.fr/wp-content/uploads/2016/09/logo.png"
-                        alt="Logo Station";
                     @let block = contents.get("hero-subtitle");
+                    @if let Some(img_id) = block.image_id {
+                        img .hero-logo
+                            src=(format!("{p}/content-images/{img_id}"))
+                            alt="Logo Station";
+                    }
                     h1 .hero-title { (block.title) }
                     @let body_html = block.render_body();
                     @if !body_html.is_empty() {
@@ -166,11 +168,15 @@ pub fn index(
                                 span .equip-status { (tow.status.label_tow()) }
                             }
                         }
-                        a .img-modal-trigger href="#"
-                          data-src="https://www.station-ski-saint-hilaire.fr/wp-content/uploads/2026/02/Plan-des-pistes-2026_-1030x557.jpg" {
-                            img .mt-4 src="https://www.station-ski-saint-hilaire.fr/wp-content/uploads/2026/02/Plan-des-pistes-2026_-1030x557.jpg"
-                                alt="Plan des pistes"
-                                style="max-width:100%;border-radius:6px;cursor:zoom-in;";
+                        @let trail = contents.get("trail-map");
+                        @if let Some(img_id) = trail.image_id {
+                            @let img_url = format!("{p}/content-images/{img_id}");
+                            a .img-modal-trigger href="#"
+                              data-src=(img_url) {
+                                img .mt-4 src=(img_url)
+                                    alt=(trail.title)
+                                    style="max-width:100%;border-radius:6px;cursor:zoom-in;";
+                            }
                         }
                         div .mt-3 {
                             a .btn-station.btn-station-primary
@@ -287,6 +293,36 @@ pub fn index(
                             (PreEscaped(block.render_body()))
                             @if let Some(ref url) = block.link_url {
                                 @let label = block.link_label.as_deref().unwrap_or(url);
+                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                    (label)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Accès / Driving indications (olive) ─────────────────────
+        section .section.section-olive {
+            div .container {
+                @let block = contents.get("driving-indications");
+                h2 .section-heading.has-text-centered.has-text-white { (block.title) }
+                div .columns.is-centered {
+                    div .column.is-8 {
+                        @if let Some(img_id) = block.image_id {
+                            div .has-text-centered.mb-4 {
+                                img src=(format!("{p}/content-images/{img_id}"))
+                                    alt=(block.title)
+                                    style="max-width:100%;border-radius:6px;";
+                            }
+                        }
+                        div .content.has-text-white {
+                            (PreEscaped(block.render_body()))
+                        }
+                        @if let Some(ref url) = block.link_url {
+                            @let label = block.link_label.as_deref().unwrap_or(url);
+                            div .has-text-centered.mt-4 {
                                 a .btn-station.btn-station-primary href=(url) target="_blank" {
                                     (label)
                                 }
