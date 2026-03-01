@@ -23,21 +23,22 @@ pub use static_pages::static_page;
 
 use crate::models::{StaffMatchType, StaffWithSeason};
 use maud::{DOCTYPE, Markup, PreEscaped, html};
-use phonenumber::Mode;
-use std::sync::RwLock;
 
-/// Global photo-of-the-day URL + photographer name, updated when photos change.
-static PHOTO_BG_URL: RwLock<Option<String>> = RwLock::new(None);
-static PHOTO_BG_AUTHOR: RwLock<Option<String>> = RwLock::new(None);
+/// Short hex hash of embedded CSS+JS for cache-busting query params.
+/// Computed once at startup; changes whenever the file content changes.
+fn static_version() -> &'static str {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    use std::sync::OnceLock;
 
-pub fn set_photo_bg(url: String, photographer: String) {
-    if let Ok(mut w) = PHOTO_BG_URL.write() {
-        *w = Some(url);
-    }
-    if let Ok(mut w) = PHOTO_BG_AUTHOR.write() {
-        *w = Some(photographer);
-    }
+    static VERSION: OnceLock<String> = OnceLock::new();
+    VERSION.get_or_init(|| {
+        let mut hasher = DefaultHasher::new();
+        crate::POWPOW_CSS.hash(&mut hasher);
+        crate::POWPOW_JS.hash(&mut hasher);
+        format!("{:x}", hasher.finish())
+    })
 }
+use phonenumber::Mode;
 
 /// Simple HTML escaping for minimal security (kept for email template which returns String)
 pub fn escape_html_public(s: &str) -> String {
@@ -108,12 +109,13 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str) -> Markup {
     let p = prefix;
 
     html! {
-        nav .navbar.is-dark role="navigation" aria-label="main navigation" {
+        nav .navbar.navbar-station role="navigation" aria-label="main navigation" {
             div .container.is-fluid {
                 div .navbar-brand {
                     a .navbar-item href={(p) "/"} {
-                        span .icon.mr-2 { i .fa-solid.fa-person-skiing {} }
-                        strong { "PowPow pour AGH'IL" }
+                        img src="https://station-ski-saint-hilaire.fr/wp-content/uploads/2016/09/logo_onepage_portfolio_text2-1-300x72.png"
+                            alt="Station de ski de Saint-Hilaire"
+                            style="max-height: 2.5rem;";
                     }
                     a .navbar-burger role="button" aria-label="menu" aria-expanded="false"
                       data-target="main-navbar" {
@@ -159,27 +161,7 @@ fn page(
 ) -> Markup {
     let p = prefix;
     let nav = navbar(prefix, nav_kind, active);
-
-    let photo_bg_css = PHOTO_BG_URL
-        .read()
-        .ok()
-        .and_then(|r| r.clone())
-        .map(|url| {
-            format!(
-                "body{{\
-                    background-image:linear-gradient(rgba(255,255,255,0.15),rgba(255,255,255,0.15)),url('{p}{url}');\
-                    background-size:cover;\
-                    background-position:center;\
-                    background-attachment:fixed;\
-                    min-height:100vh;\
-                }}\
-                .section,.box,.footer{{\
-                    background-color:rgba(255,255,255,0.65);\
-                }}"
-            )
-        });
-
-    let photo_credit = PHOTO_BG_AUTHOR.read().ok().and_then(|r| r.clone());
+    let v = static_version();
 
     html! {
         (DOCTYPE)
@@ -192,28 +174,63 @@ fn page(
                 link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css";
                 link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.2.0/css/fontawesome.min.css";
                 link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.2.0/css/solid.min.css";
-                link rel="stylesheet" href={(p) "/static/powpow.css"};
-                @if let Some(ref bg_css) = photo_bg_css {
-                    style { (PreEscaped(bg_css)) }
-                }
+                link rel="stylesheet" href={(p) "/static/powpow.css?v=" (v)};
                 (extra_head)
             }
             body data-prefix=(p) {
                 (nav)
                 (content)
                 (extra_scripts)
-                script defer src={(p) "/static/powpow.js"} {}
-                footer .footer.py-4 {
-                    div .content.has-text-centered {
-                        p .is-size-7.has-text-grey {
-                            "PowPow v" (env!("CARGO_PKG_VERSION")) " pour AG'HIL, \u{00a9}2026 Xavier Bestel <xav@bes.tel> \u{2014} "
-                            a href={(p) "/privacy"} { "Confidentialité" }
-                            " \u{00b7} "
-                            a href={(p) "/tos"} { "CGU" }
+                script defer src={(p) "/static/powpow.js?v=" (v)} {}
+                footer .footer.footer-station {
+                    div .container {
+                        div .columns {
+                            // Column 1: Contact + partners
+                            div .column.is-one-third {
+                                h4 .title.is-5.footer-heading { "Nous contacter !" }
+                                p {
+                                    "Remontées mécaniques — Tél. 04 76 08 32 20" br;
+                                    "Office de Tourisme — Tél. 04 76 08 33 99" br;
+                                    "Nous contacter par "
+                                    a href="mailto:aghil.sthilaire@gmail.com" { "e-mail" }
+                                }
+                                h4 .title.is-6.footer-heading.mt-4 { "Liens utiles" }
+                                p {
+                                    a href={(p) "/privacy"} { "Politique de confidentialité" }
+                                    " · "
+                                    a href={(p) "/tos"} { "Conditions d'utilisation" }
+                                }
+                            }
+                            // Column 2: Calendar
+                            div .column.is-one-third {
+                                h4 .title.is-5.footer-heading { "Calendrier prévisionnel 2025/2026" }
+                                div .content.is-small {
+                                    p { "Calendrier prévisionnel d'ouverture de la station de ski de St-Hilaire du Touvet. Sous couvert des conditions d'enneigement, et des disponibilités des bénévoles et des secouristes." }
+                                    ul {
+                                        li { "Tous les week-ends " strong { "de janvier 2026" } " (selon enneigement)" }
+                                        li { strong { "Fête de la station" } " : le 07 et 08 février 2026" }
+                                        li { strong { "Vacances de Février" } " : 2ème semaine zone A (14/02 au 22/02)" }
+                                        li { "Fermeture au plus tard " strong { "mi-mars" } " 2026" }
+                                    }
+                                    p { "Pour les ouvertures exceptionnelles, consultez les infos sur "
+                                        a href="https://www.facebook.com/stationskisainthilaire" target="_blank" { "notre page Facebook" }
+                                        "."
+                                    }
+                                }
+                            }
+                            // Column 3: Summer link
+                            div .column.is-one-third {
+                                h4 .title.is-5.footer-heading { "En été" }
+                                a href="https://www.funiculaire.fr" target="_blank" {
+                                    img src="https://www.station-ski-saint-hilaire.fr/wp-content/uploads/2016/09/funiculaire-221x300.jpg"
+                                        alt="Funiculaire de Saint-Hilaire du Touvet"
+                                        style="max-width: 180px;";
+                                }
+                            }
                         }
-                        @if let Some(ref name) = photo_credit {
-                            p .is-size-7.has-text-grey {
-                                "photo \u{00a9} " (name)
+                        div .content.has-text-centered.mt-4 {
+                            p .is-size-7 {
+                                "PowPow v" (env!("CARGO_PKG_VERSION")) " pour AG'HIL, \u{00a9}2026 Xavier Bestel"
                             }
                         }
                     }

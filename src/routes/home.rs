@@ -73,6 +73,17 @@ pub async fn index(
         .await
         .unwrap_or_default();
 
+    // Public frontpage data
+    let equipments = database::get_all_equipments(&state.db)
+        .await
+        .unwrap_or_default();
+    let station_open = database::is_station_open_today(&state.db)
+        .await
+        .unwrap_or(false);
+    let photo_ids = database::get_all_photo_ids(&state.db)
+        .await
+        .unwrap_or_default();
+
     templates::index(
         &prefix,
         staff.as_ref(),
@@ -80,6 +91,9 @@ pub async fn index(
         has_paid,
         &chief_ateliers,
         &upcoming,
+        &equipments,
+        station_open,
+        &photo_ids,
     )
 }
 

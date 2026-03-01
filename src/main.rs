@@ -10,7 +10,7 @@ use axum::{
     Json, Router,
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, patch, post},
+    routing::{get, post},
 };
 use axum_extra::extract::cookie::{Key, SignedCookieJar};
 use chrono::Datelike;
@@ -344,12 +344,6 @@ async fn main() -> anyhow::Result<()> {
         gmail_client,
     };
 
-    // Set photo-of-the-day background for all pages
-    if let Ok(Some((photo, name))) = database::get_photo_of_the_day(&app_state.db).await {
-        templates::set_photo_bg(format!("/photos/{}", photo.id), name);
-        info!("Photo of the day: {}", photo.id);
-    }
-
     // Clone state for background task before it moves into the router
     let state_for_weekly = app_state.clone();
 
@@ -398,7 +392,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/badge-counts", get(routes::home::api_badge_counts))
         .route(
             "/api/equipment/{id}",
-            patch(routes::admin::api_set_equipment),
+            post(routes::admin::api_cycle_equipment),
         )
         .route("/calendar", get(routes::calendar::calendar_landing))
         .route("/calendar/", get(routes::calendar::calendar_landing))
@@ -451,6 +445,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/photos/upload", post(routes::photos::upload_photo))
         .route("/photos/{id}", get(routes::photos::display_photo))
         .route("/photos/{id}/delete", post(routes::photos::delete_photo))
+        .route("/api/photos/ids", get(routes::photos::api_photo_ids))
         .route("/static/powpow.css", get(routes::static_pages::serve_css))
         .route("/static/powpow.js", get(routes::static_pages::serve_js))
         .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024))

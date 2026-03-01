@@ -1,5 +1,5 @@
 use super::{NavKind, page};
-use crate::models::{Atelier, Equipment, EquipmentType, Staff};
+use crate::models::{Atelier, Equipment, EquipmentStatus, EquipmentType, Staff};
 use maud::{Markup, html};
 
 pub fn restore_page(prefix: &str) -> Markup {
@@ -356,6 +356,24 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                         }
                     }
                 }
+
+                // Gestion des photos (admin only)
+                @if is_admin {
+                    section .section.py-4 {
+                        div .box {
+                            h3 .title.is-5.mb-3 {
+                                span .icon.mr-2 { i .fa-solid.fa-images {} }
+                                "Photos"
+                            }
+                            div .buttons {
+                                a .button.is-info href={(p) "/photos"} {
+                                    span .icon { i .fa-solid.fa-images {} }
+                                    span { "Gérer les photos" }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     };
@@ -371,19 +389,22 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
     )
 }
 
-/// Render a single equipment toggle row.
+/// Render a single equipment status row with a clickable 3-state button.
 fn equipment_toggle(prefix: &str, eq: &Equipment) -> Markup {
-    let checked = eq.in_service;
+    let (btn_class, label) = match eq.status {
+        EquipmentStatus::Open => ("is-success", "Ouvert"),
+        EquipmentStatus::Closed => ("is-danger", "Fermé"),
+        EquipmentStatus::Partial => ("is-warning", "Partiel"),
+    };
     html! {
         div .field.is-flex.is-align-items-center.is-justify-content-space-between.mb-2 {
             span { (eq.name) }
-            label .switch {
-                input type="checkbox"
-                    checked[checked]
-                    data-id=(eq.id)
-                    data-prefix=(prefix)
-                    onchange="toggleEquipment(this)";
-                span .slider.is-rounded {}
+            button class={"button is-small equip-cycle-btn " (btn_class)}
+                data-id=(eq.id)
+                data-prefix=(prefix)
+                data-status=(eq.status)
+                onclick="cycleEquipment(this)" {
+                (label)
             }
         }
     }

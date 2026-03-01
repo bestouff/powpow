@@ -488,21 +488,22 @@ fn csv_escape(field: &str) -> String {
 
 // ── Equipment API ────────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-pub struct SetEquipmentRequest {
-    in_service: bool,
-}
-
-pub async fn api_set_equipment(
+pub async fn api_cycle_equipment(
     RequireAdmin(_admin): RequireAdmin,
     State(state): State<AppState>,
     axum::extract::Path(equipment_id): axum::extract::Path<uuid::Uuid>,
-    Json(payload): Json<SetEquipmentRequest>,
 ) -> impl IntoResponse {
-    match database::set_equipment_in_service(&state.db, equipment_id, payload.in_service).await {
-        Ok(new_value) => (
+    // Fetch current status, then cycle to the next one
+    let equipments = database::get_all_equipments(&state.db)
+        .await
+        .unwrap_or_default();
+    let current = equipments.iter().find(|e| e.id == equipment_id);
+    let next_status = current.map_or(crate::models::EquipmentStatus::Closed, |e| e.status.next());
+
+    match database::set_equipment_status(&state.db, equipment_id, next_status).await {
+        Ok(new_status) => (
             StatusCode::OK,
-            Json(serde_json::json!({"in_service": new_value})),
+            Json(serde_json::json!({"status": new_status.to_string()})),
         ),
         Err(e) => {
             error!("Failed to update equipment: {}", e);

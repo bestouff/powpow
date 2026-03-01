@@ -468,6 +468,90 @@ impl std::fmt::Display for EquipmentType {
     }
 }
 
+// Piste difficulty enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "piste_difficulty", rename_all = "lowercase")]
+pub enum PisteDifficulty {
+    Verte,
+    Bleue,
+    Rouge,
+    Noire,
+}
+
+impl PisteDifficulty {
+    /// CSS color for this difficulty level.
+    #[must_use]
+    pub const fn css_color(self) -> &'static str {
+        match self {
+            Self::Verte => "#4caf50",
+            Self::Bleue => "#2196f3",
+            Self::Rouge => "#f44336",
+            Self::Noire => "#212121",
+        }
+    }
+}
+
+// Equipment status enum (3-state: open / closed / partial)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "equipment_status", rename_all = "lowercase")]
+pub enum EquipmentStatus {
+    Open,
+    Closed,
+    Partial,
+}
+
+impl EquipmentStatus {
+    /// CSS class suffix for progress bars.
+    #[must_use]
+    pub const fn css_class(self) -> &'static str {
+        match self {
+            Self::Open => "is-open",
+            Self::Closed => "is-closed",
+            Self::Partial => "is-partial",
+        }
+    }
+
+    /// French label for the status.
+    #[must_use]
+    pub const fn label_piste(self) -> &'static str {
+        match self {
+            Self::Open => "Ouverte",
+            Self::Closed => "Fermée",
+            Self::Partial => "Partielle",
+        }
+    }
+
+    /// French label for téléskis (masculine).
+    #[must_use]
+    pub const fn label_tow(self) -> &'static str {
+        match self {
+            Self::Open => "Ouvert",
+            Self::Closed => "Fermé",
+            Self::Partial => "Partiel",
+        }
+    }
+
+    /// Cycle to the next status: closed → partial → open → closed.
+    #[must_use]
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Closed => Self::Partial,
+            Self::Partial => Self::Open,
+            Self::Open => Self::Closed,
+        }
+    }
+}
+
+impl std::fmt::Display for EquipmentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Open => write!(f, "open"),
+            Self::Closed => write!(f, "closed"),
+            Self::Partial => write!(f, "partial"),
+        }
+    }
+}
+
 // Equipment model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::struct_field_names)]
@@ -475,7 +559,8 @@ pub struct Equipment {
     pub id: uuid::Uuid,
     pub name: String,
     pub equipment_type: EquipmentType,
-    pub in_service: bool,
+    pub status: EquipmentStatus,
+    pub difficulty: Option<PisteDifficulty>,
 }
 
 impl FromRow<'_, sqlx::postgres::PgRow> for Equipment {
@@ -484,7 +569,8 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Equipment {
             id: row.try_get("id")?,
             name: row.try_get("name")?,
             equipment_type: row.try_get("equipment_type")?,
-            in_service: row.try_get("in_service")?,
+            status: row.try_get("status")?,
+            difficulty: row.try_get("difficulty")?,
         })
     }
 }

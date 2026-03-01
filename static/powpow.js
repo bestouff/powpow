@@ -36,6 +36,8 @@ document.addEventListener('DOMContentLoaded', function() {
     initNavbar();
     initBadgeCounts(prefix);
     initLoginCheck(prefix);
+    initHeroSlideshow(prefix);
+    initEquipmentBars();
     initSearchFilter();
     initPersonDetail(prefix);
     initCalendarView(prefix);
@@ -56,6 +58,101 @@ function initNavbar() {
         menu.classList.toggle('is-active');
     });
 }
+
+// --- Block: Hero slideshow ---
+function initHeroSlideshow(prefix) {
+    var container = document.querySelector('.hero-slides');
+    if (!container) return;
+
+    var photoIds;
+    try { photoIds = JSON.parse(container.dataset.photos || '[]'); } catch(e) { photoIds = []; }
+    if (photoIds.length === 0) {
+        // No photos — show a plain gradient background
+        container.style.background = 'linear-gradient(135deg, #2d395c 0%, #4a6fa5 100%)';
+        return;
+    }
+
+    var pfx = container.dataset.prefix || '';
+
+    // Create slide elements
+    photoIds.forEach(function(id, i) {
+        var slide = document.createElement('div');
+        slide.className = 'hero-slide' + (i === 0 ? ' is-active' : '');
+        slide.style.backgroundImage = 'url(' + pfx + '/photos/' + id + ')';
+        container.appendChild(slide);
+    });
+
+    if (photoIds.length <= 1) return;
+
+    // Rotate slides
+    var current = 0;
+    var slides = container.querySelectorAll('.hero-slide');
+    setInterval(function() {
+        slides[current].classList.remove('is-active');
+        current = (current + 1) % slides.length;
+        slides[current].classList.add('is-active');
+    }, 5000);
+
+    // Parallax effect: move slides at half scroll speed
+    var hero = document.getElementById('hero');
+    if (hero) {
+        window.addEventListener('scroll', function() {
+            var scrollY = window.scrollY;
+            if (scrollY < hero.offsetHeight) {
+                var offset = Math.round(scrollY * 0.4);
+                slides.forEach(function(s) { s.style.transform = 'translateY(' + offset + 'px)'; });
+            }
+        }, { passive: true });
+    }
+}
+
+// --- Block: Equipment progress bar scroll animation ---
+function initEquipmentBars() {
+    var bars = document.querySelectorAll('.equip-bar-fill[data-progress]');
+    if (bars.length === 0) return;
+
+    if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    var bar = entry.target;
+                    bar.style.width = bar.dataset.progress + '%';
+                    observer.unobserve(bar);
+                }
+            });
+        }, { threshold: 0.2 });
+
+        bars.forEach(function(bar) { observer.observe(bar); });
+    } else {
+        // Fallback: animate immediately
+        bars.forEach(function(bar) { bar.style.width = bar.dataset.progress + '%'; });
+    }
+}
+
+// --- Block: Fullscreen image modal ---
+(function() {
+    var modal = document.getElementById('img-modal');
+    if (!modal) return;
+    var modalImg = modal.querySelector('.img-modal-content');
+
+    document.querySelectorAll('.img-modal-trigger').forEach(function(trigger) {
+        trigger.addEventListener('click', function(e) {
+            e.preventDefault();
+            modalImg.src = trigger.dataset.src || trigger.querySelector('img').src;
+            modal.classList.add('is-active');
+        });
+    });
+
+    modal.addEventListener('click', function() {
+        modal.classList.remove('is-active');
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.classList.contains('is-active')) {
+            modal.classList.remove('is-active');
+        }
+    });
+})();
 
 // --- Block 2: Badge counts ---
 function initBadgeCounts(prefix) {
@@ -82,24 +179,30 @@ function initLoginCheck(prefix) {
     }).catch(function() {});
 }
 
-// --- Block: Equipment toggle ---
-function toggleEquipment(el) {
+// --- Block: Equipment cycle (3-state: closed → partial → open → closed) ---
+function cycleEquipment(el) {
     var id = el.dataset.id;
     var prefix = el.dataset.prefix;
-    var inService = el.checked;
+    var statusMap = {
+        open:    { cls: 'is-success', label: 'Ouvert' },
+        closed:  { cls: 'is-danger',  label: 'Fermé' },
+        partial: { cls: 'is-warning', label: 'Partiel' }
+    };
+    el.disabled = true;
     fetch(prefix + '/api/equipment/' + id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ in_service: inService })
+        method: 'POST'
     }).then(function(r) {
         if (!r.ok) throw new Error('Erreur ' + r.status);
         return r.json();
     }).then(function(d) {
-        el.checked = d.in_service;
+        var info = statusMap[d.status] || statusMap.closed;
+        el.className = 'button is-small equip-cycle-btn ' + info.cls;
+        el.textContent = info.label;
+        el.dataset.status = d.status;
     }).catch(function(err) {
-        // Revert on error
-        el.checked = !inService;
         alert('Erreur: ' + err.message);
+    }).finally(function() {
+        el.disabled = false;
     });
 }
 

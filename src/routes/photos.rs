@@ -1,4 +1,5 @@
 use axum::{
+    Json,
     body::Body,
     extract::{Multipart, State},
     http::{HeaderMap, StatusCode, header},
@@ -112,14 +113,7 @@ pub async fn upload_photo(
     match (photo_data, photographer_id) {
         (Some((data, content_type)), Some(pid)) => {
             match database::create_photo(&state.db, data, content_type, pid).await {
-                Ok(_) => {
-                    // Refresh photo-of-the-day background
-                    if let Ok(Some((photo, name))) = database::get_photo_of_the_day(&state.db).await
-                    {
-                        templates::set_photo_bg(format!("/photos/{}", photo.id), name);
-                    }
-                    Redirect::to(&format!("{}/photos", prefix)).into_response()
-                }
+                Ok(_) => Redirect::to(&format!("{}/photos", prefix)).into_response(),
                 Err(e) => {
                     error!("Failed to upload photo: {}", e);
                     (StatusCode::INTERNAL_SERVER_ERROR, Html(format!(
@@ -156,10 +150,6 @@ pub async fn delete_photo(
     match database::delete_photo(&state.db, id).await {
         Ok(success) => {
             if success {
-                // Refresh photo-of-the-day background
-                if let Ok(Some((photo, name))) = database::get_photo_of_the_day(&state.db).await {
-                    templates::set_photo_bg(format!("/photos/{}", photo.id), name);
-                }
                 Redirect::to(&format!("{}/photos", prefix)).into_response()
             } else {
                 StatusCode::NOT_FOUND.into_response()
@@ -168,6 +158,17 @@ pub async fn delete_photo(
         Err(e) => {
             error!("Failed to delete photo: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// Return all photo IDs for the hero slideshow.
+pub async fn api_photo_ids(State(state): State<AppState>) -> impl IntoResponse {
+    match database::get_all_photo_ids(&state.db).await {
+        Ok(ids) => Json(ids).into_response(),
+        Err(e) => {
+            error!("Failed to get photo IDs: {}", e);
+            Json(Vec::<uuid::Uuid>::new()).into_response()
         }
     }
 }

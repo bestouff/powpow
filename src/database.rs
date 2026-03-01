@@ -3,7 +3,6 @@ use crate::models::{
     Staff, StaffMatchType, StaffWithSeason, User,
 };
 use anyhow::Result;
-use chrono::Datelike;
 use futures_util::StreamExt;
 use sqlx::PgPool;
 use sqlx::Row;
@@ -2595,27 +2594,6 @@ pub async fn delete_photo(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
     Ok(result.rows_affected() > 0)
 }
 
-/// Get a pseudo-random photo of the day based on current date.
-/// Uses a deterministic algorithm to select the same photo for the same day.
-pub async fn get_photo_of_the_day(pool: &PgPool) -> Result<Option<(PhotoMeta, String)>> {
-    let all_photos = get_all_photos(pool).await?;
-
-    if all_photos.is_empty() {
-        return Ok(None);
-    }
-
-    // Use current date to seed the pseudo-random selection
-    let today = chrono::Local::now().date_naive();
-    let day_of_year = today.ordinal(); // 1-366
-
-    // Simple deterministic algorithm: use day_of_year modulo number of photos
-    // This ensures the same photo is selected for the same day
-    let index = (day_of_year - 1) as usize % all_photos.len();
-
-    let (photo, name) = all_photos[index].clone();
-    Ok(Some((photo, name)))
-}
-
 pub async fn create_staff_minimal(
     pool: &PgPool,
     first_name: &str,
@@ -2652,27 +2630,44 @@ pub async fn create_staff_minimal(
 /// List all equipments, ordered by type then name.
 pub async fn get_all_equipments(pool: &PgPool) -> Result<Vec<Equipment>> {
     let rows = sqlx::query_as::<_, Equipment>(
-        "SELECT id, name, equipment_type, in_service FROM equipments ORDER BY equipment_type, name",
+        "SELECT id, name, equipment_type, status, difficulty FROM equipments ORDER BY equipment_type, name",
     )
     .fetch_all(pool)
     .await?;
     Ok(rows)
 }
 
-/// Set the `in_service` flag for a single equipment, returning the new value.
-pub async fn set_equipment_in_service(
+/// Set the `status` for a single equipment, returning the new value.
+pub async fn set_equipment_status(
     pool: &PgPool,
     equipment_id: uuid::Uuid,
-    in_service: bool,
-) -> Result<bool> {
-    let row =
-        sqlx::query("UPDATE equipments SET in_service = $1 WHERE id = $2 RETURNING in_service")
-            .bind(in_service)
-            .bind(equipment_id)
-            .fetch_optional(pool)
-            .await?;
+    status: models::EquipmentStatus,
+) -> Result<models::EquipmentStatus> {
+    let row = sqlx::query("UPDATE equipments SET status = $1 WHERE id = $2 RETURNING status")
+        .bind(status)
+        .bind(equipment_id)
+        .fetch_optional(pool)
+        .await?;
     match row {
-        Some(r) => Ok(r.try_get("in_service")?),
+        Some(r) => Ok(r.try_get("status")?),
         None => Err(anyhow::anyhow!("Equipment not found")),
     }
+}
+
+/// Check whether the station is open today (has a validated opening day).
+pub async fn is_station_open_today(pool: &PgPool) -> Result<bool> {
+    let today = chrono::Local::now().date_naive();
+    let row = sqlx::query("SELECT 1 FROM opening_days WHERE day = $1 AND status = 'validated'")
+        .bind(today)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.is_some())
+}
+
+/// Get all photo IDs (for the hero slideshow).
+pub async fn get_all_photo_ids(pool: &PgPool) -> Result<Vec<uuid::Uuid>> {
+    let rows = sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM photos ORDER BY created_at")
+        .fetch_all(pool)
+        .await?;
+    Ok(rows)
 }

@@ -1,5 +1,337 @@
 /* PowPow — extracted styles */
 
+/* === Navbar station (dark navy, matching WordPress Enfold theme) === */
+.navbar-station {
+  background-color: #2d395c !important;
+  min-height: 3.5rem;
+  box-shadow: 0 3px 5px 0 rgba(0,0,0,0.3);
+}
+.navbar-station .navbar-item,
+.navbar-station .navbar-link {
+  color: #e37e26 !important;
+  font-size: 15px;
+  transition: background-color 0.25s, color 0.25s;
+  position: relative;
+}
+.navbar-station .navbar-burger {
+  color: #e37e26 !important;
+}
+.navbar-station .navbar-item:hover {
+  background-color: #e37e26 !important;
+  color: #fff !important;
+}
+.navbar-station .navbar-item.is-active {
+  color: #e37e26 !important;
+  background-color: transparent !important;
+}
+/* Underline effect on hover/active, matching WP .avia-menu-fx */
+.navbar-station .navbar-item::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  width: 70%;
+  height: 2px;
+  background-color: #e37e26;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.navbar-station .navbar-item:hover::after,
+.navbar-station .navbar-item.is-active::after {
+  opacity: 1;
+}
+.navbar-station .navbar-menu {
+  background-color: #2d395c;
+}
+@media screen and (max-width: 1023px) {
+  .navbar-station .navbar-menu.is-active {
+    background-color: #2d395c;
+  }
+}
+
+/* === Hero section === */
+.hero-station {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 500px;
+  overflow: hidden;
+}
+.hero-slides {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.hero-slides .hero-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 1.5s ease-in-out;
+  will-change: opacity, transform;
+}
+.hero-slides .hero-slide.is-active {
+  opacity: 1;
+}
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.hero-overlay-content {
+  text-align: center;
+  max-width: 700px;
+  padding: 2rem;
+}
+.hero-logo {
+  max-width: 200px;
+  margin-bottom: 1.5rem;
+}
+.hero-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #e0710f;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+.hero-subtitle {
+  font-size: 1.1rem;
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+.hero-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+@media screen and (max-width: 768px) {
+  .hero-title { font-size: 1.6rem; }
+  .hero-subtitle { font-size: 0.95rem; }
+  .hero-logo { max-width: 140px; }
+}
+
+/* === CTA buttons (orange) === */
+.btn-station {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+  cursor: pointer;
+}
+.btn-station:hover { transform: translateY(-1px); }
+.btn-station-primary {
+  background: #e37e26;
+  color: #fff !important;
+  border: 2px solid #c15c04;
+}
+.btn-station-primary:hover {
+  background: #c15c04;
+}
+.btn-station-subtle {
+  background: #b8ae9c;
+  color: #fff !important;
+  border: 2px solid #b8ae9c;
+}
+.btn-station-subtle:hover {
+  background: #a69c8a;
+  border-color: #a69c8a;
+}
+.btn-station-outline {
+  background: transparent;
+  color: #fff !important;
+  border: 2px solid #fff;
+}
+.btn-station-outline:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* === Section background themes === */
+.section-brown {
+  background-color: #5f5144;
+  color: #fff;
+}
+.section-brown a { color: #e37e26; }
+.section-navy {
+  background-color: #2d395c;
+  color: #fff;
+}
+.section-navy a { color: #e37e26; }
+.section-olive {
+  background-color: #635f3d;
+  color: #fff;
+}
+.section-olive a { color: #e37e26; }
+.section-green {
+  background-color: #90a843;
+  color: #fff;
+}
+.section-green a { color: #fff; text-decoration: underline; }
+.section-golden {
+  background-color: #edae44;
+  color: #333;
+  border-radius: 6px;
+  padding: 1.5rem;
+  border: 1px solid #d99c2e;
+}
+
+/* === Station status badge === */
+.station-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.8rem;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+}
+.station-status-badge.is-open {
+  color: #83a846;
+}
+.station-status-badge.is-closed {
+  color: #b02b2c;
+}
+
+/* === Equipment rows (pistes / téléskis) === */
+.equip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+.difficulty-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+.equip-name {
+  min-width: 100px;
+  color: rgba(255,255,255,0.9);
+}
+.equip-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.equip-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+.equip-bar-fill.is-open {
+  background: #83a846;
+}
+.equip-bar-fill.is-closed {
+  background: #b02b2c;
+}
+.equip-bar-fill.is-partial {
+  background: #edae44;
+}
+.equip-status {
+  font-size: 0.8rem;
+  min-width: 50px;
+  text-align: right;
+  color: rgba(255,255,255,0.7);
+}
+
+/* === Equipment legend === */
+.equip-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.equip-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.85);
+}
+.equip-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.equip-legend-dot.is-open { background: #83a846; }
+.equip-legend-dot.is-closed { background: #b02b2c; }
+.equip-legend-dot.is-partial { background: #edae44; }
+
+/* === Section heading with decorative underline === */
+.section-heading {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.6rem;
+  position: relative;
+}
+.section-heading::after {
+  content: "";
+  display: block;
+  width: 60px;
+  height: 3px;
+  background: #e37e26;
+  margin-top: 0.5rem;
+}
+.section-heading.has-text-centered::after {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* === Footer station === */
+.footer-station {
+  background-color: #b8ae9c !important;
+  color: #333;
+  padding: 2rem 1.5rem;
+}
+.footer-station a {
+  color: #2d395c;
+  text-decoration: underline;
+}
+.footer-station a:hover {
+  color: #e37e26;
+}
+.footer-heading {
+  color: #2d395c !important;
+}
+
+/* === Fullscreen image modal === */
+.img-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.85);
+  cursor: pointer;
+  justify-content: center;
+  align-items: center;
+}
+.img-modal.is-active {
+  display: flex;
+}
+.img-modal-content {
+  width: 98vw;
+  height: 98vh;
+  object-fit: contain;
+  border-radius: 2px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+.img-modal-trigger { cursor: zoom-in; }
+
 /* === Navbar badges (from page()) === */
 .navbar-item { position: relative; }
 .nav-badge {
