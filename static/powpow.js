@@ -74,6 +74,14 @@ function initHeroSlideshow(prefix) {
 
     var pfx = container.dataset.prefix || '';
 
+    // Shuffle so each page load shows a different sequence (Fisher-Yates)
+    for (var i = photoIds.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = photoIds[i];
+        photoIds[i] = photoIds[j];
+        photoIds[j] = tmp;
+    }
+
     // Create slide elements
     photoIds.forEach(function(id, i) {
         var slide = document.createElement('div');
