@@ -2,6 +2,8 @@ mod admin;
 mod auth;
 mod calendar;
 mod cash;
+mod content;
+mod content_admin;
 mod home;
 mod membership;
 mod photos;
@@ -12,6 +14,8 @@ pub use admin::{admin_page, audit_page, restore_page, restore_result, validation
 pub use auth::login_page;
 pub use calendar::{calendar, calendar_editor, render_upcoming_week_email};
 pub use cash::{cash_form, cash_import_form, cash_list};
+pub use content::render_content_block;
+pub use content_admin::{content_edit_page, content_list_page};
 pub use home::index;
 pub use membership::{
     already_imported_page, import_result, import_staff_form, membership_list_with_filters,
@@ -21,7 +25,7 @@ pub use photos::photo_page;
 pub use staff::{person_detail, staff_list};
 pub use static_pages::static_page;
 
-use crate::models::{StaffMatchType, StaffWithSeason};
+use crate::models::{ContentMap, StaffMatchType, StaffWithSeason};
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 
 /// Short hex hash of embedded CSS+JS for cache-busting query params.
@@ -150,6 +154,7 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str) -> Markup {
     }
 }
 
+/// 7-arg convenience wrapper: renders the page with the default hardcoded footer.
 fn page(
     title: &str,
     prefix: &str,
@@ -158,6 +163,30 @@ fn page(
     extra_head: Markup,
     content: Markup,
     extra_scripts: Markup,
+) -> Markup {
+    page_with_footer(
+        title,
+        prefix,
+        nav_kind,
+        active,
+        extra_head,
+        content,
+        extra_scripts,
+        None,
+    )
+}
+
+/// Full page renderer with optional CMS footer content blocks.
+#[allow(clippy::too_many_arguments)]
+fn page_with_footer(
+    title: &str,
+    prefix: &str,
+    nav_kind: &NavKind,
+    active: &str,
+    extra_head: Markup,
+    content: Markup,
+    extra_scripts: Markup,
+    footer_contents: Option<&ContentMap>,
 ) -> Markup {
     let p = prefix;
     let nav = navbar(prefix, nav_kind, active);
@@ -187,12 +216,8 @@ fn page(
                         div .columns {
                             // Column 1: Contact + partners
                             div .column.is-one-third {
-                                h4 .title.is-5.footer-heading { "Nous contacter !" }
-                                p {
-                                    "Remontées mécaniques — Tél. 04 76 08 32 20" br;
-                                    "Office de Tourisme — Tél. 04 76 08 33 99" br;
-                                    "Nous contacter par "
-                                    a href="mailto:aghil.sthilaire@gmail.com" { "e-mail" }
+                                @if let Some(contents) = footer_contents {
+                                    (render_content_block(contents.get("footer-contact"), p, "h4", "title is-5 footer-heading"))
                                 }
                                 h4 .title.is-6.footer-heading.mt-4 { "Liens utiles" }
                                 p {
@@ -203,28 +228,14 @@ fn page(
                             }
                             // Column 2: Calendar
                             div .column.is-one-third {
-                                h4 .title.is-5.footer-heading { "Calendrier prévisionnel 2025/2026" }
-                                div .content.is-small {
-                                    p { "Calendrier prévisionnel d'ouverture de la station de ski de St-Hilaire du Touvet. Sous couvert des conditions d'enneigement, et des disponibilités des bénévoles et des secouristes." }
-                                    ul {
-                                        li { "Tous les week-ends " strong { "de janvier 2026" } " (selon enneigement)" }
-                                        li { strong { "Fête de la station" } " : le 07 et 08 février 2026" }
-                                        li { strong { "Vacances de Février" } " : 2ème semaine zone A (14/02 au 22/02)" }
-                                        li { "Fermeture au plus tard " strong { "mi-mars" } " 2026" }
-                                    }
-                                    p { "Pour les ouvertures exceptionnelles, consultez les infos sur "
-                                        a href="https://www.facebook.com/stationskisainthilaire" target="_blank" { "notre page Facebook" }
-                                        "."
-                                    }
+                                @if let Some(contents) = footer_contents {
+                                    (render_content_block(contents.get("footer-calendar"), p, "h4", "title is-5 footer-heading"))
                                 }
                             }
                             // Column 3: Summer link
                             div .column.is-one-third {
-                                h4 .title.is-5.footer-heading { "En été" }
-                                a href="https://www.funiculaire.fr" target="_blank" {
-                                    img src="https://www.station-ski-saint-hilaire.fr/wp-content/uploads/2016/09/funiculaire-221x300.jpg"
-                                        alt="Funiculaire de Saint-Hilaire du Touvet"
-                                        style="max-width: 180px;";
+                                @if let Some(contents) = footer_contents {
+                                    (render_content_block(contents.get("footer-summer"), p, "h4", "title is-5 footer-heading"))
                                 }
                             }
                         }

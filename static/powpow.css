@@ -20,6 +20,11 @@
   background-color: #e37e26 !important;
   color: #fff !important;
 }
+.navbar-station .navbar-item:focus,
+.navbar-station .navbar-item:focus-within {
+  background-color: transparent !important;
+  color: #e37e26 !important;
+}
 .navbar-station .navbar-item.is-active {
   color: #e37e26 !important;
   background-color: transparent !important;

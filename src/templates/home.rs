@@ -1,6 +1,6 @@
-use super::{NavKind, calendar::render_upcoming_week, page};
-use crate::models::{Atelier, Equipment, EquipmentStatus, EquipmentType, Staff};
-use maud::{Markup, html};
+use super::{NavKind, calendar::render_upcoming_week, page_with_footer};
+use crate::models::{Atelier, ContentMap, Equipment, EquipmentStatus, EquipmentType, Staff};
+use maud::{Markup, PreEscaped, html};
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn index(
@@ -13,6 +13,7 @@ pub fn index(
     equipments: &[Equipment],
     station_open: bool,
     photo_ids: &[uuid::Uuid],
+    contents: &ContentMap,
 ) -> Markup {
     let p = prefix;
     let season_display = format!("{}-{}", current_season - 1, current_season);
@@ -60,11 +61,11 @@ pub fn index(
                     img .hero-logo
                         src="https://station-ski-saint-hilaire.fr/wp-content/uploads/2016/09/logo.png"
                         alt="Logo Station";
-                    h1 .hero-title { "Agir pour la station de ski de St Hilaire !" }
-                    p .hero-subtitle {
-                        "L'association AGH'IL \u{2013} Agir pour la station de ski de St Hilaire \u{2013} regroupe "
-                        "les bénévoles qui se mobilisent chaque hiver pour faire vivre notre belle "
-                        "petite station de ski."
+                    @let block = contents.get("hero-subtitle");
+                    h1 .hero-title { (block.title) }
+                    @let body_html = block.render_body();
+                    @if !body_html.is_empty() {
+                        div .hero-subtitle { (PreEscaped(body_html)) }
                     }
                     div .hero-buttons {
                         a .btn-station.btn-station-primary
@@ -107,6 +108,14 @@ pub fn index(
                             "Téléskis : " (open_tows) "/" (total_tows) " ouverts"
                             @if partial_tows > 0 {
                                 " (" (partial_tows) " partiels)"
+                            }
+                        }
+                        // Editable infos-station block (below status)
+                        @let block = contents.get("infos-station");
+                        @let body_html = block.render_body();
+                        @if !body_html.is_empty() {
+                            div .content.has-text-white.mt-4 {
+                                (PreEscaped(body_html))
                             }
                         }
                     }
@@ -180,40 +189,30 @@ pub fn index(
             div .container {
                 div .columns {
                     div .column.is-7 {
-                        h2 .section-heading.has-text-white {
-                            "Le Plateau des Petites Roches et sa station de ski alpin"
-                        }
+                        @let block = contents.get("about-station");
+                        h2 .section-heading.has-text-white { (block.title) }
                         div .content.has-text-white {
-                            p {
-                                "La station de ski de Saint-Hilaire-du-Touvet est située sur le "
-                                "Plateau des Petites Roches, dans le massif de la Chartreuse (Isère). "
-                                "Nichée entre 1000 et 1300 mètres d'altitude, elle offre un panorama "
-                                "exceptionnel sur la vallée du Grésivaudan et la chaîne de Belledonne."
-                            }
-                            p {
-                                "Depuis sa création, la station est animée par des bénévoles passionnés "
-                                "qui assurent son fonctionnement : damage des pistes, exploitation des "
-                                "remontées mécaniques, accueil du public, vente de forfaits, secours "
-                                "sur pistes... Un esprit unique de solidarité et de convivialité !"
-                            }
+                            (PreEscaped(block.render_body()))
                         }
                     }
                     div .column.is-5 {
                         div .section-golden {
-                            h3 .title.is-4.has-text-centered { "La station ouvre en 2026 !" }
-                            h4 .subtitle.is-5.has-text-centered { "QUI SOMMES-NOUS ?" }
+                            @let block = contents.get("about-association");
+                            h3 .title.is-4.has-text-centered { (block.title) }
                             div .content {
-                                p {
-                                    "L'association AGH'IL (Agir pour la station de ski de St Hilaire) "
-                                    "regroupe les bénévoles qui permettent à la station de fonctionner. "
-                                    "Rejoignez-nous !"
-                                }
+                                (PreEscaped(block.render_body()))
                             }
-                            div .has-text-centered {
-                                a .btn-station.btn-station-primary
-                                  href="https://www.helloasso.com/associations/agir-pour-la-station-de-ski-de-st-hil"
-                                  target="_blank" {
-                                    "Adhérer sur HelloAsso"
+                            @if let Some(img_id) = block.image_id {
+                                img src=(format!("{p}/content-images/{img_id}"))
+                                    alt=(block.title)
+                                    style="max-width:100%;border-radius:6px;";
+                            }
+                            @if let Some(ref url) = block.link_url {
+                                @let label = block.link_label.as_deref().unwrap_or(url);
+                                div .has-text-centered {
+                                    a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                        (label)
+                                    }
                                 }
                             }
                         }
@@ -237,34 +236,26 @@ pub fn index(
             }
         }
 
-        // ── Webcam ───────────────────────────────────────────────────
-        section .section.section-olive {
-            div .container {
-                h2 .section-heading.has-text-centered.has-text-white {
-                    "Webcam de la station de ski de Saint-Hilaire"
-                }
-                div .has-text-centered {
-                    p .has-text-white { "La webcam sera disponible prochainement." }
-                }
-            }
-        }
-
         // ── Événements ───────────────────────────────────────────────
         section .section.section-brown {
             div .container {
-                h2 .section-heading.has-text-centered.has-text-white { "Événements 2026" }
+                @let block = contents.get("events");
+                h2 .section-heading.has-text-centered.has-text-white { (block.title) }
                 div .columns.is-centered {
                     div .column.is-8 {
                         div .box {
-                            h3 .title.is-4 {
-                                span .icon.mr-2 { i .fa-solid.fa-calendar-star {} }
-                                "FÊTE de la STATION = le 07 FÉVRIER 2026"
-                            }
                             div .content {
-                                p {
-                                    "Comme chaque année, la fête de la station est un moment "
-                                    "convivial et festif ouvert à tous. Au programme : ski, "
-                                    "animations, buvette et bonne humeur sur les pistes !"
+                                (PreEscaped(block.render_body()))
+                            }
+                            @if let Some(img_id) = block.image_id {
+                                img src=(format!("{p}/content-images/{img_id}"))
+                                    alt=(block.title)
+                                    style="max-width:100%;border-radius:6px;";
+                            }
+                            @if let Some(ref url) = block.link_url {
+                                @let label = block.link_label.as_deref().unwrap_or(url);
+                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                    (label)
                                 }
                             }
                         }
@@ -278,28 +269,27 @@ pub fn index(
             div .container {
                 div .columns {
                     div .column.is-6 {
-                        h2 .section-heading.has-text-white { "Une salle, deux utilisations..." }
+                        @let block = contents.get("salle-hors-sac");
+                        h2 .section-heading.has-text-white { (block.title) }
                         div .content.has-text-white {
-                            p {
-                                "La station met à disposition une salle hors-sac pour les "
-                                "skieurs et les familles. Idéale pour pique-niquer au chaud "
-                                "entre deux descentes, elle permet aussi d'organiser des "
-                                "événements associatifs."
-                            }
+                            (PreEscaped(block.render_body()))
+                        }
+                        @if let Some(img_id) = block.image_id {
+                            img src=(format!("{p}/content-images/{img_id}"))
+                                alt=(block.title)
+                                style="max-width:100%;border-radius:6px;";
                         }
                     }
                     div .column.is-6 {
-                        h2 .section-heading.has-text-white { "Newsletter et adhésion" }
+                        @let block = contents.get("newsletter");
+                        h2 .section-heading.has-text-white { (block.title) }
                         div .content.has-text-white {
-                            p {
-                                "Pour rester informé de l'actualité de la station et de "
-                                "l'association, adhérez via HelloAsso. Vous recevrez toutes "
-                                "les informations sur les ouvertures et événements."
-                            }
-                            a .btn-station.btn-station-primary
-                              href="https://www.helloasso.com/associations/agir-pour-la-station-de-ski-de-st-hil"
-                              target="_blank" {
-                                "Adhérer sur HelloAsso"
+                            (PreEscaped(block.render_body()))
+                            @if let Some(ref url) = block.link_url {
+                                @let label = block.link_label.as_deref().unwrap_or(url);
+                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                    (label)
+                                }
                             }
                         }
                     }
@@ -398,7 +388,7 @@ pub fn index(
         }
     };
 
-    page(
+    page_with_footer(
         "Station de ski de Saint-Hilaire du Touvet",
         prefix,
         &NavKind::LoginOnly,
@@ -406,5 +396,6 @@ pub fn index(
         extra_head,
         content,
         html! {},
+        Some(contents),
     )
 }

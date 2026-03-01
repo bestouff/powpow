@@ -446,6 +446,15 @@ async fn main() -> anyhow::Result<()> {
         .route("/photos/{id}", get(routes::photos::display_photo))
         .route("/photos/{id}/delete", post(routes::photos::delete_photo))
         .route("/api/photos/ids", get(routes::photos::api_photo_ids))
+        .route(
+            "/content-images/{id}",
+            get(routes::content::serve_content_image),
+        )
+        .route("/admin/contents", get(routes::content::content_list))
+        .route(
+            "/admin/contents/{slug}",
+            get(routes::content::content_edit).post(routes::content::content_save),
+        )
         .route("/static/powpow.css", get(routes::static_pages::serve_css))
         .route("/static/powpow.js", get(routes::static_pages::serve_js))
         .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024))

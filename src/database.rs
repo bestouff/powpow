@@ -1,6 +1,6 @@
 use crate::models::{
-    self, Atelier, Cash, Equipment, Membership, Need, PaymentHistoryEntry, Photo, PhotoMeta, Role,
-    Staff, StaffMatchType, StaffWithSeason, User,
+    self, Atelier, Cash, ContentBlock, ContentImage, Equipment, Membership, Need,
+    PaymentHistoryEntry, Photo, PhotoMeta, Role, Staff, StaffMatchType, StaffWithSeason, User,
 };
 use anyhow::Result;
 use futures_util::StreamExt;
@@ -2364,10 +2364,14 @@ const TABLES_PARENT_FIRST: &[&str] = &[
     "needs",
     "presence",
     "audit",
+    "content_images",
+    "contents",
 ];
 
 /// Tables in reverse dependency order (children first). Used for TRUNCATE.
 const TABLES_CHILD_FIRST: &[&str] = &[
+    "contents",
+    "content_images",
     "presence",
     "audit",
     "roles",
@@ -2670,4 +2674,104 @@ pub async fn get_all_photo_ids(pool: &PgPool) -> Result<Vec<uuid::Uuid>> {
         .fetch_all(pool)
         .await?;
     Ok(rows)
+}
+
+// ── CMS content functions ────────────────────────────────────────────
+
+/// Fetch all content blocks, keyed by slug.
+pub async fn get_all_contents(
+    pool: &PgPool,
+) -> Result<std::collections::HashMap<String, ContentBlock>> {
+    let rows = sqlx::query_as::<_, ContentBlock>("SELECT * FROM contents ORDER BY slug")
+        .fetch_all(pool)
+        .await?;
+    Ok(rows.into_iter().map(|c| (c.slug.clone(), c)).collect())
+}
+
+/// Fetch a single content block by slug.
+pub async fn get_content(pool: &PgPool, slug: &str) -> Result<Option<ContentBlock>> {
+    let row = sqlx::query_as::<_, ContentBlock>("SELECT * FROM contents WHERE slug = $1")
+        .bind(slug)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row)
+}
+
+/// Update a content block (upsert on slug).
+pub async fn update_content(
+    pool: &PgPool,
+    slug: &str,
+    title: &str,
+    body: &str,
+    image_id: Option<uuid::Uuid>,
+    link_url: Option<&str>,
+    link_label: Option<&str>,
+) -> Result<()> {
+    sqlx::query(
+        r"
+        INSERT INTO contents (slug, title, body, image_id, link_url, link_label, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        ON CONFLICT (slug) DO UPDATE SET
+            title = EXCLUDED.title,
+            body = EXCLUDED.body,
+            image_id = EXCLUDED.image_id,
+            link_url = EXCLUDED.link_url,
+            link_label = EXCLUDED.link_label,
+            updated_at = NOW()
+        ",
+    )
+    .bind(slug)
+    .bind(title)
+    .bind(body)
+    .bind(image_id)
+    .bind(link_url)
+    .bind(link_label)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Create a new CMS image, returning its UUID.
+pub async fn create_content_image(
+    pool: &PgPool,
+    data: Vec<u8>,
+    content_type: &str,
+    filename: &str,
+) -> Result<uuid::Uuid> {
+    let id = sqlx::query_scalar::<_, uuid::Uuid>(
+        "INSERT INTO content_images (data, content_type, filename) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(data)
+    .bind(content_type)
+    .bind(filename)
+    .fetch_one(pool)
+    .await?;
+    Ok(id)
+}
+
+/// Fetch a CMS image by ID (binary data included).
+pub async fn get_content_image(pool: &PgPool, id: uuid::Uuid) -> Result<Option<ContentImage>> {
+    let row = sqlx::query_as::<_, ContentImage>("SELECT * FROM content_images WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row)
+}
+
+/// Delete a CMS image by ID.
+pub async fn delete_content_image(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
+    let result = sqlx::query("DELETE FROM content_images WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+/// Get the filename of a content image (without loading binary data).
+pub async fn get_content_image_filename(pool: &PgPool, id: uuid::Uuid) -> Result<Option<String>> {
+    let row = sqlx::query_scalar::<_, String>("SELECT filename FROM content_images WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row)
 }

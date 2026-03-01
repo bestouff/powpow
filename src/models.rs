@@ -581,3 +581,99 @@ pub struct HelloAssoErrorResponse {
     pub error: String,
     pub error_description: Option<String>,
 }
+
+// ── CMS content blocks ──────────────────────────────────────────────
+
+/// An editable content block for the frontpage CMS.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentBlock {
+    pub slug: String,
+    pub title: String,
+    pub body: String,
+    pub image_id: Option<uuid::Uuid>,
+    pub link_url: Option<String>,
+    pub link_label: Option<String>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for ContentBlock {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(ContentBlock {
+            slug: row.try_get("slug")?,
+            title: row.try_get("title")?,
+            body: row.try_get("body")?,
+            image_id: row.try_get("image_id")?,
+            link_url: row.try_get("link_url")?,
+            link_label: row.try_get("link_label")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
+impl ContentBlock {
+    /// Render the markdown body to HTML.
+    #[must_use]
+    pub fn render_body(&self) -> String {
+        use pulldown_cmark::{Options, Parser, html};
+        let parser = Parser::new_ext(&self.body, Options::all());
+        let mut html_output = String::new();
+        html::push_html(&mut html_output, parser);
+        html_output
+    }
+}
+
+/// Thin wrapper around a `HashMap<String, ContentBlock>` that always returns
+/// a reference: the real block when present, or a built-in placeholder whose
+/// title and body make it obvious the content is missing.
+pub struct ContentMap {
+    blocks: std::collections::HashMap<String, ContentBlock>,
+    placeholder: ContentBlock,
+}
+
+impl ContentMap {
+    /// Build from the map returned by `get_all_contents()`.
+    #[must_use]
+    pub fn new(blocks: std::collections::HashMap<String, ContentBlock>) -> Self {
+        Self {
+            blocks,
+            placeholder: ContentBlock {
+                slug: String::new(),
+                title: "[contenu manquant]".to_string(),
+                body: "[contenu manquant]".to_string(),
+                image_id: None,
+                link_url: None,
+                link_label: None,
+                updated_at: Utc::now(),
+            },
+        }
+    }
+
+    /// Get a content block by slug, or the placeholder if missing.
+    #[must_use]
+    pub fn get(&self, slug: &str) -> &ContentBlock {
+        self.blocks.get(slug).unwrap_or(&self.placeholder)
+    }
+}
+
+/// A CMS image stored in the database (separate from volunteer photos).
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct ContentImage {
+    pub id: uuid::Uuid,
+    pub data: Vec<u8>,
+    pub content_type: String,
+    pub filename: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for ContentImage {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(ContentImage {
+            id: row.try_get("id")?,
+            data: row.try_get("data")?,
+            content_type: row.try_get("content_type")?,
+            filename: row.try_get("filename")?,
+            created_at: row.try_get("created_at")?,
+        })
+    }
+}

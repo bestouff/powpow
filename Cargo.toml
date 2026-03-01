@@ -43,6 +43,7 @@ base64 = "0.22"
 futures-util = { version = "0.3.31", default-features = false, features = [
   "alloc",
 ] }
+pulldown-cmark = "0.13"
 
 [dev-dependencies]
 tokio-test = "0.4"

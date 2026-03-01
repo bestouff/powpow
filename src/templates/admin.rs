@@ -374,6 +374,24 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                         }
                     }
                 }
+
+                // Contenu éditorial (admin only)
+                @if is_admin {
+                    section .section.py-4 {
+                        div .box {
+                            h3 .title.is-5.mb-3 {
+                                span .icon.mr-2 { i .fa-solid.fa-pen-to-square {} }
+                                "Contenu éditorial"
+                            }
+                            div .buttons {
+                                a .button.is-info href={(p) "/admin/contents"} {
+                                    span .icon { i .fa-solid.fa-pen-to-square {} }
+                                    span { "Gérer le contenu du site" }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     };

@@ -6,7 +6,7 @@ use axum::{
 };
 use axum_extra::extract::cookie::SignedCookieJar;
 
-use crate::{AppState, database, get_current_season, get_prefix, templates};
+use crate::{AppState, database, get_current_season, get_prefix, models::ContentMap, templates};
 
 /// Resolve the caller from the session cookie, if any.
 async fn resolve_caller(jar: &SignedCookieJar, state: &AppState) -> Option<crate::models::Staff> {
@@ -83,6 +83,11 @@ pub async fn index(
     let photo_ids = database::get_all_photo_ids(&state.db)
         .await
         .unwrap_or_default();
+    let contents = ContentMap::new(
+        database::get_all_contents(&state.db)
+            .await
+            .unwrap_or_default(),
+    );
 
     templates::index(
         &prefix,
@@ -94,6 +99,7 @@ pub async fn index(
         &equipments,
         station_open,
         &photo_ids,
+        &contents,
     )
 }
 
