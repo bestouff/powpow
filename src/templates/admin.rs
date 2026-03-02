@@ -122,7 +122,7 @@ pub fn restore_result(prefix: &str, success: bool, message: &str) -> Markup {
                                     span .icon { i .fa-solid.fa-house {} }
                                     span { "Retour à l'accueil" }
                                 }
-                                a .button.is-info.is-medium href={(p) "/users"} {
+                                a .button.is-info.is-medium href={(p) "/online"} {
                                     span .icon { i .fa-solid.fa-users {} }
                                     span { "Voir les adhésions" }
                                 }
@@ -254,10 +254,10 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                                 "Gestion des adhésions"
                             }
                             div .buttons {
-                                a .button.is-primary href={(p) "/users"} {
+                                a .button.is-primary href={(p) "/online"} {
                                     span .icon { i .fa-solid.fa-ticket {} }
                                     span { "Adhésions HelloAsso" }
-                                    span .nav-badge.d-none data-badge="users" {}
+                                    span .nav-badge.d-none data-badge="online" {}
                                 }
                                 a .button.is-primary.is-light href={(p) "/cash"} {
                                     span .icon { i .fa-solid.fa-money-bill-wave {} }

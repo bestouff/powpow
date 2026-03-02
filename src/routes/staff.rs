@@ -223,7 +223,7 @@ pub async fn view_person(
                     icon: "fa-ticket-alt",
                     color: "danger",
                     html: format!(
-                        r#"<a href="{}/users"><strong>{}</strong> adhésion(s) HelloAsso à importer</a>"#,
+                        r#"<a href="{}/online"><strong>{}</strong> adhésion(s) HelloAsso à importer</a>"#,
                         prefix, unimported_ha,
                     ),
                 });

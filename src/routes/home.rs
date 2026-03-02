@@ -141,7 +141,7 @@ pub async fn api_badge_counts(
     let admin_total = users + cash + validations;
 
     Json(serde_json::json!({
-        "users": users,
+        "online": users,
         "cash": cash,
         "validations": validations,
         "admin": admin_total,

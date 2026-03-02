@@ -1,9 +1,9 @@
 use super::{
-    capitalize_words, escape_html, format_phone_international, page, render_import_form,
-    ImportContext, NavKind,
+    ImportContext, NavKind, capitalize_words, escape_html, format_phone_international, page,
+    render_import_form,
 };
 use crate::models::{Membership, MembershipWithStatus, StaffWithSeason, User};
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 #[allow(clippy::too_many_arguments)]
 pub fn membership_list_with_filters(
@@ -59,7 +59,7 @@ pub fn membership_list_with_filters(
                 div .columns.mb-4 {
                     div .column.is-4 {
                         a class={"box stat-card has-text-centered" (total_card_active)}
-                          href={(p) "/users"} {
+                          href={(p) "/online"} {
                             span .icon.is-large.has-text-info {
                                 i .fa-solid.fa-ticket.fa-2x {}
                             }
@@ -90,7 +90,7 @@ pub fn membership_list_with_filters(
 
                 // Search and Filter Box
                 div .box.mb-4 {
-                    form #filterForm method="GET" action={(p) "/users"} {
+                    form #filterForm method="GET" action={(p) "/online"} {
                         div .columns.is-vcentered {
                             div .column.is-6 {
                                 div .field.has-addons {
@@ -126,7 +126,7 @@ pub fn membership_list_with_filters(
                                         }
                                     }
                                     @if has_filters {
-                                        a .button.is-light.is-small.ml-2 href={(p) "/users"} {
+                                        a .button.is-light.is-small.ml-2 href={(p) "/online"} {
                                             span .icon { i .fa-solid.fa-xmark {} }
                                             span { "Effacer filtres" }
                                         }
@@ -293,7 +293,7 @@ pub fn already_imported_page(membership: Membership, season: i16, prefix: &str) 
                                 }
                             }
 
-                            a .button.is-primary.is-medium.mt-4 href={(p) "/users"} {
+                            a .button.is-primary.is-medium.mt-4 href={(p) "/online"} {
                                 span .icon { i .fa-solid.fa-arrow-left {} }
                                 span { "Retour aux adhésions" }
                             }
@@ -389,7 +389,7 @@ pub fn import_staff_form(
         page_title: "Importer Staff - AGHIL",
         page_heading: "Importer un Staff",
         detail_title: "Détails de l'Adhésion",
-        back_suffix: "/users",
+        back_suffix: "/online",
         nav_active: "",
         detail_rows,
     };
@@ -434,7 +434,7 @@ pub fn user_detail(user: User, prefix: &str) -> Markup {
                         h1 .title.is-3 { "Détails de l'Utilisateur" }
                     }
                     div .level-right {
-                        a .button.is-light href={(p) "/users"} {
+                        a .button.is-light href={(p) "/online"} {
                             span .icon { i .fa-solid.fa-arrow-left {} }
                             span { "Retour à la liste" }
                         }
@@ -548,7 +548,7 @@ pub fn import_result(success: bool, message: &str, prefix: &str) -> Markup {
                         span .icon { i .fa-solid.fa-arrow-left {} }
                         span { "Retour aux adhésions à importer" }
                     }
-                    a .button.is-light href={(p) "/users"} {
+                    a .button.is-light href={(p) "/online"} {
                         span .icon { i .fa-solid.fa-list {} }
                         span { "Voir toutes les adhésions" }
                     }

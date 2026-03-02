@@ -289,7 +289,7 @@ struct ImportContext {
     page_heading: &'static str,
     /// Detail box title ("Détails de l'Adhésion" / "Détails du paiement").
     detail_title: &'static str,
-    /// Back-link target path suffix ("/users" / "/cash").
+    /// Back-link target path suffix ("/online" / "/cash").
     back_suffix: &'static str,
     /// Active nav item ("" / "cash").
     nav_active: &'static str,

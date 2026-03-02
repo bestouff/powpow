@@ -341,7 +341,7 @@ pub async fn do_import_staff(
             (
                 StatusCode::SEE_OTHER,
                 html! {
-                    meta http-equiv="refresh" content=(format!("0;url={}/users", prefix)) {}
+                    meta http-equiv="refresh" content=(format!("0;url={}/online", prefix)) {}
                     p { "Redirecting..." }
                 },
             )
