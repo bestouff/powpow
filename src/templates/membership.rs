@@ -1,9 +1,9 @@
 use super::{
-    ImportContext, NavKind, capitalize_words, escape_html, format_phone_international, page,
-    render_import_form,
+    capitalize_words, escape_html, format_phone_international, page, render_import_form,
+    ImportContext, NavKind,
 };
 use crate::models::{Membership, MembershipWithStatus, StaffWithSeason, User};
-use maud::{Markup, html};
+use maud::{html, Markup};
 
 #[allow(clippy::too_many_arguments)]
 pub fn membership_list_with_filters(
@@ -172,7 +172,7 @@ pub fn membership_list_with_filters(
                                     @let (type_label, type_class) = match membership.item_type.as_deref() {
                                         Some("Donation") => ("Don", "is-info"),
                                         Some("Membership") => ("Adhésion", "is-primary"),
-                                        Some("Registration") => ("Forfait", "is-light"),
+                                        Some("Registration") => ("Forfait", "is-link"),
                                         _ => ("?", "is-light"),
                                     };
                                     @let amount = membership.amount.map_or_else(
@@ -194,7 +194,7 @@ pub fn membership_list_with_filters(
                                         td { (order_date) }
                                         td { span class={"tag " (season_tag_class)} { (season) } }
                                         td {
-                                            @if membership.item_type.as_deref() == Some("Registration") {
+                                            @if matches!(membership.item_type.as_deref(), Some("Registration" | "Donation")) {
                                                 span .tag.is-light { "Ignoré" }
                                             } @else if membership_with_status.is_double_subscription {
                                                 span .tag.is-danger { "Double adhésion" }

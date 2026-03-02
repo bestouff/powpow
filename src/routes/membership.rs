@@ -50,10 +50,13 @@ pub async fn list_users(
                 // Check if staff exists for this membership+season (batch lookup)
                 let has_staff = imported_set.contains(&(membership.helloasso_item_id, season));
 
-                let is_registration = membership.item_type.as_deref() == Some("Registration");
+                let is_non_membership = matches!(
+                    membership.item_type.as_deref(),
+                    Some("Registration" | "Donation")
+                );
 
-                // Update stats (skip Registration/Forfait items)
-                if !is_registration {
+                // Update stats (skip non-membership items: Forfait, Don)
+                if !is_non_membership {
                     total_count += 1;
                     if has_staff {
                         imported_count += 1;
@@ -62,8 +65,8 @@ pub async fn list_users(
                     }
                 }
 
-                // Apply filter (hide imported and Registration items in "À importer" view)
-                if only_not_imported && (has_staff || is_registration) {
+                // Apply filter (hide imported and non-membership items in "À importer" view)
+                if only_not_imported && (has_staff || is_non_membership) {
                     continue;
                 }
 
