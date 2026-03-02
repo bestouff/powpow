@@ -1512,7 +1512,8 @@ pub async fn count_unimported_memberships(pool: &PgPool, current_season: i16) ->
     let row = sqlx::query(
         r"
         SELECT COUNT(*) as count FROM memberships m
-        WHERE NOT EXISTS (
+        WHERE (m.item_type IS NULL OR m.item_type NOT IN ('Registration', 'Donation'))
+        AND NOT EXISTS (
             SELECT 1 FROM payments p
             WHERE p.helloasso_item_id = m.helloasso_item_id
             AND p.season = (
