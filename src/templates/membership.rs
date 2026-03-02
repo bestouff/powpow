@@ -68,7 +68,7 @@ pub fn membership_list_with_filters(
                         }
                     }
                     div .column.is-4 {
-                        a .box.stat-card.has-text-centered href={(p) "/users?filter=all"} {
+                        a .box.stat-card.has-text-centered href={(p) "/online?filter=all"} {
                             span .icon.is-large.has-text-success {
                                 i .fa-solid.fa-circle-check.fa-2x {}
                             }
@@ -78,7 +78,7 @@ pub fn membership_list_with_filters(
                     }
                     div .column.is-4 {
                         a class={"box stat-card has-text-centered" (not_imported_card_active)}
-                          href={(p) "/users?filter=not_imported"} {
+                          href={(p) "/online?filter=not_imported"} {
                             span .icon.is-large.has-text-warning {
                                 i .fa-solid.fa-circle-exclamation.fa-2x {}
                             }
@@ -114,12 +114,12 @@ pub fn membership_list_with_filters(
                                     div .control {
                                         div .buttons.has-addons {
                                             a class={"button " (filter_all_class) " is-medium"}
-                                              href={(p) "/users?search=" (search_value)} {
+                                              href={(p) "/online?search=" (search_value)} {
                                                 span .icon { i .fa-solid.fa-list {} }
                                                 span { "Toutes" }
                                             }
                                             a class={"button " (filter_not_imported_class) " is-medium"}
-                                              href={(p) "/users?search=" (search_value) "&filter=not_imported"} {
+                                              href={(p) "/online?search=" (search_value) "&filter=not_imported"} {
                                                 span .icon { i .fa-solid.fa-circle-exclamation {} }
                                                 span { "À importer" }
                                             }
@@ -544,7 +544,7 @@ pub fn import_result(success: bool, message: &str, prefix: &str) -> Markup {
                     p { (message) }
                 }
                 div .buttons.mt-4 {
-                    a .button.is-primary href={(p) "/users?filter=not_imported"} {
+                    a .button.is-primary href={(p) "/online?filter=not_imported"} {
                         span .icon { i .fa-solid.fa-arrow-left {} }
                         span { "Retour aux adhésions à importer" }
                     }

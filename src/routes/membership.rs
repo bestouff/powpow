@@ -115,12 +115,21 @@ pub async fn list_users(
                 }
             }
 
-            // Sort: not-yet-imported first, then by date (most recent first)
+            // Sort: "À importer" first (not imported, not ignored), then rest, by date desc
             memberships_with_status.sort_by(|a, b| {
-                // First compare by has_staff (false < true, so not imported comes first)
-                match a.1.has_staff.cmp(&b.1.has_staff) {
+                let a_actionable = !a.1.has_staff
+                    && !matches!(
+                        a.1.membership.item_type.as_deref(),
+                        Some("Registration" | "Donation")
+                    );
+                let b_actionable = !b.1.has_staff
+                    && !matches!(
+                        b.1.membership.item_type.as_deref(),
+                        Some("Registration" | "Donation")
+                    );
+                // Actionable items first, then by date descending
+                match b_actionable.cmp(&a_actionable) {
                     std::cmp::Ordering::Equal => {
-                        // Then by date descending (most recent first)
                         b.1.membership.order_date.cmp(&a.1.membership.order_date)
                     }
                     other => other,
