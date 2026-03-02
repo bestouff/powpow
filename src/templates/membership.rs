@@ -172,6 +172,7 @@ pub fn membership_list_with_filters(
                                     @let (type_label, type_class) = match membership.item_type.as_deref() {
                                         Some("Donation") => ("Don", "is-info"),
                                         Some("Membership") => ("Adhésion", "is-primary"),
+                                        Some("Registration") => ("Forfait", "is-light"),
                                         _ => ("?", "is-light"),
                                     };
                                     @let amount = membership.amount.map_or_else(
@@ -193,7 +194,9 @@ pub fn membership_list_with_filters(
                                         td { (order_date) }
                                         td { span class={"tag " (season_tag_class)} { (season) } }
                                         td {
-                                            @if membership_with_status.is_double_subscription {
+                                            @if membership.item_type.as_deref() == Some("Registration") {
+                                                span .tag.is-light { "Ignoré" }
+                                            } @else if membership_with_status.is_double_subscription {
                                                 span .tag.is-danger { "Double adhésion" }
                                             } @else if membership_with_status.has_staff {
                                                 span .tag.is-success { "Importé" }

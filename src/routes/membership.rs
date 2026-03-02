@@ -50,16 +50,20 @@ pub async fn list_users(
                 // Check if staff exists for this membership+season (batch lookup)
                 let has_staff = imported_set.contains(&(membership.helloasso_item_id, season));
 
-                // Update stats
-                total_count += 1;
-                if has_staff {
-                    imported_count += 1;
-                } else {
-                    not_imported_count += 1;
+                let is_registration = membership.item_type.as_deref() == Some("Registration");
+
+                // Update stats (skip Registration/Forfait items)
+                if !is_registration {
+                    total_count += 1;
+                    if has_staff {
+                        imported_count += 1;
+                    } else {
+                        not_imported_count += 1;
+                    }
                 }
 
-                // Apply filter
-                if only_not_imported && has_staff {
+                // Apply filter (hide imported and Registration items in "À importer" view)
+                if only_not_imported && (has_staff || is_registration) {
                     continue;
                 }
 
