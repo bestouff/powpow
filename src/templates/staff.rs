@@ -57,7 +57,7 @@ pub fn staff_list(
                 }
 
                 div .box {
-                    div .table-container {
+                    div .table-container.staff-table {
                         table .table.is-fullwidth.is-striped.is-hoverable {
                             thead {
                                 tr {
