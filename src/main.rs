@@ -384,7 +384,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/export/mailchimp", get(routes::admin::export_mailchimp))
         .route("/backup", get(routes::admin::backup_database))
         .route("/restore", get(routes::admin::restore_page))
-        .route("/restore", post(routes::admin::restore_database))
+        .route(
+            "/restore",
+            post(routes::admin::restore_database)
+                .layer(axum::extract::DefaultBodyLimit::max(1024 * 1024 * 1024)),
+        )
         .route("/api/online", get(routes::membership::api_list_users))
         .route("/api/sync", post(routes::sync::api_sync_users))
         .route("/api/stats", get(routes::admin::api_get_stats))
