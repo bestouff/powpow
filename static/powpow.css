@@ -71,24 +71,23 @@
 }
 .hero-slides {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   z-index: 0;
 }
 .hero-slides .hero-slide {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   background-size: cover;
   background-position: center;
   opacity: 0;
   transition: opacity 1.5s ease-in-out;
-  will-change: opacity, transform;
 }
 .hero-slides .hero-slide.is-active {
   opacity: 1;
 }
 .hero-overlay {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   z-index: 1;
   display: flex;
   align-items: center;
@@ -325,7 +324,7 @@
 .img-modal {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   z-index: 1000;
   background: rgba(0, 0, 0, 0.85);
   cursor: pointer;
@@ -737,7 +736,7 @@ label.switch input[type="checkbox"]:disabled + .check { opacity: 0.5; cursor: no
 .switch .slider {
   position: absolute;
   cursor: pointer;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   background-color: #ccc;
   transition: .3s;
 }
