@@ -27,7 +27,23 @@ pub fn staff_list(
     show_contact: bool,
 ) -> Markup {
     let p = prefix;
-    let staff_count = staff_with_seasons.len();
+    let count_all = staff_with_seasons.len();
+    let count_members = staff_with_seasons
+        .iter()
+        .filter(|(_, s)| *s == Some(current_season))
+        .count();
+    let count_volunteers = staff_with_seasons
+        .iter()
+        .filter(|(staff, s)| {
+            *s == Some(current_season) && roles.iter().any(|r| r.staff == staff.id)
+        })
+        .count();
+    let count_chiefs = staff_with_seasons
+        .iter()
+        .filter(|(staff, s)| {
+            *s == Some(current_season) && roles.iter().any(|r| r.staff == staff.id && r.chief)
+        })
+        .count();
 
     let extra_head = html! {};
 
@@ -42,7 +58,12 @@ pub fn staff_list(
                         }
                     }
                     div .level-right {
-                        span .tag.is-info.is-medium { (staff_count) " membres" }
+                        div .tags {
+                            span .tag.is-light.is-medium { (count_all) " Personnes" }
+                            span .tag.is-success.is-medium { (count_members) " Adhérents à jour" }
+                            span .tag.is-info.is-medium { (count_volunteers) " Bénévoles" }
+                            span .tag.is-warning.is-medium { (count_chiefs) " Chefs" }
+                        }
                     }
                 }
 
