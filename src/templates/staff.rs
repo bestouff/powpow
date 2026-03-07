@@ -83,7 +83,7 @@ pub fn staff_list(
                         table .table.is-fullwidth.is-striped.is-hoverable {
                             thead {
                                 tr {
-                                    th { "Nom" }
+                                    th .sticky-col { "Nom" }
                                     @if show_contact {
                                         th { "Email" }
                                         th { "Téléphone" }
@@ -117,7 +117,7 @@ pub fn staff_list(
                                         None => ("is-light", "\u{2014}".to_string()),
                                     };
                                     tr class=(row_class) {
-                                        td {
+                                        td .sticky-col {
                                             a href={(p) "/person/" (staff.id)} {
                                                 strong { (staff.first_name) " " (staff.last_name) }
                                             }

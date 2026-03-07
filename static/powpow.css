@@ -397,7 +397,7 @@
 }
 
 /* === Staff list table (from staff_list()) === */
-.staff-table-container { overflow: auto; max-height: calc(100vh - 300px); }
+.staff-table { overflow: auto; max-height: calc(100vh - 300px); }
 .atelier-col {
   border-left: 1px solid var(--bulma-border) !important;
   border-right: 1px solid var(--bulma-border) !important;
@@ -408,6 +408,22 @@
   top: 0;
   background: var(--bulma-scheme-main) !important;
   z-index: 10;
+}
+.staff-table .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--bulma-scheme-main);
+  border-right: 2px solid var(--bulma-border) !important;
+}
+.staff-table thead th.sticky-col {
+  z-index: 12;
+}
+.staff-table tbody tr:nth-child(even) .sticky-col {
+  background: var(--bulma-table-striped-row-even-background-color, var(--bulma-scheme-main-bis));
+}
+.staff-table tbody tr.inactive-staff .sticky-col {
+  background: var(--bulma-scheme-main);
 }
 th.atelier-col {
   background: var(--bulma-scheme-main) !important;
