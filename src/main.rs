@@ -469,6 +469,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/photos/upload", post(routes::photos::upload_photo))
         .route("/photos/{id}", get(routes::photos::display_photo))
         .route("/photos/{id}/delete", post(routes::photos::delete_photo))
+        .route(
+            "/api/photos/{id}/frontpage",
+            post(routes::photos::api_toggle_frontpage),
+        )
         .route("/api/photos/ids", get(routes::photos::api_photo_ids))
         .route(
             "/content-images/{id}",

@@ -139,6 +139,19 @@ pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) 
                                             p .title.is-6 { (photographer_name) }
                                         }
                                     }
+                                    @if is_admin {
+                                        label .checkbox {
+                                            input .frontpage-toggle type="checkbox"
+                                                data-id=(photo.id)
+                                                checked[photo.frontpage];
+                                            " Page d'accueil"
+                                        }
+                                    } @else if photo.frontpage {
+                                        span .tag.is-success.is-light {
+                                            span .icon.is-small { i .fa-solid.fa-house {} }
+                                            "\u{00a0}Accueil"
+                                        }
+                                    }
                                 }
                                 @if is_admin {
                                     footer .card-footer {

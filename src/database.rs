@@ -2716,7 +2716,7 @@ pub async fn get_photo_by_id(pool: &PgPool, id: uuid::Uuid) -> Result<Option<Pho
 pub async fn get_all_photos(pool: &PgPool) -> Result<Vec<(PhotoMeta, String)>> {
     let rows = sqlx::query(
         r"
-        SELECT p.id, p.mime_type, p.photographer_id, p.created_at, p.updated_at,
+        SELECT p.id, p.mime_type, p.photographer_id, p.frontpage, p.created_at, p.updated_at,
                s.first_name AS staff_first_name, s.last_name AS staff_last_name
         FROM photos p
         JOIN staff s ON p.photographer_id = s.id
@@ -2750,6 +2750,18 @@ pub async fn delete_photo(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
     .await?;
 
     Ok(result.rows_affected() > 0)
+}
+
+/// Toggle the frontpage flag on a photo.
+pub async fn toggle_photo_frontpage(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
+    let row = sqlx::query_scalar::<_, bool>(
+        r"UPDATE photos SET frontpage = NOT frontpage WHERE id = $1 RETURNING frontpage",
+    )
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(row)
 }
 
 pub async fn create_staff_minimal(
@@ -2822,11 +2834,13 @@ pub async fn is_station_open_today(pool: &PgPool) -> Result<bool> {
     Ok(row.is_some())
 }
 
-/// Get all photo IDs (for the hero slideshow).
+/// Get photo IDs for the hero slideshow (frontpage only).
 pub async fn get_all_photo_ids(pool: &PgPool) -> Result<Vec<uuid::Uuid>> {
-    let rows = sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM photos ORDER BY created_at")
-        .fetch_all(pool)
-        .await?;
+    let rows = sqlx::query_scalar::<_, uuid::Uuid>(
+        "SELECT id FROM photos WHERE frontpage = TRUE ORDER BY created_at",
+    )
+    .fetch_all(pool)
+    .await?;
     Ok(rows)
 }
 

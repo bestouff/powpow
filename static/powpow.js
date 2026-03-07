@@ -1250,4 +1250,21 @@ function initPhotoPage(prefix) {
             uploadBtn.querySelector('span:last-child').textContent = 'Télécharger';
         });
     });
+
+    // Frontpage toggle checkboxes
+    document.querySelectorAll('.frontpage-toggle').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            var photoId = cb.dataset.id;
+            fetch(prefix + '/api/photos/' + photoId + '/frontpage', { method: 'POST' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.frontpage !== undefined) {
+                        cb.checked = data.frontpage;
+                    }
+                })
+                .catch(function() {
+                    cb.checked = !cb.checked; // revert on error
+                });
+        });
+    });
 }
