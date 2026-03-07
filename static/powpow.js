@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initCalendarView(prefix);
     initCalendarEditor(prefix);
     initLoginPage(prefix);
+    initQualificationsPage(prefix);
     initValidationPage(prefix);
     initPhotoPage(prefix);
 });
@@ -999,6 +1000,57 @@ function initLoginPage(prefix) {
             errorText.textContent = 'Erreur réseau';
             errorBox.style.display = 'block';
         });
+    });
+}
+
+// --- Block 14b: Qualifications page staff search ---
+function initQualificationsPage(prefix) {
+    var input = document.getElementById('sq-staff-search');
+    if (!input) return;
+
+    var panel = document.getElementById('sq-staff-results');
+    var hiddenInput = document.getElementById('sq-staff-id');
+    var selectedBox = document.getElementById('sq-staff-selected');
+    var selectedName = document.getElementById('sq-staff-selected-name');
+    var debounceTimer = null;
+
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        hiddenInput.value = '';
+        selectedBox.style.display = 'none';
+        var q = input.value.trim();
+        if (q.length < 4) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
+        debounceTimer = setTimeout(function() {
+            fetch(prefix + '/api/staff/search?q=' + encodeURIComponent(q))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    panel.innerHTML = '';
+                    if (data.length === 0) {
+                        panel.innerHTML = '<p class="panel-block">Aucun résultat</p>';
+                    } else {
+                        data.forEach(function(s) {
+                            var a = document.createElement('a');
+                            a.className = 'panel-block';
+                            a.textContent = s.first_name + ' ' + s.last_name;
+                            a.href = '#';
+                            a.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                hiddenInput.value = s.id;
+                                selectedName.textContent = s.first_name + ' ' + s.last_name;
+                                selectedBox.style.display = 'block';
+                                panel.style.display = 'none';
+                                input.value = s.first_name + ' ' + s.last_name;
+                            });
+                            panel.appendChild(a);
+                        });
+                    }
+                    panel.style.display = 'block';
+                })
+                .catch(function() {
+                    panel.innerHTML = '<p class="panel-block">Erreur de recherche</p>';
+                    panel.style.display = 'block';
+                });
+        }, 300);
     });
 }
 

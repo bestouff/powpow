@@ -237,6 +237,44 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Role {
     }
 }
 
+// Qualification model (type of training/certification)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Qualification {
+    pub id: i32,
+    pub name: String,
+    pub duration: Option<i16>, // years valid, None = lifelong
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for Qualification {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(Qualification {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            duration: row.try_get("duration")?,
+        })
+    }
+}
+
+// Staff qualification record (staff member obtained a qualification)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaffQualif {
+    pub id: i32,
+    pub staff: uuid::Uuid,
+    pub qualification: i32,
+    pub obtained_date: chrono::NaiveDate,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for StaffQualif {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(StaffQualif {
+            id: row.try_get("id")?,
+            staff: row.try_get("staff")?,
+            qualification: row.try_get("qualification")?,
+            obtained_date: row.try_get("obtained_date")?,
+        })
+    }
+}
+
 // Need model (day when staff are needed for an atelier)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Need {

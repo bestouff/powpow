@@ -1,6 +1,7 @@
 use crate::models::{
     self, Atelier, Cash, ContentBlock, ContentImage, Equipment, Membership, Need,
-    PaymentHistoryEntry, Photo, PhotoMeta, Role, Staff, StaffMatchType, StaffWithSeason, User,
+    PaymentHistoryEntry, Photo, PhotoMeta, Qualification, Role, Staff, StaffMatchType, StaffQualif,
+    StaffWithSeason, User,
 };
 use anyhow::Result;
 use futures_util::StreamExt;
@@ -1168,6 +1169,150 @@ pub async fn get_all_roles(pool: &PgPool) -> Result<Vec<Role>> {
         .await?;
 
     Ok(roles)
+}
+
+/// Get all qualifications
+pub async fn get_all_qualifications(pool: &PgPool) -> Result<Vec<Qualification>> {
+    let qualifications =
+        sqlx::query_as::<_, Qualification>(r"SELECT * FROM qualifications ORDER BY name")
+            .fetch_all(pool)
+            .await?;
+
+    Ok(qualifications)
+}
+
+/// Get all staff qualification records
+pub async fn get_all_staff_qualifications(pool: &PgPool) -> Result<Vec<StaffQualif>> {
+    let staff_qualifs =
+        sqlx::query_as::<_, StaffQualif>(r"SELECT * FROM staff_qualif ORDER BY obtained_date DESC")
+            .fetch_all(pool)
+            .await?;
+
+    Ok(staff_qualifs)
+}
+
+/// Get qualifications for a specific staff member (joined with qualification name/duration)
+pub async fn get_staff_qualifications_for_person(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+) -> Result<Vec<(StaffQualif, String, Option<i16>)>> {
+    let rows = sqlx::query(
+        r"SELECT sq.id, sq.staff, sq.qualification, sq.obtained_date, q.name, q.duration
+          FROM staff_qualif sq
+          JOIN qualifications q ON q.id = sq.qualification
+          WHERE sq.staff = $1
+          ORDER BY q.name, sq.obtained_date DESC",
+    )
+    .bind(staff_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut results = Vec::new();
+    for row in &rows {
+        use sqlx::Row;
+        let sq = StaffQualif {
+            id: row.try_get("id")?,
+            staff: row.try_get("staff")?,
+            qualification: row.try_get("qualification")?,
+            obtained_date: row.try_get("obtained_date")?,
+        };
+        let name: String = row.try_get("name")?;
+        let duration: Option<i16> = row.try_get("duration")?;
+        results.push((sq, name, duration));
+    }
+
+    Ok(results)
+}
+
+/// Create a new qualification type
+pub async fn create_qualification(
+    pool: &PgPool,
+    name: &str,
+    duration: Option<i16>,
+) -> Result<Qualification> {
+    let row = sqlx::query_as::<_, Qualification>(
+        r"INSERT INTO qualifications (name, duration) VALUES ($1, $2) RETURNING *",
+    )
+    .bind(name)
+    .bind(duration)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(row)
+}
+
+/// Delete a qualification type (cascades to `staff_qualif`)
+pub async fn delete_qualification(pool: &PgPool, id: i32) -> Result<()> {
+    sqlx::query(r"DELETE FROM qualifications WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+/// Add a staff qualification record
+pub async fn add_staff_qualif(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    qualification_id: i32,
+    obtained_date: chrono::NaiveDate,
+) -> Result<StaffQualif> {
+    let row = sqlx::query_as::<_, StaffQualif>(
+        r"INSERT INTO staff_qualif (staff, qualification, obtained_date) VALUES ($1, $2, $3) RETURNING *",
+    )
+    .bind(staff_id)
+    .bind(qualification_id)
+    .bind(obtained_date)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(row)
+}
+
+/// Remove a staff qualification record
+pub async fn delete_staff_qualif(pool: &PgPool, id: i32) -> Result<()> {
+    sqlx::query(r"DELETE FROM staff_qualif WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+/// Get all staff qualifications with staff and qualification details (for admin page)
+pub async fn get_all_staff_qualifications_detailed(
+    pool: &PgPool,
+) -> Result<Vec<(StaffQualif, String, String, Option<i16>)>> {
+    let rows = sqlx::query(
+        r"SELECT sq.id, sq.staff, sq.qualification, sq.obtained_date,
+                s.first_name, s.last_name, q.name AS qual_name, q.duration
+         FROM staff_qualif sq
+         JOIN staff s ON s.id = sq.staff
+         JOIN qualifications q ON q.id = sq.qualification
+         ORDER BY s.last_name, s.first_name, q.name, sq.obtained_date DESC",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut results = Vec::new();
+    for row in &rows {
+        use sqlx::Row;
+        let sq = StaffQualif {
+            id: row.try_get("id")?,
+            staff: row.try_get("staff")?,
+            qualification: row.try_get("qualification")?,
+            obtained_date: row.try_get("obtained_date")?,
+        };
+        let first_name: String = row.try_get("first_name")?;
+        let last_name: String = row.try_get("last_name")?;
+        let staff_name = format!("{first_name} {last_name}");
+        let qual_name: String = row.try_get("qual_name")?;
+        let duration: Option<i16> = row.try_get("duration")?;
+        results.push((sq, staff_name, qual_name, duration));
+    }
+
+    Ok(results)
 }
 
 /// Update a staff member's comment
@@ -2369,10 +2514,14 @@ const TABLES_PARENT_FIRST: &[&str] = &[
     "audit",
     "content_images",
     "contents",
+    "qualifications",
+    "staff_qualif",
 ];
 
 /// Tables in reverse dependency order (children first). Used for TRUNCATE.
 const TABLES_CHILD_FIRST: &[&str] = &[
+    "staff_qualif",
+    "qualifications",
     "contents",
     "content_images",
     "presence",

@@ -10,7 +10,7 @@ use axum::{
     Json, Router,
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use axum_extra::extract::cookie::{Key, SignedCookieJar};
 use chrono::Datelike;
@@ -433,6 +433,26 @@ async fn main() -> anyhow::Result<()> {
         )
         .route("/audit", get(routes::admin::audit_page_handler))
         .route("/validation", get(routes::admin::validation_page_handler))
+        .route(
+            "/qualifications",
+            get(routes::admin::qualifications_page_handler),
+        )
+        .route(
+            "/api/qualifications",
+            post(routes::admin::api_create_qualification),
+        )
+        .route(
+            "/api/qualifications/{id}",
+            delete(routes::admin::api_delete_qualification),
+        )
+        .route(
+            "/api/staff-qualif",
+            post(routes::admin::api_add_staff_qualif),
+        )
+        .route(
+            "/api/staff-qualif/{id}",
+            delete(routes::admin::api_delete_staff_qualif),
+        )
         .route("/login", get(routes::auth::login_page))
         .route("/api/staff/search", get(routes::auth::api_search_staff))
         .route(

@@ -514,3 +514,168 @@ pub async fn api_cycle_equipment(
         }
     }
 }
+
+// --- Qualifications management ---
+
+pub async fn qualifications_page_handler(
+    RequireAdmin(_staff): RequireAdmin,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let prefix = get_prefix(&headers);
+
+    let qualifications = database::get_all_qualifications(&state.db)
+        .await
+        .unwrap_or_default();
+
+    let staff_qualifs = database::get_all_staff_qualifications_detailed(&state.db)
+        .await
+        .unwrap_or_default();
+
+    templates::qualifications_page(&prefix, &qualifications, &staff_qualifs)
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct CreateQualificationRequest {
+    name: String,
+    duration: Option<i16>,
+}
+
+pub async fn api_create_qualification(
+    RequireAdmin(admin): RequireAdmin,
+    State(state): State<AppState>,
+    Json(payload): Json<CreateQualificationRequest>,
+) -> impl IntoResponse {
+    let name = payload.name.trim();
+    if name.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Nom requis"})),
+        );
+    }
+
+    match database::create_qualification(&state.db, name, payload.duration).await {
+        Ok(qual) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(admin.id),
+                &format!("{} {}", admin.first_name, admin.last_name),
+                "Création qualification",
+                &format!("name={} duration={:?}", qual.name, qual.duration),
+            )
+            .await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"success": true, "id": qual.id})),
+            )
+        }
+        Err(e) => {
+            error!("Error creating qualification: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}
+
+pub async fn api_delete_qualification(
+    RequireAdmin(admin): RequireAdmin,
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<i32>,
+) -> impl IntoResponse {
+    match database::delete_qualification(&state.db, id).await {
+        Ok(()) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(admin.id),
+                &format!("{} {}", admin.first_name, admin.last_name),
+                "Suppression qualification",
+                &format!("id={id}"),
+            )
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"success": true})))
+        }
+        Err(e) => {
+            error!("Error deleting qualification: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct AddStaffQualifRequest {
+    staff_id: uuid::Uuid,
+    qualification_id: i32,
+    obtained_date: chrono::NaiveDate,
+}
+
+pub async fn api_add_staff_qualif(
+    RequireAdmin(admin): RequireAdmin,
+    State(state): State<AppState>,
+    Json(payload): Json<AddStaffQualifRequest>,
+) -> impl IntoResponse {
+    match database::add_staff_qualif(
+        &state.db,
+        payload.staff_id,
+        payload.qualification_id,
+        payload.obtained_date,
+    )
+    .await
+    {
+        Ok(sq) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(admin.id),
+                &format!("{} {}", admin.first_name, admin.last_name),
+                "Ajout qualification staff",
+                &format!(
+                    "staff={} qualification={} date={}",
+                    sq.staff, sq.qualification, sq.obtained_date
+                ),
+            )
+            .await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"success": true, "id": sq.id})),
+            )
+        }
+        Err(e) => {
+            error!("Error adding staff qualification: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}
+
+pub async fn api_delete_staff_qualif(
+    RequireAdmin(admin): RequireAdmin,
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<i32>,
+) -> impl IntoResponse {
+    match database::delete_staff_qualif(&state.db, id).await {
+        Ok(()) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(admin.id),
+                &format!("{} {}", admin.first_name, admin.last_name),
+                "Suppression qualification staff",
+                &format!("id={id}"),
+            )
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"success": true})))
+        }
+        Err(e) => {
+            error!("Error deleting staff qualification: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}

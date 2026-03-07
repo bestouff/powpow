@@ -54,6 +54,22 @@ pub async fn list_staff(
         }
     };
 
+    let qualifications = match database::get_all_qualifications(&state.db).await {
+        Ok(list) => list,
+        Err(e) => {
+            error!("Error fetching qualifications: {}", e);
+            return html! { p { "Error loading qualifications: " (e) } };
+        }
+    };
+
+    let staff_qualifs = match database::get_all_staff_qualifications(&state.db).await {
+        Ok(list) => list,
+        Err(e) => {
+            error!("Error fetching staff qualifications: {}", e);
+            return html! { p { "Error loading staff qualifications: " (e) } };
+        }
+    };
+
     // Sort staff list: chiefs or gods first, then by name
     let mut staff_list = staff_list;
     staff_list.sort_by(|(staff_a, _), (staff_b, _)| {
@@ -70,6 +86,8 @@ pub async fn list_staff(
         staff_list,
         &ateliers,
         &roles,
+        &qualifications,
+        &staff_qualifs,
         current_season,
         &prefix,
         show_contact,
@@ -276,6 +294,15 @@ pub async fn view_person(
         }
     };
 
+    let person_qualifications =
+        match database::get_staff_qualifications_for_person(&state.db, id).await {
+            Ok(q) => q,
+            Err(e) => {
+                error!("Error fetching person qualifications: {}", e);
+                Vec::new()
+            }
+        };
+
     // Fetch person calendar (upcoming needs + presence across all ateliers)
     // Visible to self, admins, and chiefs
     let person_calendar = if is_self || is_viewer_admin || is_viewer_chief {
@@ -302,6 +329,7 @@ pub async fn view_person(
         &todos,
         &payment_history,
         &person_calendar,
+        &person_qualifications,
     )
     .into_response()
 }

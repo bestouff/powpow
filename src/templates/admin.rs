@@ -1,5 +1,7 @@
 use super::{NavKind, page};
-use crate::models::{Atelier, Equipment, EquipmentStatus, EquipmentType, Staff};
+use crate::models::{
+    Atelier, Equipment, EquipmentStatus, EquipmentType, Qualification, Staff, StaffQualif,
+};
 use maud::{Markup, html};
 
 pub fn restore_page(prefix: &str) -> Markup {
@@ -295,6 +297,10 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                                     span .icon { i .fa-solid.fa-clipboard-list {} }
                                     span { "Journal d'audit" }
                                 }
+                                a .button.is-link.is-light href={(p) "/qualifications"} {
+                                    span .icon { i .fa-solid.fa-certificate {} }
+                                    span { "Qualifications" }
+                                }
                             }
                         }
                     }
@@ -498,6 +504,282 @@ pub fn validation_page(pending: &[(Staff, Atelier)], prefix: &str) -> Markup {
         prefix,
         &NavKind::LoginOnly,
         "",
+        html! {},
+        content,
+        script,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn qualifications_page(
+    prefix: &str,
+    qualifications: &[Qualification],
+    staff_qualifs: &[(StaffQualif, String, String, Option<i16>)],
+) -> Markup {
+    let p = prefix;
+    let today = chrono::Utc::now().date_naive();
+
+    let content = html! {
+        div #notification-container {}
+
+        section .section {
+            div .container.is-fluid {
+                nav .breadcrumb aria-label="breadcrumbs" {
+                    ul {
+                        li { a href={(p) "/"} { "Accueil" } }
+                        li { a href={(p) "/admin"} { "Administration" } }
+                        li .is-active { a href="#" aria-current="page" { "Qualifications" } }
+                    }
+                }
+
+                h1 .title.is-3 {
+                    span .icon.mr-2 { i .fa-solid.fa-certificate {} }
+                    "Gestion des qualifications"
+                }
+
+                div .columns {
+                    // Left column: Qualification types
+                    div .column.is-one-third {
+                        div .box {
+                            h2 .title.is-5 {
+                                span .icon { i .fa-solid.fa-list {} }
+                                "\u{00a0}Types de qualification"
+                            }
+
+                            // Existing qualifications
+                            @for qual in qualifications {
+                                div .is-flex.is-align-items-center.is-justify-content-space-between.mb-3 {
+                                    div {
+                                        strong { (qual.name) }
+                                        @if let Some(d) = qual.duration {
+                                            span .tag.is-light.ml-2 { (d) " an(s)" }
+                                        } @else {
+                                            span .tag.is-light.ml-2 { "Permanent" }
+                                        }
+                                    }
+                                    button .button.is-small.is-danger.is-outlined.qual-delete-btn
+                                        data-id=(qual.id)
+                                        data-name=(qual.name) {
+                                        span .icon { i .fa-solid.fa-trash {} }
+                                    }
+                                }
+                            }
+
+                            @if qualifications.is_empty() {
+                                p .has-text-grey-light.mb-4 { "Aucune qualification définie" }
+                            }
+
+                            // Add form
+                            hr;
+                            h3 .title.is-6 { "Ajouter un type" }
+                            div .field {
+                                label .label { "Nom" }
+                                div .control {
+                                    input .input #qual-name type="text" placeholder="ex: PSE1";
+                                }
+                            }
+                            div .field {
+                                label .label { "Durée de validité (années)" }
+                                div .control {
+                                    input .input #qual-duration type="number" min="1" placeholder="Vide = permanent";
+                                }
+                            }
+                            div .field {
+                                button .button.is-success #add-qual-btn {
+                                    span .icon { i .fa-solid.fa-plus {} }
+                                    span { "Ajouter" }
+                                }
+                            }
+                        }
+                    }
+
+                    // Right column: Staff qualifications
+                    div .column {
+                        div .box {
+                            h2 .title.is-5 {
+                                span .icon { i .fa-solid.fa-user-graduate {} }
+                                "\u{00a0}Qualifications du staff"
+                            }
+
+                            // Add form
+                            div .columns.mb-4 {
+                                div .column {
+                                    div .field {
+                                        label .label { "Bénévole" }
+                                        div .control.has-icons-left {
+                                            input .input #sq-staff-search type="text"
+                                                placeholder="Tapez au moins 4 caractères..."
+                                                autocomplete="off";
+                                            span .icon.is-left { i .fa-solid.fa-magnifying-glass {} }
+                                        }
+                                        nav .panel.d-none #sq-staff-results {}
+                                        input type="hidden" #sq-staff-id value="";
+                                        p .help #sq-staff-selected .d-none {
+                                            span .icon.is-small { i .fa-solid.fa-check {} }
+                                            span #sq-staff-selected-name {}
+                                        }
+                                    }
+                                }
+                                div .column {
+                                    div .field {
+                                        label .label { "Qualification" }
+                                        div .control {
+                                            div .select.is-fullwidth {
+                                                select #sq-qual {
+                                                    option value="" { "Choisir..." }
+                                                    @for qual in qualifications {
+                                                        option value=(qual.id) { (qual.name) }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                div .column {
+                                    div .field {
+                                        label .label { "Date d'obtention" }
+                                        div .control {
+                                            input .input #sq-date type="date" value=(today);
+                                        }
+                                    }
+                                }
+                                div .column.is-narrow {
+                                    div .field {
+                                        label .label { "\u{00a0}" }
+                                        div .control {
+                                            button .button.is-success #add-sq-btn {
+                                                span .icon { i .fa-solid.fa-plus {} }
+                                                span { "Ajouter" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Table of assignments
+                            div .table-container {
+                                table .table.is-striped.is-hoverable.is-fullwidth {
+                                    thead {
+                                        tr {
+                                            th { "Bénévole" }
+                                            th { "Qualification" }
+                                            th { "Obtenu le" }
+                                            th { "Statut" }
+                                            th {}
+                                        }
+                                    }
+                                    tbody {
+                                        @for (sq, staff_name, qual_name, duration) in staff_qualifs {
+                                            @let expired = duration.is_some_and(|d| {
+                                                let months = u32::from(d.unsigned_abs()) * 12;
+                                                let expiry = sq.obtained_date + chrono::Months::new(months);
+                                                expiry < today
+                                            });
+                                            @let status_tag = if expired {
+                                                ("is-danger", "Expirée")
+                                            } else if duration.is_some() {
+                                                ("is-success", "Valide")
+                                            } else {
+                                                ("is-success", "Permanent")
+                                            };
+                                            tr {
+                                                td {
+                                                    a href={(p) "/person/" (sq.staff)} { (staff_name) }
+                                                }
+                                                td { (qual_name) }
+                                                td { (sq.obtained_date.format("%d/%m/%Y")) }
+                                                td {
+                                                    span class={"tag " (status_tag.0)} { (status_tag.1) }
+                                                    @if let Some(d) = duration {
+                                                        @let expiry_date = sq.obtained_date + chrono::Months::new(u32::from(d.unsigned_abs()) * 12);
+                                                        small .ml-1.has-text-grey { " → " (expiry_date.format("%d/%m/%Y")) }
+                                                    }
+                                                }
+                                                td {
+                                                    button .button.is-small.is-danger.is-outlined.sq-delete-btn
+                                                        data-id=(sq.id) {
+                                                        span .icon { i .fa-solid.fa-trash {} }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        @if staff_qualifs.is_empty() {
+                                            tr {
+                                                td colspan="5" .has-text-centered.has-text-grey-light.py-5 {
+                                                    "Aucune qualification attribuée"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    let script = html! {
+        script {
+            (maud::PreEscaped(format!(r#"
+const PREFIX = "{}";
+
+document.getElementById('add-qual-btn').addEventListener('click', async () => {{
+    const name = document.getElementById('qual-name').value.trim();
+    if (!name) {{ alert('Nom requis'); return; }}
+    const dur = document.getElementById('qual-duration').value;
+    const duration = dur ? parseInt(dur) : null;
+    const res = await fetch(PREFIX + '/api/qualifications', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ name, duration }})
+    }});
+    if (res.ok) {{ location.reload(); }}
+    else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+}});
+
+document.querySelectorAll('.qual-delete-btn').forEach(btn => {{
+    btn.addEventListener('click', async () => {{
+        const name = btn.dataset.name;
+        if (!confirm('Supprimer la qualification "' + name + '" et toutes ses attributions ?')) return;
+        const res = await fetch(PREFIX + '/api/qualifications/' + btn.dataset.id, {{ method: 'DELETE' }});
+        if (res.ok) {{ location.reload(); }}
+        else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+    }});
+}});
+
+document.getElementById('add-sq-btn').addEventListener('click', async () => {{
+    const staff = document.getElementById('sq-staff-id').value;
+    const qual = document.getElementById('sq-qual').value;
+    const date = document.getElementById('sq-date').value;
+    if (!staff || !qual || !date) {{ alert('Tous les champs sont requis'); return; }}
+    const res = await fetch(PREFIX + '/api/staff-qualif', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ staff_id: staff, qualification_id: parseInt(qual), obtained_date: date }})
+    }});
+    if (res.ok) {{ location.reload(); }}
+    else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+}});
+
+document.querySelectorAll('.sq-delete-btn').forEach(btn => {{
+    btn.addEventListener('click', async () => {{
+        if (!confirm('Supprimer cette qualification ?')) return;
+        const res = await fetch(PREFIX + '/api/staff-qualif/' + btn.dataset.id, {{ method: 'DELETE' }});
+        if (res.ok) {{ location.reload(); }}
+        else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+    }});
+}});
+"#, p)))
+        }
+    };
+
+    page(
+        "Qualifications - AGHIL",
+        prefix,
+        &NavKind::Standard,
+        "admin",
         html! {},
         content,
         script,

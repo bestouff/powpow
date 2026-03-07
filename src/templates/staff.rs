@@ -1,12 +1,27 @@
 use super::{NavKind, TodoItem, capitalize_words, format_phone_international, page};
-use crate::models::{Atelier, Role, Staff};
+use crate::models::{Atelier, Qualification, Role, Staff, StaffQualif};
 use chrono::Datelike;
 use maud::{Markup, PreEscaped, html};
 
+/// Check if a qualification is expired given its duration (years) and obtained date.
+/// Returns `true` if expired, `false` if still valid or lifelong.
+fn is_qualification_expired(qual: &Qualification, obtained_date: chrono::NaiveDate) -> bool {
+    if let Some(duration) = qual.duration {
+        let months = u32::from(duration.unsigned_abs()) * 12;
+        let expiry = obtained_date + chrono::Months::new(months);
+        expiry < chrono::Utc::now().date_naive()
+    } else {
+        false
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn staff_list(
     staff_with_seasons: Vec<(Staff, Option<i16>)>,
     ateliers: &[Atelier],
     roles: &[Role],
+    qualifications: &[Qualification],
+    staff_qualifs: &[StaffQualif],
     current_season: i16,
     prefix: &str,
     show_contact: bool,
@@ -54,6 +69,13 @@ pub fn staff_list(
                             " En attente"
                         }
                     }
+                    @if !qualifications.is_empty() {
+                        p .mt-2 {
+                            strong { "Légende formations:" }
+                            span .tag.is-success.ml-2 { "Valide" }
+                            span .tag.is-danger.ml-2 { "Expirée" }
+                        }
+                    }
                 }
 
                 div .box {
@@ -76,6 +98,9 @@ pub fn staff_list(
                                     }
                                     th .has-text-centered.atelier-col {
                                         span .vertical-text { "Admin" }
+                                    }
+                                    @if !qualifications.is_empty() {
+                                        th { "Formations" }
                                     }
                                     th { "Commentaire" }
                                 }
@@ -136,6 +161,25 @@ pub fn staff_list(
                                         } @else {
                                             td {}
                                         }
+                                        // Formations column
+                                        @if !qualifications.is_empty() {
+                                            td {
+                                                div .tags {
+                                                    @for qual in qualifications {
+                                                        // Find the most recent record for this staff + qualification
+                                                        @let latest = staff_qualifs.iter()
+                                                            .filter(|sq| sq.staff == staff.id && sq.qualification == qual.id)
+                                                            .max_by_key(|sq| sq.obtained_date);
+                                                        @if let Some(sq) = latest {
+                                                            @let tag_class = if is_qualification_expired(qual, sq.obtained_date) { "is-danger" } else { "is-success" };
+                                                            span class={
+                                                                "tag " (tag_class)
+                                                            } { (qual.name) }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                         td { small { (staff.comment) } }
                                     }
                                 }
@@ -171,6 +215,7 @@ pub fn person_detail(
     todos: &[TodoItem],
     payment_history: &[crate::models::PaymentHistoryEntry],
     person_calendar: &[(crate::models::Need, String, String, String, bool, bool)],
+    person_qualifications: &[(crate::models::StaffQualif, String, Option<i16>)],
 ) -> Markup {
     let p = prefix;
     let can_edit_ateliers = is_self || is_admin;
@@ -205,6 +250,18 @@ pub fn person_detail(
             .any(|(id, _, _, _)| *id == need.atelier)
         {
             atelier_order.push((need.atelier, name.clone(), slug.clone(), icon.clone()));
+        }
+    }
+
+    // Deduplicate qualifications: keep only the most recent per qualification id
+    // (input is sorted by name, obtained_date DESC so first occurrence per id is the latest)
+    let mut deduped_qualifications: Vec<&(crate::models::StaffQualif, String, Option<i16>)> =
+        Vec::new();
+    let mut seen_qual_ids: Vec<i32> = Vec::new();
+    for entry in person_qualifications {
+        if !seen_qual_ids.contains(&entry.0.qualification) {
+            seen_qual_ids.push(entry.0.qualification);
+            deduped_qualifications.push(entry);
         }
     }
 
@@ -419,6 +476,38 @@ pub fn person_detail(
                                                 span .icon { i class={"fa-solid fa-" (atelier.icon)} {} }
                                                 "\u{00a0}"
                                                 span { (atelier.name) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Formations box
+                        @if !deduped_qualifications.is_empty() {
+                            div .box {
+                                h2 .title.is-4 {
+                                    span .icon { i .fa-solid.fa-certificate {} }
+                                    "\u{00a0}Formations"
+                                }
+                                div .tags.are-medium {
+                                    @for (sq, name, duration) in &deduped_qualifications {
+                                        @let expired = duration.is_some_and(|d| {
+                                            let months = u32::from(d.unsigned_abs()) * 12;
+                                            let expiry = sq.obtained_date + chrono::Months::new(months);
+                                            expiry < chrono::Utc::now().date_naive()
+                                        });
+                                        @let (tag_class, icon_class) = if expired {
+                                            ("is-danger is-light", "fa-solid fa-triangle-exclamation")
+                                        } else {
+                                            ("is-success is-light", "fa-solid fa-circle-check")
+                                        };
+                                        span class={"tag " (tag_class)} {
+                                            span .icon { i class=(icon_class) {} }
+                                            "\u{00a0}" (name)
+                                            @if let Some(d) = duration {
+                                                @let expiry_date = sq.obtained_date + chrono::Months::new(u32::from(d.unsigned_abs()) * 12);
+                                                small .ml-1 { " (" (expiry_date.format("%m/%Y")) ")" }
                                             }
                                         }
                                     }

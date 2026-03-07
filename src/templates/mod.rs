@@ -10,7 +10,9 @@ mod photos;
 mod staff;
 mod static_pages;
 
-pub use admin::{admin_page, audit_page, restore_page, restore_result, validation_page};
+pub use admin::{
+    admin_page, audit_page, qualifications_page, restore_page, restore_result, validation_page,
+};
 pub use auth::login_page;
 pub use calendar::{calendar, calendar_editor, render_upcoming_week_email};
 pub use cash::{cash_form, cash_import_form, cash_list};
