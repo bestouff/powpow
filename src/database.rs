@@ -2258,7 +2258,8 @@ pub async fn list_unimported_names(
         r"
         SELECT beneficiary_first_name AS first_name, beneficiary_last_name AS last_name, 'HelloAsso' AS source
         FROM memberships m
-        WHERE NOT EXISTS (
+        WHERE (m.item_type IS NULL OR m.item_type NOT IN ('Registration', 'Donation'))
+        AND NOT EXISTS (
             SELECT 1 FROM payments p
             WHERE p.helloasso_item_id = m.helloasso_item_id
             AND p.season = (
@@ -2349,6 +2350,27 @@ pub async fn get_audit_log_paginated(
     }
 
     Ok(result)
+}
+
+/// Look up staff names by a list of UUIDs, returning a map from UUID to "first last".
+pub async fn get_staff_names_by_ids(
+    pool: &PgPool,
+    ids: &[uuid::Uuid],
+) -> Result<std::collections::HashMap<uuid::Uuid, String>> {
+    use sqlx::Row;
+    let rows = sqlx::query(r"SELECT id, first_name, last_name FROM staff WHERE id = ANY($1)")
+        .bind(ids)
+        .fetch_all(pool)
+        .await?;
+
+    let mut map = std::collections::HashMap::new();
+    for row in rows {
+        let id: uuid::Uuid = row.try_get("id")?;
+        let first: String = row.try_get("first_name")?;
+        let last: String = row.try_get("last_name")?;
+        map.insert(id, format!("{first} {last}"));
+    }
+    Ok(map)
 }
 
 /// Count total audit log entries

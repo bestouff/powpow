@@ -203,9 +203,43 @@ pub async fn audit_page_handler(
     let total = database::count_audit(&state.db).await.unwrap_or(0);
     let total_pages = ((total as f64) / (page_size as f64)).ceil() as i64;
 
-    let entries = database::get_audit_log_paginated(&state.db, page_size, offset)
+    let mut entries = database::get_audit_log_paginated(&state.db, page_size, offset)
         .await
         .unwrap_or_default();
+
+    // Resolve staff=<UUID> patterns in detail strings to include the staff name
+    let mut uuids = Vec::new();
+    for e in &entries {
+        let mut rest = e.detail.as_str();
+        while let Some(pos) = rest.find("staff=") {
+            let after = &rest[pos + 6..];
+            if after.len() >= 36
+                && let Ok(id) = uuid::Uuid::parse_str(&after[..36])
+            {
+                uuids.push(id);
+            }
+            rest = if after.len() >= 36 { &after[36..] } else { "" };
+        }
+    }
+    uuids.sort();
+    uuids.dedup();
+    let names = if uuids.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        database::get_staff_names_by_ids(&state.db, &uuids)
+            .await
+            .unwrap_or_default()
+    };
+    if !names.is_empty() {
+        for e in &mut entries {
+            for (id, name) in &names {
+                let uuid_str = id.to_string();
+                if e.detail.contains(&uuid_str) {
+                    e.detail = e.detail.replace(&uuid_str, &format!("{uuid_str}({name})"));
+                }
+            }
+        }
+    }
 
     templates::audit_page(&entries, current_page, total_pages.max(1), &prefix)
 }
