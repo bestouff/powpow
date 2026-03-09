@@ -14,14 +14,15 @@ No passwords to remember. Volunteers log in by searching their name, receiving a
 
 ### Staff and privilege levels
 
-Four privilege tiers:
+Five privilege tiers:
 
-| Level     | Access                                                                                                |
-| --------- | ----------------------------------------------------------------------------------------------------- |
-| **Staff** | View their own profile, register for ateliers, mark presence on the calendar                          |
-| **Chief** | Manage the ateliers they lead, validate role requests from volunteers                                 |
-| **Admin** | Full management: import memberships, manage staff, edit content                                       |
-| **God**   | Everything above, plus the ability to grant/revoke admin and god status, backup /restore the database |
+| Level         | Access                                                                                                |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| **Anonymous** | See the frontpage, current opening status, equipments availability                                    |
+| **Staff**     | View their own profile, register for ateliers, mark presence on the calendar                          |
+| **Chief**     | Manage the ateliers they lead, validate role requests from volunteers                                 |
+| **Admin**     | Full management: import memberships, manage staff, edit content                                       |
+| **God**       | Everything above, plus the ability to grant/revoke admin and god status, backup /restore the database |
 
 ### Ateliers and roles
 
