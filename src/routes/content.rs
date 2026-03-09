@@ -6,7 +6,7 @@ use axum::{
 };
 use tracing::error;
 
-use crate::{AppState, auth::RequireAdmin, database, get_prefix, templates};
+use crate::{AppState, auth::RequireAdmin, database, get_prefix, models::ContentMap, templates};
 
 /// Maximum CMS image upload size: 5 MB.
 const MAX_IMAGE_SIZE: usize = 5 * 1024 * 1024;
@@ -257,6 +257,16 @@ pub async fn content_save(
                     .ok()
                     .flatten();
                 templates::set_navbar_block(block);
+            }
+            // Refresh the footer blocks cache if a footer slug was updated
+            if templates::is_footer_slug(&slug)
+                && let Ok(footer_map) = database::get_contents_by_slugs(
+                    &state.db,
+                    &["footer-contact", "footer-calendar", "footer-summer"],
+                )
+                .await
+            {
+                templates::set_footer_blocks(ContentMap::new(footer_map));
             }
             Redirect::to(&format!("{prefix}/admin/contents")).into_response()
         }

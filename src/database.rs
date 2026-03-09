@@ -2878,6 +2878,18 @@ pub async fn get_all_contents(
     Ok(rows.into_iter().map(|c| (c.slug.clone(), c)).collect())
 }
 
+/// Fetch content blocks for a set of slugs, keyed by slug.
+pub async fn get_contents_by_slugs(
+    pool: &PgPool,
+    slugs: &[&str],
+) -> Result<std::collections::HashMap<String, ContentBlock>> {
+    let rows = sqlx::query_as::<_, ContentBlock>("SELECT * FROM contents WHERE slug = ANY($1)")
+        .bind(slugs)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows.into_iter().map(|c| (c.slug.clone(), c)).collect())
+}
+
 /// Fetch a single content block by slug.
 pub async fn get_content(pool: &PgPool, slug: &str) -> Result<Option<ContentBlock>> {
     let row = sqlx::query_as::<_, ContentBlock>("SELECT * FROM contents WHERE slug = $1")

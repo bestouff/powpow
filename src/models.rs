@@ -671,6 +671,7 @@ impl ContentBlock {
 /// Thin wrapper around a `HashMap<String, ContentBlock>` that always returns
 /// a reference: the real block when present, or a built-in placeholder whose
 /// title and body make it obvious the content is missing.
+#[derive(Clone)]
 pub struct ContentMap {
     blocks: std::collections::HashMap<String, ContentBlock>,
     placeholder: ContentBlock,

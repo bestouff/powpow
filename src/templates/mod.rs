@@ -33,6 +33,13 @@ use maud::{DOCTYPE, Markup, PreEscaped, html};
 /// Cached navbar content block, shared across all pages.
 static NAVBAR_BLOCK: std::sync::RwLock<Option<ContentBlock>> = std::sync::RwLock::new(None);
 
+/// Cached footer content blocks, shared across all pages.
+/// Stores blocks for slugs: `footer-contact`, `footer-calendar`, `footer-summer`.
+static FOOTER_BLOCKS: std::sync::RwLock<Option<ContentMap>> = std::sync::RwLock::new(None);
+
+/// Footer content block slugs that trigger a cache refresh when saved.
+const FOOTER_SLUGS: &[&str] = &["footer-contact", "footer-calendar", "footer-summer"];
+
 /// Update the cached navbar content block (call at startup and when CMS content is saved).
 pub fn set_navbar_block(block: Option<ContentBlock>) {
     if let Ok(mut guard) = NAVBAR_BLOCK.write() {
@@ -43,6 +50,23 @@ pub fn set_navbar_block(block: Option<ContentBlock>) {
 /// Read the cached navbar content block.
 fn get_navbar_block() -> Option<ContentBlock> {
     NAVBAR_BLOCK.read().ok().and_then(|g| g.clone())
+}
+
+/// Update the cached footer content blocks (call at startup and when a footer slug is saved).
+pub fn set_footer_blocks(blocks: ContentMap) {
+    if let Ok(mut guard) = FOOTER_BLOCKS.write() {
+        *guard = Some(blocks);
+    }
+}
+
+/// Read the cached footer content blocks.
+fn get_footer_blocks() -> Option<ContentMap> {
+    FOOTER_BLOCKS.read().ok().and_then(|g| g.clone())
+}
+
+/// Check whether a given slug is a footer-related slug that should trigger a cache refresh.
+pub fn is_footer_slug(slug: &str) -> bool {
+    FOOTER_SLUGS.contains(&slug)
 }
 
 /// Short hex hash of embedded CSS+JS for cache-busting query params.
@@ -201,6 +225,10 @@ fn page(
 }
 
 /// Full page renderer with optional CMS footer content blocks.
+///
+/// When `footer_contents` is `Some(...)` (e.g. the home page), those blocks are
+/// used directly. Otherwise the globally cached footer blocks are used so that
+/// every page displays the footer content.
 #[allow(clippy::too_many_arguments)]
 fn page_with_footer(
     title: &str,
@@ -220,6 +248,10 @@ fn page_with_footer(
         .or(cached_block.as_ref());
     let nav = navbar(prefix, nav_kind, active, navbar_block);
     let v = static_version();
+
+    // Resolve footer content: use explicit parameter or fall back to global cache
+    let cached_footer = get_footer_blocks();
+    let effective_footer: Option<&ContentMap> = footer_contents.or(cached_footer.as_ref());
 
     html! {
         (DOCTYPE)
@@ -245,7 +277,7 @@ fn page_with_footer(
                         div .columns {
                             // Column 1: Contact + partners
                             div .column.is-one-third {
-                                @if let Some(contents) = footer_contents {
+                                @if let Some(contents) = effective_footer {
                                     (render_content_block(contents.get("footer-contact"), p, "h4", "title is-5 footer-heading"))
                                 }
                                 h4 .title.is-6.footer-heading.mt-4 { "Liens utiles" }
@@ -257,13 +289,13 @@ fn page_with_footer(
                             }
                             // Column 2: Calendar
                             div .column.is-one-third {
-                                @if let Some(contents) = footer_contents {
+                                @if let Some(contents) = effective_footer {
                                     (render_content_block(contents.get("footer-calendar"), p, "h4", "title is-5 footer-heading"))
                                 }
                             }
                             // Column 3: Summer link
                             div .column.is-one-third {
-                                @if let Some(contents) = footer_contents {
+                                @if let Some(contents) = effective_footer {
                                     (render_content_block(contents.get("footer-summer"), p, "h4", "title is-5 footer-heading"))
                                 }
                             }

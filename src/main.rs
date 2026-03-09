@@ -403,6 +403,16 @@ async fn main() -> anyhow::Result<()> {
         templates::set_navbar_block(Some(block));
     }
 
+    // Pre-load footer content blocks so all pages show footer info
+    if let Ok(footer_map) = database::get_contents_by_slugs(
+        &app_state.db,
+        &["footer-contact", "footer-calendar", "footer-summer"],
+    )
+    .await
+    {
+        templates::set_footer_blocks(models::ContentMap::new(footer_map));
+    }
+
     // Build router
     let app = Router::new()
         .route("/", get(routes::home::index))
