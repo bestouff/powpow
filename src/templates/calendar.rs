@@ -4,6 +4,15 @@ use chrono::Datelike;
 use maud::{Markup, PreEscaped, html};
 use std::collections::HashMap;
 
+#[derive(serde::Serialize)]
+struct AtelierJs<'a> {
+    id: uuid::Uuid,
+    name: &'a str,
+    slug: &'a str,
+    icon: &'a str,
+    default_nightly: bool,
+}
+
 #[allow(
     clippy::too_many_arguments,
     clippy::cast_possible_truncation,
@@ -411,30 +420,25 @@ pub fn calendar_editor(
         opening_days.iter().map(|od| (od.day, od)).collect();
 
     // Build editable atelier IDs as JSON array for JS
-    let editable_json: String = format!(
-        "[{}]",
-        editable_ids
-            .iter()
-            .map(|id| format!("\"{id}\""))
-            .collect::<Vec<_>>()
-            .join(",")
-    );
+    let editable_json: String =
+        serde_json::to_string(editable_ids).unwrap_or_else(|_| "[]".to_string());
 
     // Build atelier cards data as JSON for JS (used in the modal)
-    let ateliers_json: String = format!(
-        "[{}]",
-        all_ateliers
-            .iter()
-            .map(|a| format!(
-                "{{\"id\":\"{}\",\"name\":\"{}\",\"slug\":\"{}\",\"icon\":\"{}\",\"default_nightly\":{}}}",
-                a.id, a.name, a.slug, a.icon, a.default_nightly
-            ))
-            .collect::<Vec<_>>()
-            .join(",")
-    );
+    let atelier_cards: Vec<AtelierJs<'_>> = all_ateliers
+        .iter()
+        .map(|a| AtelierJs {
+            id: a.id,
+            name: &a.name,
+            slug: &a.slug,
+            icon: &a.icon,
+            default_nightly: a.default_nightly,
+        })
+        .collect();
+    let ateliers_json: String =
+        serde_json::to_string(&atelier_cards).unwrap_or_else(|_| "[]".to_string());
 
     let extra_head = html! {
-        link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/css/bulma-calendar.min.css";
+        link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/css/bulma-calendar.min.css" integrity="sha384-PWg6kRaCiFAMYaANyvWqUS4fYZ2uKHjaQj1BDiCnzwBvLZTVoh6TvAFYRA+QpRhT" crossorigin="anonymous";
     };
 
     let content = html! {
@@ -686,7 +690,7 @@ pub fn calendar_editor(
     };
 
     let extra_scripts = html! {
-        script src="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/js/bulma-calendar.min.js" {}
+        script src="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/js/bulma-calendar.min.js" integrity="sha384-onqOHSNjpIlm1BKqzaATbU2MGaNgk2Mam/76Tibn5+DBk35hQcm2NKYQP2hD/7EF" crossorigin="anonymous" {}
     };
 
     page(

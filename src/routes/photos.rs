@@ -13,6 +13,25 @@ use crate::{
     database, get_prefix, templates,
 };
 
+/// Allowed image MIME types for uploads.
+const ALLOWED_IMAGE_TYPES: &[&str] = &[
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/avif",
+];
+
+/// Return the MIME type if it is an allowed image type, or fall back to
+/// `image/jpeg` for any unrecognised / non-image Content-Type.
+fn sanitise_image_mime(ct: &str) -> &'static str {
+    ALLOWED_IMAGE_TYPES
+        .iter()
+        .find(|&&allowed| allowed.eq_ignore_ascii_case(ct))
+        .copied()
+        .unwrap_or("image/jpeg")
+}
+
 pub async fn photo_page(
     RequireStaff(staff): RequireStaff,
     headers: HeaderMap,
@@ -35,14 +54,19 @@ pub async fn display_photo(
 ) -> impl IntoResponse {
     match database::get_photo_by_id(&state.db, id).await {
         Ok(Some(photo)) => {
+            let safe_mime = sanitise_image_mime(&photo.mime_type);
             let mut response = Response::new(Body::from(photo.photo_data));
             response.headers_mut().insert(
                 header::CONTENT_TYPE,
-                header::HeaderValue::from_str(&photo.mime_type).unwrap(),
+                header::HeaderValue::from_static(safe_mime),
             );
             response.headers_mut().insert(
                 header::CACHE_CONTROL,
                 header::HeaderValue::from_static("public, max-age=86400, immutable"),
+            );
+            response.headers_mut().insert(
+                header::HeaderName::from_static("x-content-type-options"),
+                header::HeaderValue::from_static("nosniff"),
             );
             response
         }
@@ -80,15 +104,26 @@ pub async fn upload_photo(
                             .content_type()
                             .unwrap_or("application/octet-stream")
                             .to_string();
-                        match field.bytes().await {
-                            Ok(data) => {
-                                tracing::info!("Photo upload: received {} bytes", data.len());
-                                photo_data = Some((data.to_vec(), content_type));
+                        if ALLOWED_IMAGE_TYPES
+                            .iter()
+                            .any(|&a| a.eq_ignore_ascii_case(&content_type))
+                        {
+                            match field.bytes().await {
+                                Ok(data) => {
+                                    tracing::info!("Photo upload: received {} bytes", data.len());
+                                    photo_data = Some((data.to_vec(), content_type));
+                                }
+                                Err(e) => {
+                                    error!("Failed to read photo data: {}", e);
+                                    multipart_error =
+                                        Some(format!("Erreur lecture fichier: {}", e));
+                                }
                             }
-                            Err(e) => {
-                                error!("Failed to read photo data: {}", e);
-                                multipart_error = Some(format!("Erreur lecture fichier: {}", e));
-                            }
+                        } else {
+                            multipart_error = Some(format!(
+                                "Type de fichier non autorisé : {}. Formats acceptés : JPEG, PNG, GIF, WebP, AVIF.",
+                                content_type
+                            ));
                         }
                     }
                     _ => {}

@@ -71,7 +71,14 @@ fn get_prefix(parts: &Parts) -> String {
         .headers
         .get("X-Forwarded-Prefix")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.trim_end_matches('/').to_string())
+        .map(|s| s.trim_end_matches('/'))
+        .filter(|s| {
+            !s.is_empty()
+                && s.bytes().all(|b| {
+                    b.is_ascii_alphanumeric() || b == b'/' || b == b'_' || b == b'-' || b == b'.'
+                })
+        })
+        .map(String::from)
         .unwrap_or_default()
 }
 

@@ -118,6 +118,7 @@ pub async fn view_person(
                 cookie.set_path("/");
                 cookie.set_http_only(true);
                 cookie.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+                cookie.set_secure(true);
                 cookie.set_max_age(time::Duration::days(30));
                 let updated_jar = jar.add(cookie);
                 return (

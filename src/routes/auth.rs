@@ -352,6 +352,9 @@ pub async fn logout(headers: HeaderMap, jar: SignedCookieJar) -> impl IntoRespon
     let prefix = get_prefix(&headers);
     let mut cookie = axum_extra::extract::cookie::Cookie::new("aghil_session", "");
     cookie.set_path("/");
+    cookie.set_http_only(true);
+    cookie.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
+    cookie.set_secure(true);
     cookie.set_max_age(time::Duration::ZERO);
     let updated_jar = jar.remove(cookie);
     (updated_jar, Redirect::to(&format!("{}/", prefix)))

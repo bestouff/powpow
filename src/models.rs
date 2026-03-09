@@ -653,14 +653,18 @@ impl FromRow<'_, sqlx::postgres::PgRow> for ContentBlock {
 }
 
 impl ContentBlock {
-    /// Render the markdown body to HTML.
+    /// Render the markdown body to sanitised HTML.
+    ///
+    /// Uses `pulldown-cmark` for Markdown→HTML then `ammonia` to strip
+    /// dangerous tags (`<script>`, `<iframe>`, event-handler attributes, …)
+    /// while keeping safe formatting elements.
     #[must_use]
     pub fn render_body(&self) -> String {
         use pulldown_cmark::{Options, Parser, html};
         let parser = Parser::new_ext(&self.body, Options::all());
         let mut html_output = String::new();
         html::push_html(&mut html_output, parser);
-        html_output
+        ammonia::clean(&html_output)
     }
 }
 

@@ -16,7 +16,6 @@ use axum_extra::extract::cookie::{Key, SignedCookieJar};
 use chrono::Datelike;
 use sqlx::PgPool;
 use std::collections::HashMap;
-use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};
 
 mod auth;
@@ -35,13 +34,60 @@ use mailchimp::MailchimpClient;
 pub(crate) const POWPOW_CSS: &str = include_str!("../static/powpow.css");
 pub(crate) const POWPOW_JS: &str = include_str!("../static/powpow.js");
 
-/// Extract the URL prefix from X-Forwarded-Prefix header
+/// Extract the URL prefix from `X-Forwarded-Prefix` header.
+///
+/// Only characters safe for a URL path segment (`a-z A-Z 0-9 / _ - .`) are
+/// accepted; anything else causes the header to be ignored (returns `""`).
+/// This prevents injection when the value is interpolated into HTML or JS.
 pub(crate) fn get_prefix(headers: &HeaderMap) -> String {
     headers
         .get("X-Forwarded-Prefix")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.trim_end_matches('/').to_string())
+        .map(|s| s.trim_end_matches('/'))
+        .filter(|s| {
+            !s.is_empty()
+                && s.bytes().all(|b| {
+                    b.is_ascii_alphanumeric() || b == b'/' || b == b'_' || b == b'-' || b == b'.'
+                })
+        })
+        .map(String::from)
         .unwrap_or_default()
+}
+
+/// Middleware that adds security response headers (CSP, X-Content-Type-Options,
+/// X-Frame-Options, Referrer-Policy).
+async fn security_headers(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let mut response = next.run(request).await;
+    let h = response.headers_mut();
+    h.insert(
+        axum::http::header::HeaderName::from_static("content-security-policy"),
+        axum::http::header::HeaderValue::from_static(
+            "default-src 'self'; \
+             script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; \
+             style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; \
+             img-src 'self' data:; \
+             font-src 'self' https://cdn.jsdelivr.net; \
+             frame-ancestors 'none'; \
+             base-uri 'self'; \
+             form-action 'self'",
+        ),
+    );
+    h.insert(
+        axum::http::header::HeaderName::from_static("x-content-type-options"),
+        axum::http::header::HeaderValue::from_static("nosniff"),
+    );
+    h.insert(
+        axum::http::header::HeaderName::from_static("x-frame-options"),
+        axum::http::header::HeaderValue::from_static("DENY"),
+    );
+    h.insert(
+        axum::http::header::HeaderName::from_static("referrer-policy"),
+        axum::http::header::HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+    response
 }
 
 #[derive(Clone)]
@@ -262,8 +308,13 @@ pub(crate) async fn send_notification_email(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
-    tracing_subscriber::fmt::init();
+    // Initialize tracing with a default of `info` level when RUST_LOG is not set
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
 
     // Load configuration: try /etc/powpow.conf first, then .env as fallback
     dotenvy::from_path("/etc/powpow.conf").ok();
@@ -491,7 +542,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/static/powpow.css", get(routes::static_pages::serve_css))
         .route("/static/powpow.js", get(routes::static_pages::serve_js))
         .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024))
-        .layer(CorsLayer::permissive())
+        .layer(axum::middleware::from_fn(security_headers))
         .with_state(app_state);
 
     // Spawn daily morning email task

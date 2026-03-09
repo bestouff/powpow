@@ -11,6 +11,25 @@ use crate::{AppState, auth::RequireAdmin, database, get_prefix, templates};
 /// Maximum CMS image upload size: 5 MB.
 const MAX_IMAGE_SIZE: usize = 5 * 1024 * 1024;
 
+/// Allowed image MIME types for uploads.
+const ALLOWED_IMAGE_TYPES: &[&str] = &[
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/avif",
+];
+
+/// Return the MIME type if it is an allowed image type, or fall back to
+/// `image/jpeg` for any unrecognised / non-image Content-Type.
+fn sanitise_image_mime(ct: &str) -> &'static str {
+    ALLOWED_IMAGE_TYPES
+        .iter()
+        .find(|&&allowed| allowed.eq_ignore_ascii_case(ct))
+        .copied()
+        .unwrap_or("image/jpeg")
+}
+
 /// Serve a CMS image by UUID (public, cached).
 pub async fn serve_content_image(
     State(state): State<AppState>,
@@ -18,15 +37,19 @@ pub async fn serve_content_image(
 ) -> impl IntoResponse {
     match database::get_content_image(&state.db, id).await {
         Ok(Some(img)) => {
+            let safe_mime = sanitise_image_mime(&img.content_type);
             let mut response = Response::new(Body::from(img.data));
             response.headers_mut().insert(
                 header::CONTENT_TYPE,
-                header::HeaderValue::from_str(&img.content_type)
-                    .unwrap_or(header::HeaderValue::from_static("application/octet-stream")),
+                header::HeaderValue::from_static(safe_mime),
             );
             response.headers_mut().insert(
                 header::CACHE_CONTROL,
                 header::HeaderValue::from_static("public, max-age=3600"),
+            );
+            response.headers_mut().insert(
+                header::HeaderName::from_static("x-content-type-options"),
+                header::HeaderValue::from_static("nosniff"),
             );
             response
         }
@@ -140,21 +163,31 @@ pub async fn content_save(
                             .content_type()
                             .unwrap_or("application/octet-stream")
                             .to_string();
-                        let filename = field.file_name().unwrap_or("upload").to_string();
-                        match field.bytes().await {
-                            Ok(data) if !data.is_empty() => {
-                                if data.len() > MAX_IMAGE_SIZE {
-                                    multipart_error =
-                                        Some("Image trop volumineuse (max 5 Mo)".to_string());
-                                } else {
-                                    image_data = Some((data.to_vec(), content_type, filename));
+                        if ALLOWED_IMAGE_TYPES
+                            .iter()
+                            .any(|&a| a.eq_ignore_ascii_case(&content_type))
+                        {
+                            let filename = field.file_name().unwrap_or("upload").to_string();
+                            match field.bytes().await {
+                                Ok(data) if !data.is_empty() => {
+                                    if data.len() > MAX_IMAGE_SIZE {
+                                        multipart_error =
+                                            Some("Image trop volumineuse (max 5 Mo)".to_string());
+                                    } else {
+                                        image_data = Some((data.to_vec(), content_type, filename));
+                                    }
+                                }
+                                Ok(_) => {} // empty file field, ignore
+                                Err(e) => {
+                                    error!("Failed to read image data: {}", e);
+                                    multipart_error = Some(format!("Erreur lecture fichier: {e}"));
                                 }
                             }
-                            Ok(_) => {} // empty file field, ignore
-                            Err(e) => {
-                                error!("Failed to read image data: {}", e);
-                                multipart_error = Some(format!("Erreur lecture fichier: {e}"));
-                            }
+                        } else {
+                            multipart_error = Some(format!(
+                                "Type de fichier non autorisé : {}. Formats acceptés : JPEG, PNG, GIF, WebP, AVIF.",
+                                content_type
+                            ));
                         }
                     }
                     _ => {}
