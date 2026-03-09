@@ -128,6 +128,7 @@ docker compose up --build
 ```
 
 This starts PostgreSQL 15 and the application on port 3000. Migrations run automatically on startup.
+**This is for development only, if you want to use it to deploy change the password in the docker file !**
 
 ### Run as a Debian package (recommended for Debian servers)
 
