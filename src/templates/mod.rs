@@ -270,7 +270,9 @@ fn page_with_footer(
                         }
                         div .content.has-text-centered.mt-4 {
                             p .is-size-7 {
-                                "PowPow v" (env!("CARGO_PKG_VERSION")) " pour AG'HIL, \u{00a9}2026 Xavier Bestel"
+                                a href="https://codeberg.org/bestouff/powpow" {
+                                    "PowPow"
+                                } " v" (env!("CARGO_PKG_VERSION")) " pour AG'HIL, \u{00a9}2026 Xavier Bestel"
                             }
                         }
                     }
