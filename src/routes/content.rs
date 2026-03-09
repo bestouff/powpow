@@ -216,7 +216,17 @@ pub async fn content_save(
     )
     .await
     {
-        Ok(()) => Redirect::to(&format!("{prefix}/admin/contents")).into_response(),
+        Ok(()) => {
+            // Refresh the navbar logo cache if the navbar block was updated
+            if slug == "navbar" {
+                let block = database::get_content(&state.db, "navbar")
+                    .await
+                    .ok()
+                    .flatten();
+                templates::set_navbar_block(block);
+            }
+            Redirect::to(&format!("{prefix}/admin/contents")).into_response()
+        }
         Err(e) => {
             error!("Failed to update content {}: {}", slug, e);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()

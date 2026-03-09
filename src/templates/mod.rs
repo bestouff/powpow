@@ -30,6 +30,21 @@ pub use static_pages::static_page;
 use crate::models::{ContentBlock, ContentMap, StaffMatchType, StaffWithSeason};
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 
+/// Cached navbar content block, shared across all pages.
+static NAVBAR_BLOCK: std::sync::RwLock<Option<ContentBlock>> = std::sync::RwLock::new(None);
+
+/// Update the cached navbar content block (call at startup and when CMS content is saved).
+pub fn set_navbar_block(block: Option<ContentBlock>) {
+    if let Ok(mut guard) = NAVBAR_BLOCK.write() {
+        *guard = block;
+    }
+}
+
+/// Read the cached navbar content block.
+fn get_navbar_block() -> Option<ContentBlock> {
+    NAVBAR_BLOCK.read().ok().and_then(|g| g.clone())
+}
+
 /// Short hex hash of embedded CSS+JS for cache-busting query params.
 /// Computed once at startup; changes whenever the file content changes.
 fn static_version() -> &'static str {
@@ -198,7 +213,11 @@ fn page_with_footer(
     footer_contents: Option<&ContentMap>,
 ) -> Markup {
     let p = prefix;
-    let navbar_block = footer_contents.map(|c| c.get("navbar"));
+    // Use navbar block from footer_contents if available, otherwise from the global cache
+    let cached_block = get_navbar_block();
+    let navbar_block = footer_contents
+        .map(|c| c.get("navbar"))
+        .or(cached_block.as_ref());
     let nav = navbar(prefix, nav_kind, active, navbar_block);
     let v = static_version();
 

@@ -347,6 +347,11 @@ async fn main() -> anyhow::Result<()> {
     // Clone state for background task before it moves into the router
     let state_for_weekly = app_state.clone();
 
+    // Pre-load the navbar content block so all pages show the logo
+    if let Ok(Some(block)) = database::get_content(&app_state.db, "navbar").await {
+        templates::set_navbar_block(Some(block));
+    }
+
     // Build router
     let app = Router::new()
         .route("/", get(routes::home::index))
