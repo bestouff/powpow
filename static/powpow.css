@@ -409,21 +409,23 @@
   background: var(--bulma-scheme-main) !important;
   z-index: 10;
 }
-.staff-table .sticky-col {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  background: var(--bulma-scheme-main);
-  border-right: 2px solid var(--bulma-border) !important;
-}
-.staff-table thead th.sticky-col {
-  z-index: 12;
-}
-.staff-table tbody tr:nth-child(even) .sticky-col {
-  background: var(--bulma-table-striped-row-even-background-color, var(--bulma-scheme-main-bis));
-}
-.staff-table tbody tr.inactive-staff .sticky-col {
-  background: var(--bulma-scheme-main);
+@media (min-width: 1024px) {
+  .staff-table .sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bulma-scheme-main);
+    border-right: 2px solid var(--bulma-border) !important;
+  }
+  .staff-table thead th.sticky-col {
+    z-index: 12;
+  }
+  .staff-table tbody tr:nth-child(even) .sticky-col {
+    background: var(--bulma-table-striped-row-even-background-color, var(--bulma-scheme-main-bis));
+  }
+  .staff-table tbody tr.inactive-staff .sticky-col {
+    background: var(--bulma-scheme-main);
+  }
 }
 th.atelier-col {
   background: var(--bulma-scheme-main) !important;
