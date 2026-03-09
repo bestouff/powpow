@@ -26,7 +26,7 @@ Nous prenons des mesures raisonnables pour protéger vos informations, mais aucu
 
 ## Vos Droits
 
-Vous avez le droit d'accéder, de corriger ou de supprimer vos données personnelles. Pour toute demande, veuillez nous contacter à Xavier Bestel <xav@bes.tel>.
+Vous avez le droit d'accéder, de corriger ou de supprimer vos données personnelles. Pour toute demande, veuillez nous contacter à [AG'HIL](mailto:aghil.ppr@gmail.com).
 
 ## Modifications
 
@@ -34,4 +34,4 @@ Nous pouvons mettre à jour cette Politique de Confidentialité à tout moment. 
 
 ## Contact
 
-Pour toute question concernant cette Politique, veuillez nous contacter à Xavier Bestel <xav@bes.tel>.
+Pour toute question concernant cette Politique, veuillez nous contacter à [AG'HIL](mailto:aghil.ppr@gmail.com).

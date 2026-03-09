@@ -272,7 +272,7 @@ fn page_with_footer(
                             p .is-size-7 {
                                 a href="https://codeberg.org/bestouff/powpow" {
                                     "PowPow"
-                                } " v" (env!("CARGO_PKG_VERSION")) " pour AG'HIL, \u{00a9}2026 Xavier Bestel"
+                                } " v" (env!("CARGO_PKG_VERSION")) " pour AG'HIL"
                             }
                         }
                     }

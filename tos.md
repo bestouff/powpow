@@ -26,4 +26,4 @@ Ces conditions sont régies par la loi Française. Tout litige sera soumis à la
 
 ## Contact
 
-Pour toute question concernant ces conditions, veuillez nous contacter à Xavier Bestel <xav@bes.tel>.
+Pour toute question concernant ces conditions, veuillez nous contacter à [AG'HIL](mailto:aghil.ppr@gmail.com).
