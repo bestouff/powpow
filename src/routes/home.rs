@@ -6,7 +6,9 @@ use axum::{
 };
 use axum_extra::extract::cookie::SignedCookieJar;
 
-use crate::{AppState, database, get_current_season, get_prefix, models::ContentMap, templates};
+use crate::{
+    AppState, database, dicton, get_current_season, get_prefix, models::ContentMap, templates,
+};
 
 /// Resolve the caller from the session cookie, if any.
 async fn resolve_caller(jar: &SignedCookieJar, state: &AppState) -> Option<crate::models::Staff> {
@@ -89,6 +91,10 @@ pub async fn index(
             .unwrap_or_default(),
     );
 
+    // Generate (or retrieve from cache) the "dicton du jour"
+    let dicton =
+        dicton::get_or_generate(&state.db, current_season, &state.config.huggingface_token).await;
+
     templates::index(
         &prefix,
         staff.as_ref(),
@@ -100,6 +106,7 @@ pub async fn index(
         station_open,
         &photo_ids,
         &contents,
+        dicton.as_deref(),
     )
 }
 

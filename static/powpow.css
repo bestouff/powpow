@@ -282,6 +282,29 @@
 .equip-legend-dot.is-closed { background: #b02b2c; }
 .equip-legend-dot.is-partial { background: #edae44; }
 
+/* === Dicton du jour === */
+.dicton-du-jour {
+  background: rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  border-left: 3px solid #e37e26;
+}
+.dicton-title {
+  color: #e37e26;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+}
+.dicton-text {
+  color: rgba(255,255,255,0.85);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  word-break: break-word;
+  margin: 0;
+}
+
 /* === Section heading with decorative underline === */
 .section-heading {
   font-size: 1.6rem;

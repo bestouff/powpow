@@ -31,6 +31,7 @@ pub struct AppConfig {
     pub cookie_secret: String,
     pub sync_token: String,
     pub backup_token: String,
+    pub huggingface_token: String,
 }
 
 impl AppConfig {
@@ -72,6 +73,7 @@ impl AppConfig {
             cookie_secret: env::var("COOKIE_SECRET").unwrap_or_default(),
             sync_token: env::var("SYNC_TOKEN").unwrap_or_default(),
             backup_token: env::var("BACKUP_TOKEN").unwrap_or_default(),
+            huggingface_token: env::var("HUGGINGFACE_TOKEN").unwrap_or_default(),
         })
     }
 }

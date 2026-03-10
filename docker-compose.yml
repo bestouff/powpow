@@ -43,6 +43,7 @@ services:
       COOKIE_SECRET: ${COOKIE_SECRET:-}
       SYNC_TOKEN: ${SYNC_TOKEN:-}
       BACKUP_TOKEN: ${BACKUP_TOKEN:-}
+      HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
       RUST_LOG: debug
     depends_on:
       postgres:

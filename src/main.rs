@@ -21,6 +21,7 @@ use tracing::{error, info, warn};
 mod auth;
 mod config;
 mod database;
+mod dicton;
 mod helloasso;
 mod mailchimp;
 mod models;

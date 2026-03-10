@@ -14,6 +14,7 @@ pub fn index(
     station_open: bool,
     photo_ids: &[uuid::Uuid],
     contents: &ContentMap,
+    dicton: Option<&str>,
 ) -> Markup {
     let p = prefix;
     let season_display = format!("{}-{}", current_season - 1, current_season);
@@ -151,6 +152,16 @@ pub fn index(
                             span .equip-legend-item {
                                 span .equip-legend-dot.is-closed {}
                                 "Fermé"
+                            }
+                        }
+                        // Dicton du jour
+                        @if let Some(dicton_text) = dicton {
+                            div .dicton-du-jour.mt-4 {
+                                h3 .dicton-title {
+                                    span .icon.mr-1 { i .fa-solid.fa-feather-pointed {} }
+                                    "Dicton du jour"
+                                }
+                                div .dicton-text { (PreEscaped(dicton_text)) }
                             }
                         }
                     }
