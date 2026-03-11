@@ -58,6 +58,15 @@ Real-time status management for ski slopes and ski tows, displayed on the public
 - Select which photos appear in the frontpage hero carousel via a frontpage flag
 - Admin interface for browsing, deleting, and toggling photos
 
+### Dicton du jour
+
+An AI-generated daily paragraph displayed on the homepage, inspired by the current weather at the station. Every day, the application fetches weather data from the [Open-Meteo](https://open-meteo.com/) API and sends a prompt to a language model (DeepSeek V3 Turbo via the [Hugging Face](https://huggingface.co/) Inference API) asking for a whimsical French "dicton" about the mountains. The result is cached for the day and rendered as styled HTML on the frontpage. The feature is opt-in: it activates only when a `HUGGINGFACE_TOKEN` is configured.
+
+### News feed
+
+The homepage displays the latest posts from the association's Facebook page, fetched via an RSS bridge feed. A background task syncs the feed every 15 minutes, downloading post text and images into PostgreSQL. Images are stored as BYTEA and served from the database, avoiding any external CDN dependency at render time. The feature is opt-in: it activates only when an `RSS_NEWS_FEED` URL is configured.
+Examples of suitable RSS bridges: https://fetchrss.com or https://rss.app
+
 ### CMS content blocks
 
 Editable content blocks stored in the database, rendered with Markdown (via pulldown-cmark). Used for the homepage sections, navbar links, footer content, and driving indications. Admins edit content through a built-in content editor.
@@ -86,6 +95,8 @@ Full database backup (JSON export of all 17+ tables) and restore, accessible via
 | CSS framework    | [Bulma](https://bulma.io/)                                              |
 | Email            | [Lettre](https://github.com/lettre/lettre) (SMTP) or Gmail API          |
 | Markdown         | [pulldown-cmark](https://github.com/pulldown-cmark/pulldown-cmark) 0.13 |
+| HTML sanitizer   | [ammonia](https://github.com/rust-ammonia/ammonia)                       |
+| RSS parsing      | [rss](https://crates.io/crates/rss) 2.0                                 |
 | Containerization | Docker with multi-stage build (cargo-chef for layer caching)            |
 
 All CSS and JS are embedded in the binary via `include_str!()` and served from memory -- no external static file server required. The application is a single self-contained binary.
@@ -118,6 +129,8 @@ Key variables:
 | `HELLOASSO_ASSOCIATION_SLUG`  | Your association's slug on HelloAsso                     |
 | `MAIL_METHOD`                 | `smtp` or `gmail`                                        |
 | `COOKIE_SECRET`               | Random string (64+ hex chars) for signed session cookies |
+| `HUGGINGFACE_TOKEN`           | Optional HF Inference API token (enables dicton du jour) |
+| `RSS_NEWS_FEED`               | Optional RSS feed URL (enables news section)             |
 | `SYNC_TOKEN` / `BACKUP_TOKEN` | Optional tokens for headless API access                  |
 
 See `.env.example` for the full list including SMTP/Gmail and Mailchimp settings.
@@ -200,13 +213,15 @@ src/
   auth.rs          # Passwordless auth extractors (RequireStaff/Chief/Admin/God)
   config.rs        # Environment/config parsing
   database.rs      # All SQL queries (~3000 lines)
+  dicton.rs        # Daily AI-generated "dicton du jour" (weather + HF API)
   helloasso.rs     # HelloAsso API client
   mailchimp.rs     # Mailchimp API client
-  models.rs        # Data models (Staff, Atelier, Equipment, etc.)
+  models.rs        # Data models (Staff, Atelier, Equipment, NewsRow, etc.)
+  news.rs          # RSS feed sync, image download, XML entity decoding
   routes/          # Axum route handlers
   templates/       # Maud HTML templates
 static/
   powpow.css       # Styles (embedded at compile time)
   powpow.js        # Client-side JS (embedded at compile time)
-migrations/        # SQLx PostgreSQL migrations (001-030)
+migrations/        # SQLx PostgreSQL migrations (001-031)
 ```
