@@ -2977,3 +2977,98 @@ pub async fn get_content_image_filename(pool: &PgPool, id: uuid::Uuid) -> Result
         .await?;
     Ok(row)
 }
+
+// ── News (RSS feed items) ───────────────────────────────────────────
+
+/// Upsert a news item by its RSS `guid`.
+///
+/// If a row with the same `guid` already exists, its text, link, `pub_date`,
+/// and image columns are updated.
+pub async fn upsert_news_item(
+    pool: &PgPool,
+    guid: &str,
+    text: &str,
+    link: &str,
+    pub_date: Option<chrono::DateTime<chrono::Utc>>,
+    image_data: Option<&[u8]>,
+    image_mime: Option<&str>,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO news (guid, text, link, pub_date, image_data, image_mime)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (guid) DO UPDATE
+         SET text = EXCLUDED.text,
+             link = EXCLUDED.link,
+             pub_date = EXCLUDED.pub_date,
+             image_data = EXCLUDED.image_data,
+             image_mime = EXCLUDED.image_mime",
+    )
+    .bind(guid)
+    .bind(text)
+    .bind(link)
+    .bind(pub_date)
+    .bind(image_data)
+    .bind(image_mime)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Fetch the N most recent news items for display (no image binary).
+pub async fn get_recent_news(pool: &PgPool, limit: i64) -> Result<Vec<crate::models::NewsRow>> {
+    let rows = sqlx::query_as::<
+        _,
+        (
+            uuid::Uuid,
+            String,
+            String,
+            Option<chrono::DateTime<chrono::Utc>>,
+            bool,
+        ),
+    >(
+        "SELECT id, text, link, pub_date, (image_data IS NOT NULL) AS has_image
+         FROM news
+         ORDER BY pub_date DESC NULLS LAST
+         LIMIT $1",
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, text, link, pub_date, has_image)| crate::models::NewsRow {
+                id,
+                text,
+                link,
+                pub_date,
+                has_image,
+            },
+        )
+        .collect())
+}
+
+/// Fetch news-image binary data and MIME type by news row ID.
+pub async fn get_news_image(pool: &PgPool, id: uuid::Uuid) -> Result<Option<(Vec<u8>, String)>> {
+    let row = sqlx::query_as::<_, (Vec<u8>, String)>(
+        "SELECT image_data, image_mime FROM news WHERE id = $1 AND image_data IS NOT NULL",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row)
+}
+
+/// Keep only the `keep` most recent news items, deleting the rest.
+pub async fn prune_old_news(pool: &PgPool, keep: i64) -> Result<u64> {
+    let result = sqlx::query(
+        "DELETE FROM news WHERE id NOT IN (
+             SELECT id FROM news ORDER BY pub_date DESC NULLS LAST LIMIT $1
+         )",
+    )
+    .bind(keep)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}

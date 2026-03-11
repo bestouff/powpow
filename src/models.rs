@@ -724,3 +724,15 @@ impl FromRow<'_, sqlx::postgres::PgRow> for ContentImage {
         })
     }
 }
+
+// ── News (RSS feed items stored in DB) ──────────────────────────────
+
+/// A news item row for display (without the image binary data).
+#[derive(Clone, Debug)]
+pub struct NewsRow {
+    pub id: uuid::Uuid,
+    pub text: String,
+    pub link: String,
+    pub pub_date: Option<DateTime<Utc>>,
+    pub has_image: bool,
+}

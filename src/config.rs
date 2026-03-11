@@ -32,6 +32,7 @@ pub struct AppConfig {
     pub sync_token: String,
     pub backup_token: String,
     pub huggingface_token: String,
+    pub rss_news_feed: String,
 }
 
 impl AppConfig {
@@ -74,6 +75,7 @@ impl AppConfig {
             sync_token: env::var("SYNC_TOKEN").unwrap_or_default(),
             backup_token: env::var("BACKUP_TOKEN").unwrap_or_default(),
             huggingface_token: env::var("HUGGINGFACE_TOKEN").unwrap_or_default(),
+            rss_news_feed: env::var("RSS_NEWS_FEED").unwrap_or_default(),
         })
     }
 }

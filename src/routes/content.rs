@@ -61,6 +61,37 @@ pub async fn serve_content_image(
     }
 }
 
+/// Serve a news-feed image by news row UUID (public, cached).
+pub async fn serve_news_image(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+) -> impl IntoResponse {
+    match database::get_news_image(&state.db, id).await {
+        Ok(Some((data, mime))) => {
+            let safe_mime = sanitise_image_mime(&mime);
+            let mut response = Response::new(Body::from(data));
+            response.headers_mut().insert(
+                header::CONTENT_TYPE,
+                header::HeaderValue::from_static(safe_mime),
+            );
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                header::HeaderValue::from_static("public, max-age=3600"),
+            );
+            response.headers_mut().insert(
+                header::HeaderName::from_static("x-content-type-options"),
+                header::HeaderValue::from_static("nosniff"),
+            );
+            response
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            error!("Failed to get news image: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
 /// List all content blocks (admin page).
 pub async fn content_list(
     RequireAdmin(_staff): RequireAdmin,

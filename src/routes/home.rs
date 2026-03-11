@@ -95,6 +95,11 @@ pub async fn index(
     let dicton =
         dicton::get_or_generate(&state.db, current_season, &state.config.huggingface_token).await;
 
+    // Fetch news items from the database (synced by background task)
+    let news_items = database::get_recent_news(&state.db, 6)
+        .await
+        .unwrap_or_default();
+
     templates::index(
         &prefix,
         staff.as_ref(),
@@ -107,6 +112,7 @@ pub async fn index(
         &photo_ids,
         &contents,
         dicton.as_deref(),
+        &news_items,
     )
 }
 

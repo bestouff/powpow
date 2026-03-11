@@ -1,5 +1,8 @@
 use super::{NavKind, calendar::render_upcoming_week, page_with_footer};
-use crate::models::{Atelier, ContentMap, Equipment, EquipmentStatus, EquipmentType, Staff};
+use crate::models::{
+    Atelier, ContentMap, Equipment, EquipmentStatus, EquipmentType, NewsRow, Staff,
+};
+use chrono::Datelike;
 use maud::{Markup, PreEscaped, html};
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -15,6 +18,7 @@ pub fn index(
     photo_ids: &[uuid::Uuid],
     contents: &ContentMap,
     dicton: Option<&str>,
+    news_items: &[NewsRow],
 ) -> Markup {
     let p = prefix;
     let season_display = format!("{}-{}", current_season - 1, current_season);
@@ -238,17 +242,28 @@ pub fn index(
             }
         }
 
-        // ── Facebook ─────────────────────────────────────────────────
-        section .section.section-navy {
-            div .container {
-                h2 .section-heading.has-text-centered.has-text-white { "Actualités" }
-                div .has-text-centered {
-                    iframe src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2F2185539661710843&tabs=timeline&width=500&height=700&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=true"
-                        width="500" height="700"
-                        style="border:none;overflow:hidden;max-width:100%;"
-                        scrolling="no" frameborder="0"
-                        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-                        allowfullscreen="true" {}
+        // ── Actualités (RSS) ───────────────────────────────────────────
+        @if !news_items.is_empty() {
+            section .section.section-navy {
+                div .container {
+                    h2 .section-heading.has-text-centered.has-text-white { "Actualités" }
+                    div .news-grid {
+                        @for item in news_items {
+                            a .news-card href=(item.link) target="_blank" rel="noopener" {
+                                @if item.has_image {
+                                    img .news-card-img
+                                        src=(format!("{p}/news-images/{}", item.id))
+                                        alt="" loading="lazy";
+                                }
+                                @if let Some(dt) = item.pub_date {
+                                    span .news-date {
+                                        (format_date_fr_short(dt))
+                                    }
+                                }
+                                p .news-text { (item.text) }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -445,4 +460,25 @@ pub fn index(
         html! {},
         Some(contents),
     )
+}
+
+/// Format a `DateTime<Utc>` as a short French date (e.g. "15 janvier 2026").
+fn format_date_fr_short(dt: chrono::DateTime<chrono::Utc>) -> String {
+    let d = dt.date_naive();
+    let month = match d.month() {
+        1 => "janvier",
+        2 => "février",
+        3 => "mars",
+        4 => "avril",
+        5 => "mai",
+        6 => "juin",
+        7 => "juillet",
+        8 => "août",
+        9 => "septembre",
+        10 => "octobre",
+        11 => "novembre",
+        12 => "décembre",
+        _ => "???",
+    };
+    format!("{} {} {}", d.day(), month, d.year())
 }

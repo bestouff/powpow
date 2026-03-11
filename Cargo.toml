@@ -43,6 +43,7 @@ futures-util = { version = "0.3.31", default-features = false, features = [
 ] }
 pulldown-cmark = "0.13"
 ammonia = "4"
+rss = "2.0.12"
 
 [dev-dependencies]
 tokio-test = "0.4"

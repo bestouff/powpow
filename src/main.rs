@@ -25,6 +25,7 @@ mod dicton;
 mod helloasso;
 mod mailchimp;
 mod models;
+mod news;
 mod routes;
 mod templates;
 
@@ -398,6 +399,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Clone state for background task before it moves into the router
     let state_for_weekly = app_state.clone();
+    let news_pool = app_state.db.clone();
+    let news_feed_url = app_state.config.rss_news_feed.clone();
 
     // Pre-load the navbar content block so all pages show the logo
     if let Ok(Some(block)) = database::get_content(&app_state.db, "navbar").await {
@@ -545,6 +548,7 @@ async fn main() -> anyhow::Result<()> {
             "/content-images/{id}",
             get(routes::content::serve_content_image),
         )
+        .route("/news-images/{id}", get(routes::content::serve_news_image))
         .route("/admin/contents", get(routes::content::content_list))
         .route(
             "/admin/contents/{slug}",
@@ -560,6 +564,9 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(routes::background::weekly_morning_email_loop(
         state_for_weekly,
     ));
+
+    // Spawn RSS news sync background loop
+    tokio::spawn(news::sync_news_loop(news_pool, news_feed_url));
 
     // Start server
     let listener = tokio::net::TcpListener::bind(&listen_address).await?;
