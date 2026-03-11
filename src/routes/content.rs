@@ -194,31 +194,31 @@ pub async fn content_save(
                             .content_type()
                             .unwrap_or("application/octet-stream")
                             .to_string();
-                        if ALLOWED_IMAGE_TYPES
-                            .iter()
-                            .any(|&a| a.eq_ignore_ascii_case(&content_type))
-                        {
-                            let filename = field.file_name().unwrap_or("upload").to_string();
-                            match field.bytes().await {
-                                Ok(data) if !data.is_empty() => {
+                        let filename = field.file_name().unwrap_or("upload").to_string();
+                        match field.bytes().await {
+                            Ok(data) if !data.is_empty() => {
+                                if ALLOWED_IMAGE_TYPES
+                                    .iter()
+                                    .any(|&a| a.eq_ignore_ascii_case(&content_type))
+                                {
                                     if data.len() > MAX_IMAGE_SIZE {
                                         multipart_error =
                                             Some("Image trop volumineuse (max 5 Mo)".to_string());
                                     } else {
                                         image_data = Some((data.to_vec(), content_type, filename));
                                     }
-                                }
-                                Ok(_) => {} // empty file field, ignore
-                                Err(e) => {
-                                    error!("Failed to read image data: {}", e);
-                                    multipart_error = Some(format!("Erreur lecture fichier: {e}"));
+                                } else {
+                                    multipart_error = Some(format!(
+                                        "Type de fichier non autorisé : {}. Formats acceptés : JPEG, PNG, GIF, WebP, AVIF.",
+                                        content_type
+                                    ));
                                 }
                             }
-                        } else {
-                            multipart_error = Some(format!(
-                                "Type de fichier non autorisé : {}. Formats acceptés : JPEG, PNG, GIF, WebP, AVIF.",
-                                content_type
-                            ));
+                            Ok(_) => {} // empty file field (no file selected), ignore
+                            Err(e) => {
+                                error!("Failed to read image data: {}", e);
+                                multipart_error = Some(format!("Erreur lecture fichier: {e}"));
+                            }
                         }
                     }
                     _ => {}

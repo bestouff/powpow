@@ -104,26 +104,26 @@ pub async fn upload_photo(
                             .content_type()
                             .unwrap_or("application/octet-stream")
                             .to_string();
-                        if ALLOWED_IMAGE_TYPES
-                            .iter()
-                            .any(|&a| a.eq_ignore_ascii_case(&content_type))
-                        {
-                            match field.bytes().await {
-                                Ok(data) => {
+                        match field.bytes().await {
+                            Ok(data) if !data.is_empty() => {
+                                if ALLOWED_IMAGE_TYPES
+                                    .iter()
+                                    .any(|&a| a.eq_ignore_ascii_case(&content_type))
+                                {
                                     tracing::info!("Photo upload: received {} bytes", data.len());
                                     photo_data = Some((data.to_vec(), content_type));
-                                }
-                                Err(e) => {
-                                    error!("Failed to read photo data: {}", e);
-                                    multipart_error =
-                                        Some(format!("Erreur lecture fichier: {}", e));
+                                } else {
+                                    multipart_error = Some(format!(
+                                        "Type de fichier non autorisé : {}. Formats acceptés : JPEG, PNG, GIF, WebP, AVIF.",
+                                        content_type
+                                    ));
                                 }
                             }
-                        } else {
-                            multipart_error = Some(format!(
-                                "Type de fichier non autorisé : {}. Formats acceptés : JPEG, PNG, GIF, WebP, AVIF.",
-                                content_type
-                            ));
+                            Ok(_) => {} // empty file field (no file selected), ignore
+                            Err(e) => {
+                                error!("Failed to read photo data: {}", e);
+                                multipart_error = Some(format!("Erreur lecture fichier: {}", e));
+                            }
                         }
                     }
                     _ => {}
