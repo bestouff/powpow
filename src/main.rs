@@ -397,8 +397,9 @@ async fn main() -> anyhow::Result<()> {
         gmail_client,
     };
 
-    // Clone state for background task before it moves into the router
+    // Clone state for background tasks before it moves into the router
     let state_for_weekly = app_state.clone();
+    let state_for_preload = app_state.clone();
     let news_pool = app_state.db.clone();
     let news_feed_url = app_state.config.rss_news_feed.clone();
 
@@ -567,6 +568,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Spawn RSS news sync background loop
     tokio::spawn(news::sync_news_loop(news_pool, news_feed_url));
+
+    // Spawn daily 5 AM preload (dicton du jour + news), runs once at startup too
+    tokio::spawn(routes::background::daily_preload_loop(state_for_preload));
 
     // Start server
     let listener = tokio::net::TcpListener::bind(&listen_address).await?;

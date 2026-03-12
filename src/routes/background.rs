@@ -1,7 +1,67 @@
 use chrono::TimeDelta;
 use tracing::info;
 
-use crate::{AppState, database, get_current_season, send_notification_email, templates};
+use crate::{
+    AppState, database, dicton, get_current_season, news, send_notification_email, templates,
+};
+
+/// Compute the next occurrence of 5:00 AM local time strictly after `from_when`.
+pub fn next_5am_local(
+    from_when: chrono::DateTime<chrono::Local>,
+) -> Option<chrono::DateTime<chrono::Local>> {
+    let today_5am = from_when.date_naive().and_hms_opt(5, 0, 0)?;
+    let today_5am_local =
+        chrono::TimeZone::from_local_datetime(&from_when.timezone(), &today_5am).single()?;
+
+    if from_when < today_5am_local {
+        Some(today_5am_local)
+    } else {
+        // Already past 5 AM today, schedule for tomorrow
+        let tomorrow_5am = today_5am + TimeDelta::days(1);
+        chrono::TimeZone::from_local_datetime(&from_when.timezone(), &tomorrow_5am).single()
+    }
+}
+
+/// Background loop that preloads the dicton du jour and news feed.
+///
+/// Runs once immediately at startup, then sleeps until the next 5:00 AM local
+/// time and repeats every day so the first visitor of the morning gets an
+/// instant page load.
+pub async fn daily_preload_loop(state: AppState) {
+    loop {
+        // ── Preload ─────────────────────────────────────────────────
+        let season = get_current_season();
+        let hf_token = state.config.huggingface_token.clone();
+        let feed_url = state.config.rss_news_feed.clone();
+
+        info!("daily preload: generating dicton du jour");
+        let _ = dicton::get_or_generate(&state.db, season, &hf_token).await;
+
+        if !feed_url.is_empty() {
+            info!("daily preload: syncing news feed");
+            news::sync_news(&state.db, &feed_url).await;
+        }
+
+        info!("daily preload: done");
+
+        // ── Sleep until next 5 AM ───────────────────────────────────
+        let now = chrono::Local::now();
+        let Some(target) = next_5am_local(now) else {
+            // Fallback: sleep 1 hour and retry
+            tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+            continue;
+        };
+
+        let sleep_duration = (target - now)
+            .to_std()
+            .unwrap_or(tokio::time::Duration::from_secs(3600));
+        info!(
+            "daily preload: next run in {} seconds (at ~05:00)",
+            sleep_duration.as_secs()
+        );
+        tokio::time::sleep(sleep_duration).await;
+    }
+}
 
 pub fn next_monday_8am_local(
     from_when: chrono::DateTime<chrono::Local>,
@@ -154,6 +214,51 @@ mod tests {
         assert_eq!(
             result,
             chrono::Local.with_ymd_and_hms(2026, 3, 2, 8, 0, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_next_5am_before_5am() {
+        // 3 AM → should get 5 AM the same day
+        let at_3am = chrono::Local
+            .with_ymd_and_hms(2026, 2, 24, 3, 0, 0)
+            .unwrap();
+        let result = next_5am_local(at_3am).unwrap();
+        assert_eq!(
+            result,
+            chrono::Local
+                .with_ymd_and_hms(2026, 2, 24, 5, 0, 0)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_next_5am_after_5am() {
+        // 10 AM → should get 5 AM the next day
+        let at_10am = chrono::Local
+            .with_ymd_and_hms(2026, 2, 24, 10, 0, 0)
+            .unwrap();
+        let result = next_5am_local(at_10am).unwrap();
+        assert_eq!(
+            result,
+            chrono::Local
+                .with_ymd_and_hms(2026, 2, 25, 5, 0, 0)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_next_5am_at_exactly_5am() {
+        // Exactly 5 AM → should get 5 AM the next day
+        let at_5am = chrono::Local
+            .with_ymd_and_hms(2026, 2, 24, 5, 0, 0)
+            .unwrap();
+        let result = next_5am_local(at_5am).unwrap();
+        assert_eq!(
+            result,
+            chrono::Local
+                .with_ymd_and_hms(2026, 2, 25, 5, 0, 0)
+                .unwrap()
         );
     }
 }
