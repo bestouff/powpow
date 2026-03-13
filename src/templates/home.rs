@@ -73,8 +73,19 @@ pub fn index(
                           target="_blank" {
                             "Réserver votre forfait"
                         }
-                        a .btn-station.btn-station-subtle href="#infosplus" {
-                            "Infos station"
+                        @for (slug, anchor, css_class) in [
+                            ("infos-station", "infosplus", "btn-station-brown"),
+                            ("driving-indications", "driving-indications", "btn-station-olive"),
+                            ("pricing", "pricing", "btn-station-teal"),
+                            ("salle-hors-sac", "salle-hors-sac", "btn-station-green"),
+                        ] {
+                            @let block = contents.get(slug);
+                            @if !block.title.is_empty() {
+                                a class=(format!("btn-station {css_class}"))
+                                  href=(format!("#{anchor}")) {
+                                    (block.title)
+                                }
+                            }
                         }
                     }
                 }
@@ -298,7 +309,7 @@ pub fn index(
         }
 
         // ── Salle hors-sac + Newsletter ──────────────────────────────
-        section .section.section-green {
+        section #salle-hors-sac .section.section-green {
             div .container {
                 div .columns {
                     div .column.is-6 {
@@ -331,7 +342,7 @@ pub fn index(
         }
 
         // ── Accès / Driving indications (olive) ─────────────────────
-        section .section.section-olive {
+        section #driving-indications .section.section-olive {
             div .container {
                 @let block = contents.get("driving-indications");
                 h2 .section-heading.has-text-centered.has-text-white { (block.title) }
@@ -361,7 +372,7 @@ pub fn index(
         }
 
         // ── Tarifs (pricing) ─────────────────────────────────────────
-        section .section.section-teal {
+        section #pricing .section.section-teal {
             div .container {
                 @let block = contents.get("pricing");
                 h2 .section-heading.has-text-centered.has-text-white { (block.title) }

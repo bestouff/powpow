@@ -1,32 +1,52 @@
 /* PowPow — extracted styles */
 
+/* === Color palette (CSS custom properties) === */
+:root {
+  --color-navy: #2d395c;
+  --color-accent: #e37e26;
+  --color-accent-dark: #c15c04;
+  --color-hero-title: #e0710f;
+  --color-brown: #5f5144;
+  --color-olive: #635f3d;
+  --color-green: #90a843;
+  --color-teal: #426359;
+  --color-golden: #edae44;
+  --color-golden-border: #d99c2e;
+  --color-footer: #b8ae9c;
+  --color-footer-hover: #a69c8a;
+  --color-status-open: #83a846;
+  --color-status-closed: #b02b2c;
+  --color-text-dark: #333;
+  --color-switch-off: #ccc;
+}
+
 /* === Navbar station (dark navy, matching WordPress Enfold theme) === */
 .navbar-station {
-  background-color: #2d395c !important;
+  background-color: var(--color-navy) !important;
   min-height: 3.5rem;
   box-shadow: 0 3px 5px 0 rgba(0,0,0,0.3);
 }
 .navbar-station .navbar-item,
 .navbar-station .navbar-link {
-  color: #e37e26 !important;
+  color: var(--color-accent) !important;
   font-size: 15px;
   transition: background-color 0.25s, color 0.25s;
   position: relative;
 }
 .navbar-station .navbar-burger {
-  color: #e37e26 !important;
+  color: var(--color-accent) !important;
 }
 .navbar-station .navbar-item:hover {
-  background-color: #e37e26 !important;
+  background-color: var(--color-accent) !important;
   color: #fff !important;
 }
 .navbar-station .navbar-item:focus,
 .navbar-station .navbar-item:focus-within {
   background-color: transparent !important;
-  color: #e37e26 !important;
+  color: var(--color-accent) !important;
 }
 .navbar-station .navbar-item.is-active {
-  color: #e37e26 !important;
+  color: var(--color-accent) !important;
   background-color: transparent !important;
 }
 /* Underline effect on hover/active, matching WP .avia-menu-fx */
@@ -37,7 +57,7 @@
   left: 15%;
   width: 70%;
   height: 2px;
-  background-color: #e37e26;
+  background-color: var(--color-accent);
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -46,11 +66,11 @@
   opacity: 1;
 }
 .navbar-station .navbar-menu {
-  background-color: #2d395c;
+  background-color: var(--color-navy);
 }
 @media screen and (max-width: 1023px) {
   .navbar-station .navbar-menu.is-active {
-    background-color: #2d395c;
+    background-color: var(--color-navy);
   }
 }
 .navbar-logo-title {
@@ -106,7 +126,7 @@
 .hero-title {
   font-size: 2.5rem;
   font-weight: 700;
-  color: #e0710f;
+  color: var(--color-hero-title);
   margin-bottom: 1rem;
   text-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
@@ -141,21 +161,21 @@
 }
 .btn-station:hover { transform: translateY(-1px); }
 .btn-station-primary {
-  background: #e37e26;
+  background: var(--color-accent);
   color: #fff !important;
-  border: 2px solid #c15c04;
+  border: 2px solid var(--color-accent-dark);
 }
 .btn-station-primary:hover {
-  background: #c15c04;
+  background: var(--color-accent-dark);
 }
 .btn-station-subtle {
-  background: #b8ae9c;
+  background: var(--color-footer);
   color: #fff !important;
-  border: 2px solid #b8ae9c;
+  border: 2px solid var(--color-footer);
 }
 .btn-station-subtle:hover {
-  background: #a69c8a;
-  border-color: #a69c8a;
+  background: var(--color-footer-hover);
+  border-color: var(--color-footer-hover);
 }
 .btn-station-outline {
   background: transparent;
@@ -165,39 +185,59 @@
 .btn-station-outline:hover {
   background: rgba(255,255,255,0.15);
 }
+.btn-station-brown {
+  background: var(--color-brown);
+  color: #fff !important;
+  border: 2px solid var(--color-brown);
+}
+.btn-station-olive {
+  background: var(--color-olive);
+  color: #fff !important;
+  border: 2px solid var(--color-olive);
+}
+.btn-station-teal {
+  background: var(--color-teal);
+  color: #fff !important;
+  border: 2px solid var(--color-teal);
+}
+.btn-station-green {
+  background: var(--color-green);
+  color: #fff !important;
+  border: 2px solid var(--color-green);
+}
 
 /* === Section background themes === */
 .section-brown {
-  background-color: #5f5144;
+  background-color: var(--color-brown);
   color: #fff;
 }
-.section-brown a { color: #e37e26; }
+.section-brown a { color: var(--color-accent); }
 .section-navy {
-  background-color: #2d395c;
+  background-color: var(--color-navy);
   color: #fff;
 }
-.section-navy a { color: #e37e26; }
+.section-navy a { color: var(--color-accent); }
 .section-olive {
-  background-color: #635f3d;
+  background-color: var(--color-olive);
   color: #fff;
 }
-.section-olive a { color: #e37e26; }
+.section-olive a { color: var(--color-accent); }
 .section-green {
-  background-color: #90a843;
+  background-color: var(--color-green);
   color: #fff;
 }
 .section-green a { color: #fff; text-decoration: underline; }
 .section-teal {
-  background-color: #426359;
+  background-color: var(--color-teal);
   color: #fff;
 }
-.section-teal a { color: #e37e26; }
+.section-teal a { color: var(--color-accent); }
 .section-golden {
-  background-color: #edae44;
-  color: #333;
+  background-color: var(--color-golden);
+  color: var(--color-text-dark);
   border-radius: 6px;
   padding: 1.5rem;
-  border: 1px solid #d99c2e;
+  border: 1px solid var(--color-golden-border);
 }
 
 /* === Station status badge === */
@@ -211,10 +251,10 @@
   border-radius: 8px;
 }
 .station-status-badge.is-open {
-  color: #83a846;
+  color: var(--color-status-open);
 }
 .station-status-badge.is-closed {
-  color: #b02b2c;
+  color: var(--color-status-closed);
 }
 
 /* === Equipment rows (pistes / téléskis) === */
@@ -249,13 +289,13 @@
   transition: width 0.6s ease;
 }
 .equip-bar-fill.is-open {
-  background: #83a846;
+  background: var(--color-status-open);
 }
 .equip-bar-fill.is-closed {
-  background: #b02b2c;
+  background: var(--color-status-closed);
 }
 .equip-bar-fill.is-partial {
-  background: #edae44;
+  background: var(--color-golden);
 }
 .equip-status {
   font-size: 0.8rem;
@@ -283,19 +323,19 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
-.equip-legend-dot.is-open { background: #83a846; }
-.equip-legend-dot.is-closed { background: #b02b2c; }
-.equip-legend-dot.is-partial { background: #edae44; }
+.equip-legend-dot.is-open { background: var(--color-status-open); }
+.equip-legend-dot.is-closed { background: var(--color-status-closed); }
+.equip-legend-dot.is-partial { background: var(--color-golden); }
 
 /* === Dicton du jour === */
 .dicton-du-jour {
   background: rgba(255,255,255,0.08);
   border-radius: 8px;
   padding: 0.8rem 1rem;
-  border-left: 3px solid #e37e26;
+  border-left: 3px solid var(--color-accent);
 }
 .dicton-title {
-  color: #e37e26;
+  color: var(--color-accent);
   font-size: 0.95rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
@@ -323,7 +363,7 @@
   display: block;
   width: 60px;
   height: 3px;
-  background: #e37e26;
+  background: var(--color-accent);
   margin-top: 0.5rem;
 }
 .section-heading.has-text-centered::after {
@@ -333,19 +373,19 @@
 
 /* === Footer station === */
 .footer-station {
-  background-color: #b8ae9c !important;
-  color: #333;
+  background-color: var(--color-footer) !important;
+  color: var(--color-text-dark);
   padding: 2rem 1.5rem;
 }
 .footer-station a {
-  color: #2d395c;
+  color: var(--color-navy);
   text-decoration: underline;
 }
 .footer-station a:hover {
-  color: #e37e26;
+  color: var(--color-accent);
 }
 .footer-heading {
-  color: #2d395c !important;
+  color: var(--color-navy) !important;
 }
 
 /* === Fullscreen image modal === */
@@ -783,7 +823,7 @@ label.switch input[type="checkbox"]:disabled + .check { opacity: 0.5; cursor: no
   position: absolute;
   cursor: pointer;
   top: 0; right: 0; bottom: 0; left: 0;
-  background-color: #ccc;
+  background-color: var(--color-switch-off);
   transition: .3s;
 }
 .switch .slider.is-rounded {
@@ -820,7 +860,7 @@ label.switch input[type="checkbox"]:disabled + .check { opacity: 0.5; cursor: no
   background: rgba(255,255,255,0.07);
   border-radius: 8px;
   padding: 1.2rem 1.25rem;
-  border-left: 3px solid #e37e26;
+  border-left: 3px solid var(--color-accent);
   color: #fff;
   text-decoration: none;
   transition: background .2s;
