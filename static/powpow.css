@@ -454,6 +454,30 @@
 .img-modal.is-active {
   display: flex;
 }
+.img-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  font-size: 1.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  transition: background 0.2s, border-color 0.2s;
+  line-height: 1;
+  padding: 0;
+}
+.img-modal-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: #fff;
+}
 .img-modal-content {
   width: 98vw;
   height: 98vh;

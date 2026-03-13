@@ -411,6 +411,7 @@ pub fn index(
 
         // ── Fullscreen image modal ────────────────────────────────────
         div #img-modal .img-modal {
+            button .img-modal-close type="button" aria-label="Fermer" { "\u{2715}" }
             img .img-modal-content src="" alt="";
         }
     };
