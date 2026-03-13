@@ -1258,8 +1258,25 @@ function initPhotoPage(prefix) {
             fetch(prefix + '/api/photos/' + photoId + '/frontpage', { method: 'POST' })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    if (data.frontpage !== undefined) {
-                        cb.checked = data.frontpage;
+                    if (data.is_frontpage !== undefined) {
+                        cb.checked = data.is_frontpage;
+                    }
+                })
+                .catch(function() {
+                    cb.checked = !cb.checked; // revert on error
+                });
+        });
+    });
+
+    // Staff toggle checkboxes
+    document.querySelectorAll('.staff-toggle').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            var photoId = cb.dataset.id;
+            fetch(prefix + '/api/photos/' + photoId + '/staff', { method: 'POST' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.is_staff !== undefined) {
+                        cb.checked = data.is_staff;
                     }
                 })
                 .catch(function() {

@@ -9,7 +9,8 @@ pub struct Photo {
     pub photo_data: Vec<u8>,
     pub mime_type: String,
     pub photographer_id: uuid::Uuid,
-    pub frontpage: bool,
+    pub is_frontpage: bool,
+    pub is_staff: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -21,7 +22,8 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Photo {
             photo_data: row.try_get("photo_data")?,
             mime_type: row.try_get("mime_type")?,
             photographer_id: row.try_get("photographer_id")?,
-            frontpage: row.try_get("frontpage")?,
+            is_frontpage: row.try_get("is_frontpage")?,
+            is_staff: row.try_get("is_staff")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })
@@ -34,7 +36,8 @@ pub struct PhotoMeta {
     pub id: uuid::Uuid,
     pub mime_type: String,
     pub photographer_id: uuid::Uuid,
-    pub frontpage: bool,
+    pub is_frontpage: bool,
+    pub is_staff: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -45,7 +48,8 @@ impl FromRow<'_, sqlx::postgres::PgRow> for PhotoMeta {
             id: row.try_get("id")?,
             mime_type: row.try_get("mime_type")?,
             photographer_id: row.try_get("photographer_id")?,
-            frontpage: row.try_get("frontpage")?,
+            is_frontpage: row.try_get("is_frontpage")?,
+            is_staff: row.try_get("is_staff")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })

@@ -2738,7 +2738,7 @@ pub async fn get_photo_by_id(pool: &PgPool, id: uuid::Uuid) -> Result<Option<Pho
 pub async fn get_all_photos(pool: &PgPool) -> Result<Vec<(PhotoMeta, String)>> {
     let rows = sqlx::query(
         r"
-        SELECT p.id, p.mime_type, p.photographer_id, p.frontpage, p.created_at, p.updated_at,
+        SELECT p.id, p.mime_type, p.photographer_id, p.is_frontpage, p.is_staff, p.created_at, p.updated_at,
                s.first_name AS staff_first_name, s.last_name AS staff_last_name
         FROM photos p
         JOIN staff s ON p.photographer_id = s.id
@@ -2774,10 +2774,22 @@ pub async fn delete_photo(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
     Ok(result.rows_affected() > 0)
 }
 
-/// Toggle the frontpage flag on a photo.
+/// Toggle the `is_frontpage` flag on a photo.
 pub async fn toggle_photo_frontpage(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
     let row = sqlx::query_scalar::<_, bool>(
-        r"UPDATE photos SET frontpage = NOT frontpage WHERE id = $1 RETURNING frontpage",
+        r"UPDATE photos SET is_frontpage = NOT is_frontpage WHERE id = $1 RETURNING is_frontpage",
+    )
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(row)
+}
+
+/// Toggle the `is_staff` flag on a photo.
+pub async fn toggle_photo_staff(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
+    let row = sqlx::query_scalar::<_, bool>(
+        r"UPDATE photos SET is_staff = NOT is_staff WHERE id = $1 RETURNING is_staff",
     )
     .bind(id)
     .fetch_one(pool)
@@ -2856,10 +2868,10 @@ pub async fn is_station_open_today(pool: &PgPool) -> Result<bool> {
     Ok(row.is_some())
 }
 
-/// Get photo IDs for the hero slideshow (frontpage only).
+/// Get photo IDs for the hero slideshow (`is_frontpage` only).
 pub async fn get_all_photo_ids(pool: &PgPool) -> Result<Vec<uuid::Uuid>> {
     let rows = sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM photos WHERE frontpage = TRUE ORDER BY created_at",
+        "SELECT id FROM photos WHERE is_frontpage = TRUE ORDER BY created_at",
     )
     .fetch_all(pool)
     .await?;

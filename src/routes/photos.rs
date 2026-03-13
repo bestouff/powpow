@@ -208,7 +208,7 @@ pub async fn api_photo_ids(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-/// Toggle the frontpage flag on a photo.
+/// Toggle the `is_frontpage` flag on a photo.
 pub async fn api_toggle_frontpage(
     RequireAdmin(_staff): RequireAdmin,
     State(state): State<AppState>,
@@ -217,11 +217,34 @@ pub async fn api_toggle_frontpage(
     match database::toggle_photo_frontpage(&state.db, id).await {
         Ok(new_val) => (
             StatusCode::OK,
-            Json(serde_json::json!({"frontpage": new_val})),
+            Json(serde_json::json!({"is_frontpage": new_val})),
         )
             .into_response(),
         Err(e) => {
-            error!("Failed to toggle photo frontpage: {}", e);
+            error!("Failed to toggle photo is_frontpage: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Toggle the `is_staff` flag on a photo.
+pub async fn api_toggle_staff(
+    RequireAdmin(_staff): RequireAdmin,
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> impl IntoResponse {
+    match database::toggle_photo_staff(&state.db, id).await {
+        Ok(new_val) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"is_staff": new_val})),
+        )
+            .into_response(),
+        Err(e) => {
+            error!("Failed to toggle photo is_staff: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": e.to_string()})),

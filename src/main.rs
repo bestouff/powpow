@@ -544,6 +544,10 @@ async fn main() -> anyhow::Result<()> {
             "/api/photos/{id}/frontpage",
             post(routes::photos::api_toggle_frontpage),
         )
+        .route(
+            "/api/photos/{id}/staff",
+            post(routes::photos::api_toggle_staff),
+        )
         .route("/api/photos/ids", get(routes::photos::api_photo_ids))
         .route(
             "/content-images/{id}",

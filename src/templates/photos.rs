@@ -143,13 +143,28 @@ pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) 
                                         label .checkbox {
                                             input .frontpage-toggle type="checkbox"
                                                 data-id=(photo.id)
-                                                checked[photo.frontpage];
+                                                checked[photo.is_frontpage];
                                             " Page d'accueil"
                                         }
-                                    } @else if photo.frontpage {
-                                        span .tag.is-success.is-light {
-                                            span .icon.is-small { i .fa-solid.fa-house {} }
-                                            "\u{00a0}Accueil"
+                                        br;
+                                        label .checkbox {
+                                            input .staff-toggle type="checkbox"
+                                                data-id=(photo.id)
+                                                checked[photo.is_staff];
+                                            " Bénévoles"
+                                        }
+                                    } @else {
+                                        @if photo.is_frontpage {
+                                            span .tag.is-success.is-light {
+                                                span .icon.is-small { i .fa-solid.fa-house {} }
+                                                "\u{00a0}Accueil"
+                                            }
+                                        }
+                                        @if photo.is_staff {
+                                            span .tag.is-info.is-light {
+                                                span .icon.is-small { i .fa-solid.fa-users {} }
+                                                "\u{00a0}Bénévoles"
+                                            }
                                         }
                                     }
                                 }
