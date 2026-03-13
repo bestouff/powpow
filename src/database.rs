@@ -2878,6 +2878,16 @@ pub async fn get_all_photo_ids(pool: &PgPool) -> Result<Vec<uuid::Uuid>> {
     Ok(rows)
 }
 
+/// Get photo IDs tagged as staff photos (`is_staff` only).
+pub async fn get_staff_photo_ids(pool: &PgPool) -> Result<Vec<uuid::Uuid>> {
+    let rows = sqlx::query_scalar::<_, uuid::Uuid>(
+        "SELECT id FROM photos WHERE is_staff = TRUE ORDER BY created_at",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
 // ── CMS content functions ────────────────────────────────────────────
 
 /// Fetch all content blocks, keyed by slug.

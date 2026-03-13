@@ -85,6 +85,9 @@ pub async fn index(
     let photo_ids = database::get_all_photo_ids(&state.db)
         .await
         .unwrap_or_default();
+    let staff_photo_ids = database::get_staff_photo_ids(&state.db)
+        .await
+        .unwrap_or_default();
     let contents = ContentMap::new(
         database::get_all_contents(&state.db)
             .await
@@ -110,6 +113,7 @@ pub async fn index(
         &equipments,
         station_open,
         &photo_ids,
+        &staff_photo_ids,
         &contents,
         dicton.as_deref(),
         &news_items,

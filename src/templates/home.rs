@@ -16,6 +16,7 @@ pub fn index(
     equipments: &[Equipment],
     station_open: bool,
     photo_ids: &[uuid::Uuid],
+    staff_photo_ids: &[uuid::Uuid],
     contents: &ContentMap,
     dicton: Option<&str>,
     news_items: &[NewsRow],
@@ -234,6 +235,14 @@ pub fn index(
                                     a .btn-station.btn-station-primary href=(url) target="_blank" {
                                         (label)
                                     }
+                                }
+                            }
+                            @if !staff_photo_ids.is_empty() {
+                                @let staff_ids_json = serde_json::to_string(staff_photo_ids).unwrap_or_else(|_| "[]".to_string());
+                                div .staff-carousel data-prefix=(p) data-photos=(staff_ids_json) {
+                                    div .staff-carousel-track {}
+                                    button .staff-carousel-btn.staff-prev type="button" { "❮" }
+                                    button .staff-carousel-btn.staff-next type="button" { "❯" }
                                 }
                             }
                         }

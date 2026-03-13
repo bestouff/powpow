@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initBadgeCounts(prefix);
     initLoginCheck(prefix);
     initHeroSlideshow(prefix);
+    initStaffCarousel(prefix);
     initEquipmentBars();
     initSearchFilter();
     initPersonDetail(prefix);
@@ -1283,5 +1284,55 @@ function initPhotoPage(prefix) {
                     cb.checked = !cb.checked; // revert on error
                 });
         });
+    });
+}
+
+// --- Block: Staff photo carousel ---
+function initStaffCarousel(prefix) {
+    var container = document.querySelector('.staff-carousel');
+    if (!container) return;
+
+    var photoIds;
+    try { photoIds = JSON.parse(container.dataset.photos || '[]'); } catch(e) { photoIds = []; }
+    if (photoIds.length === 0) { container.style.display = 'none'; return; }
+
+    var pfx = container.dataset.prefix || prefix || '';
+    var track = container.querySelector('.staff-carousel-track');
+    var prevBtn = container.querySelector('.staff-prev');
+    var nextBtn = container.querySelector('.staff-next');
+
+    // Create img elements
+    photoIds.forEach(function(id) {
+        var img = document.createElement('img');
+        img.src = pfx + '/photos/' + id;
+        img.alt = 'Staff';
+        img.loading = 'lazy';
+        track.appendChild(img);
+    });
+
+    if (photoIds.length <= 1) {
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'none';
+        return;
+    }
+
+    var current = 0;
+    var total = photoIds.length;
+
+    function goTo(idx) {
+        current = (idx + total) % total;
+        track.style.transform = 'translateX(-' + (current * 100) + '%)';
+    }
+
+    prevBtn.addEventListener('click', function() { goTo(current - 1); });
+    nextBtn.addEventListener('click', function() { goTo(current + 1); });
+
+    // Auto-advance every 4 seconds
+    var timer = setInterval(function() { goTo(current + 1); }, 4000);
+
+    // Pause auto-advance on hover
+    container.addEventListener('mouseenter', function() { clearInterval(timer); });
+    container.addEventListener('mouseleave', function() {
+        timer = setInterval(function() { goTo(current + 1); }, 4000);
     });
 }

@@ -851,3 +851,42 @@ label.switch input[type="checkbox"]:disabled + .check { opacity: 0.5; cursor: no
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ── Staff photo carousel ─────────────────────────────────── */
+.staff-carousel {
+  position: relative;
+  margin-top: 1.2rem;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.staff-carousel-track {
+  display: flex;
+  transition: transform 0.5s ease-in-out;
+}
+.staff-carousel-track img {
+  width: 100%;
+  flex: 0 0 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  aspect-ratio: 4 / 3;
+}
+.staff-carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  border: none;
+  font-size: 1.3rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  border-radius: 4px;
+  z-index: 2;
+  line-height: 1;
+  transition: background 0.2s;
+}
+.staff-carousel-btn:hover {
+  background: rgba(0,0,0,0.7);
+}
+.staff-prev { left: 0.4rem; }
+.staff-next { right: 0.4rem; }
