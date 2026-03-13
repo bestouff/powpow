@@ -18,6 +18,8 @@ fn slug_label(slug: &str) -> &'static str {
         "driving-indications" => "Accès à la station",
         "pricing" => "Tarifs",
         "favicon" => "Favicon du site",
+        "trail-map" => "Plan des pistes",
+        "navbar" => "Barre de navigation",
         _ => "Bloc inconnu",
     }
 }

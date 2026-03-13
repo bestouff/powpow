@@ -68,16 +68,19 @@ pub fn index(
                         div .hero-subtitle { (PreEscaped(body_html)) }
                     }
                     div .hero-buttons {
-                        a .btn-station.btn-station-primary
-                          href="https://www.helloasso.com/associations/agir-pour-la-station-de-ski-de-st-hil"
-                          target="_blank" {
-                            "Réserver votre forfait"
+                        @if let (Some(url), Some(label)) = (block.link_url.as_ref(), block.link_label.as_ref())  {
+                            a .btn-station.btn-station-primary
+                            href=(url)
+                            target="_blank" {
+                                (label)
+                            }
                         }
                         @for (slug, anchor, css_class) in [
                             ("infos-station", "infosplus", "btn-station-brown"),
-                            ("driving-indications", "driving-indications", "btn-station-olive"),
                             ("pricing", "pricing", "btn-station-teal"),
                             ("salle-hors-sac", "salle-hors-sac", "btn-station-green"),
+                            ("driving-indications", "driving-indications", "btn-station-olive"),
+                            ("about-association", "about-association", "btn-station-golden"),
                         ] {
                             @let block = contents.get(slug);
                             @if !block.title.is_empty() {
@@ -210,7 +213,7 @@ pub fn index(
         }
 
         // ── About / Description ──────────────────────────────────────
-        section .section.section-navy {
+        section #about-association .section.section-navy {
             div .container {
                 div .columns {
                     div .column.is-7 {
@@ -258,9 +261,14 @@ pub fn index(
         @if !news_items.is_empty() {
             section .section.section-navy {
                 div .container {
-                    h2 .section-heading.has-text-centered.has-text-white { "Actualités" }
+                    h2 .section-heading.has-text-centered.has-text-white {
+                        "Actualités "
+                        a href=(news_items[0].link) {
+                            (news_items[0].text)
+                        }
+                    }
                     div .news-grid {
-                        @for item in news_items {
+                        @for item in &news_items[1..] {
                             a .news-card href=(item.link) target="_blank" rel="noopener" {
                                 @if item.has_image {
                                     img .news-card-img
@@ -408,7 +416,7 @@ pub fn index(
     };
 
     page_with_footer(
-        "Station de ski de Saint-Hilaire du Touvet",
+        None,
         prefix,
         &NavKind::LoginOnly,
         "",

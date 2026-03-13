@@ -3021,6 +3021,7 @@ pub async fn upsert_news_item(
 }
 
 /// Fetch the N most recent news items for display (no image binary).
+/// The first news item is fake and contains the metadata
 pub async fn get_recent_news(pool: &PgPool, limit: i64) -> Result<Vec<crate::models::NewsRow>> {
     let rows = sqlx::query_as::<
         _,
@@ -3028,11 +3029,12 @@ pub async fn get_recent_news(pool: &PgPool, limit: i64) -> Result<Vec<crate::mod
             uuid::Uuid,
             String,
             String,
+            String,
             Option<chrono::DateTime<chrono::Utc>>,
             bool,
         ),
     >(
-        "SELECT id, text, link, pub_date, (image_data IS NOT NULL) AS has_image
+        "SELECT id, guid, text, link, pub_date, (image_data IS NOT NULL) AS has_image
          FROM news
          ORDER BY pub_date DESC NULLS LAST
          LIMIT $1",
@@ -3041,18 +3043,29 @@ pub async fn get_recent_news(pool: &PgPool, limit: i64) -> Result<Vec<crate::mod
     .fetch_all(pool)
     .await?;
 
-    Ok(rows
+    let mut items: Vec<crate::models::NewsRow> = rows
         .into_iter()
         .map(
-            |(id, text, link, pub_date, has_image)| crate::models::NewsRow {
+            |(id, guid, text, link, pub_date, has_image)| crate::models::NewsRow {
                 id,
+                guid,
                 text,
                 link,
                 pub_date,
                 has_image,
             },
         )
-        .collect())
+        .collect();
+    if !items.is_empty() {
+        let mut fake_news_position = 0;
+        items.iter().enumerate().for_each(|(i, item)| {
+            if item.guid.is_empty() {
+                fake_news_position = i;
+            }
+        });
+        items.swap(fake_news_position, 0);
+    }
+    Ok(items)
 }
 
 /// Fetch news-image binary data and MIME type by news row ID.
@@ -3069,9 +3082,13 @@ pub async fn get_news_image(pool: &PgPool, id: uuid::Uuid) -> Result<Option<(Vec
 /// Keep only the `keep` most recent news items, deleting the rest.
 pub async fn prune_old_news(pool: &PgPool, keep: i64) -> Result<u64> {
     let result = sqlx::query(
-        "DELETE FROM news WHERE id NOT IN (
-             SELECT id FROM news ORDER BY pub_date DESC NULLS LAST LIMIT $1
-         )",
+        "DELETE FROM news
+        WHERE id NOT IN (
+            SELECT id FROM news
+            WHERE guid <> ''
+            ORDER BY pub_date DESC NULLS LAST LIMIT $1
+        )
+        AND guid <> ''",
     )
     .bind(keep)
     .execute(pool)

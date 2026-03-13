@@ -176,7 +176,7 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBloc
                         @if let Some(b) = block {
                             @if let Some(img_id) = b.image_id {
                                 img src=(format!("{p}/content-images/{img_id}"))
-                                    alt="Station de ski de Saint-Hilaire"
+                                    alt=(b.title.clone())
                                     style="max-height: 2.5rem;";
                             }
                             @if !b.title.is_empty() {
@@ -228,7 +228,7 @@ fn page(
     extra_scripts: Markup,
 ) -> Markup {
     page_with_footer(
-        title,
+        Some(title),
         prefix,
         nav_kind,
         active,
@@ -246,7 +246,7 @@ fn page(
 /// every page displays the footer content.
 #[allow(clippy::too_many_arguments)]
 fn page_with_footer(
-    title: &str,
+    custom_title: Option<&str>,
     prefix: &str,
     nav_kind: &NavKind,
     active: &str,
@@ -276,6 +276,10 @@ fn page_with_footer(
     // Resolve footer content: use explicit parameter or fall back to global cache
     let cached_footer = get_footer_blocks();
     let effective_footer: Option<&ContentMap> = footer_contents.or(cached_footer.as_ref());
+
+    let title: &str = custom_title
+        .or(favicon_block.map(|fav| fav.title.as_str()))
+        .unwrap_or("[missing title in favicon section]");
 
     html! {
         (DOCTYPE)

@@ -113,7 +113,7 @@ async fn fetch_and_parse(url: &str) -> anyhow::Result<Vec<ParsedItem>> {
 
     let channel = rss::Channel::read_from(&body[..])?;
 
-    let items: Vec<ParsedItem> = channel
+    let mut items: Vec<ParsedItem> = channel
         .items()
         .iter()
         .filter_map(|item| {
@@ -148,6 +148,15 @@ async fn fetch_and_parse(url: &str) -> anyhow::Result<Vec<ParsedItem>> {
             })
         })
         .collect();
+
+    // Push a "fake news" item which is just the title+link of the feed
+    items.push(ParsedItem {
+        guid: String::new(),
+        text: channel.title,
+        link: channel.link,
+        pub_date: None,
+        image_url: None,
+    });
 
     Ok(items)
 }
