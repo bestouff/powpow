@@ -1,18 +1,11 @@
-use super::{NavKind, calendar::render_upcoming_week, page_with_footer};
-use crate::models::{
-    Atelier, ContentMap, Equipment, EquipmentStatus, EquipmentType, NewsRow, Staff,
-};
+use super::{NavKind, page_with_footer};
+use crate::models::{ContentMap, Equipment, EquipmentStatus, EquipmentType, NewsRow};
 use chrono::Datelike;
 use maud::{Markup, PreEscaped, html};
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn index(
     prefix: &str,
-    staff: Option<&Staff>,
-    current_season: i16,
-    has_paid: bool,
-    chief_ateliers: &[Atelier],
-    upcoming: &[(chrono::NaiveDate, String, i16, i64)],
     equipments: &[Equipment],
     station_open: bool,
     photo_ids: &[uuid::Uuid],
@@ -22,7 +15,6 @@ pub fn index(
     news_items: &[NewsRow],
 ) -> Markup {
     let p = prefix;
-    let season_display = format!("{}-{}", current_season - 1, current_season);
 
     // Split equipments into slopes and ski tows
     let slopes: Vec<&Equipment> = equipments
@@ -368,61 +360,28 @@ pub fn index(
             }
         }
 
-        // ── Fullscreen image modal ────────────────────────────────────
-        div #img-modal .img-modal {
-            img .img-modal-content src="" alt="";
-        }
-
-        // ── Logged-in user sections ──────────────────────────────────
-        @if let Some(staff) = staff {
-            // Membership status
-            section .section.py-4 {
-                div .container.is-fluid {
-                    @if has_paid {
-                        div .notification.is-success.is-light {
-                            span .icon { i .fa-solid.fa-circle-check {} }
-                            " Ta cotisation est à jour pour la saison " (season_display) "."
+        // ── Tarifs (pricing) ─────────────────────────────────────────
+        section .section.section-teal {
+            div .container {
+                @let block = contents.get("pricing");
+                h2 .section-heading.has-text-centered.has-text-white { (block.title) }
+                div .columns.is-centered {
+                    div .column.is-8 {
+                        div .content.has-text-white {
+                            (PreEscaped(block.render_body()))
                         }
-                    } @else {
-                        div .notification.is-warning.is-light {
-                            span .icon { i .fa-solid.fa-triangle-exclamation {} }
-                            " Ta cotisation n'est pas à jour pour la saison " (season_display)
-                            " \u{2014} "
-                            a href="https://www.helloasso.com/associations/agir-pour-la-station-de-ski-de-st-hil"
-                              target="_blank" { "inscris-toi sur HelloAsso" }
-                            "."
-                        }
-                    }
-                }
-            }
-
-            // My profile
-            section .section.py-4 {
-                div .container.is-fluid {
-                    a .box.box-link href={(p) "/person/" (staff.id)} {
-                        span .icon.mr-2 { i .fa-solid.fa-user-gear {} }
-                        strong { "Gérer mes ateliers et mes préférences" }
-                    }
-                }
-            }
-
-            // Chief ateliers
-            @if !chief_ateliers.is_empty() {
-                section .section.py-4 {
-                    div .container.is-fluid {
-                        div .box {
-                            h3 .title.is-5.mb-3 {
-                                span .icon.mr-2 { i .fa-solid.fa-user-shield {} }
-                                "Mes ateliers"
+                        @if let Some(img_id) = block.image_id {
+                            div .has-text-centered.mb-4 {
+                                img src=(format!("{p}/content-images/{img_id}"))
+                                    alt=(block.title)
+                                    style="max-width:100%;border-radius:6px;";
                             }
-                            div .buttons {
-                                @for a in chief_ateliers {
-                                    a .button.is-link.is-light.mr-2.mb-2
-                                      href={(p) "/calendar/" (a.slug)} {
-                                        span .icon { i class={"fa-solid fa-" (a.icon)} {} }
-                                        "\u{00a0}"
-                                        span { (a.name) }
-                                    }
+                        }
+                        @if let Some(ref url) = block.link_url {
+                            @let label = block.link_label.as_deref().unwrap_or(url);
+                            div .has-text-centered.mt-4 {
+                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                    (label)
                                 }
                             }
                         }
@@ -431,31 +390,9 @@ pub fn index(
             }
         }
 
-        // Upcoming week (visible to everyone)
-        section .section.py-4 {
-            div .container.is-fluid {
-                a .box.box-link href={(p) "/calendar"} {
-                    h3 .title.is-5.mb-3 {
-                        span .icon.mr-2 { i .fa-solid.fa-calendar-week {} }
-                        "Semaine à venir"
-                    }
-                    (render_upcoming_week(upcoming))
-                }
-            }
-        }
-
-        @if let Some(staff) = staff {
-            // Admin / chief link
-            @if staff.is_admin || !chief_ateliers.is_empty() {
-                section .section.py-4 {
-                    div .container.is-fluid {
-                        a .box.box-link href={(p) "/admin"} {
-                            span .icon.mr-2 { i .fa-solid.fa-screwdriver-wrench {} }
-                            strong { "Administration" }
-                        }
-                    }
-                }
-            }
+        // ── Fullscreen image modal ────────────────────────────────────
+        div #img-modal .img-modal {
+            img .img-modal-content src="" alt="";
         }
     };
 

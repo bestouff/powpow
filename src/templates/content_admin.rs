@@ -15,6 +15,8 @@ fn slug_label(slug: &str) -> &'static str {
         "footer-contact" => "Pied de page — Contact",
         "footer-calendar" => "Pied de page — Calendrier",
         "footer-summer" => "Pied de page — En été",
+        "driving-indications" => "Accès à la station",
+        "pricing" => "Tarifs",
         _ => "Bloc inconnu",
     }
 }

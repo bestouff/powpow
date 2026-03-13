@@ -855,22 +855,6 @@ pub async fn is_chief(pool: &PgPool, staff_id: uuid::Uuid) -> Result<bool> {
     Ok(row)
 }
 
-/// Check if a staff member has paid for a given season
-pub async fn has_staff_paid_season(
-    pool: &PgPool,
-    staff_id: uuid::Uuid,
-    season: i16,
-) -> Result<bool> {
-    let row = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM payments WHERE staff = $1 AND season = $2)",
-    )
-    .bind(staff_id)
-    .bind(season)
-    .fetch_one(pool)
-    .await?;
-    Ok(row)
-}
-
 /// Get email addresses of all admin staff members
 pub async fn get_admin_emails(pool: &PgPool) -> Result<Vec<String>> {
     let emails = sqlx::query_scalar::<_, String>(

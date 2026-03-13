@@ -187,6 +187,11 @@
   color: #fff;
 }
 .section-green a { color: #fff; text-decoration: underline; }
+.section-teal {
+  background-color: #426359;
+  color: #fff;
+}
+.section-teal a { color: #e37e26; }
 .section-golden {
   background-color: #edae44;
   color: #333;

@@ -23,57 +23,9 @@ async fn resolve_caller(jar: &SignedCookieJar, state: &AppState) -> Option<crate
         .flatten()
 }
 
-pub async fn index(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    jar: SignedCookieJar,
-) -> impl IntoResponse {
+pub async fn index(headers: HeaderMap, State(state): State<AppState>) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-
-    // Try to identify the logged-in user (anonymous access is fine)
-    let staff = jar
-        .get("aghil_session")
-        .and_then(|c| c.value().parse::<uuid::Uuid>().ok());
-
-    let staff = match staff {
-        Some(id) => database::get_staff_by_id(&state.db, id)
-            .await
-            .ok()
-            .flatten(),
-        None => None,
-    };
-
     let current_season = get_current_season();
-
-    // Gather data depending on privilege level
-    let has_paid = if let Some(ref s) = staff {
-        database::has_staff_paid_season(&state.db, s.id, current_season)
-            .await
-            .unwrap_or(false)
-    } else {
-        false
-    };
-
-    let chief_ateliers = if let Some(ref s) = staff {
-        if s.is_admin || s.is_god {
-            // Admins/gods see all ateliers
-            database::get_all_ateliers(&state.db)
-                .await
-                .unwrap_or_default()
-        } else {
-            database::get_chief_ateliers(&state.db, s.id)
-                .await
-                .unwrap_or_default()
-        }
-    } else {
-        Vec::new()
-    };
-
-    let today = chrono::Local::now().date_naive();
-    let week_end = today + chrono::Duration::days(7);
-    let upcoming = database::get_upcoming_needs_deficit(&state.db, today, week_end)
-        .await
-        .unwrap_or_default();
 
     // Public frontpage data
     let equipments = database::get_all_equipments(&state.db)
@@ -105,11 +57,6 @@ pub async fn index(
 
     templates::index(
         &prefix,
-        staff.as_ref(),
-        current_season,
-        has_paid,
-        &chief_ateliers,
-        &upcoming,
         &equipments,
         station_open,
         &photo_ids,
