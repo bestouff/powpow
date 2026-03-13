@@ -1,5 +1,5 @@
 [Unit]
-Description=Powpow - AGHIL volunteer management
+Description=Powpow - ski station volunteer management
 After=network.target postgresql.service
 Wants=postgresql.service
 
