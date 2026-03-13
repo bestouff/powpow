@@ -408,6 +408,11 @@ async fn main() -> anyhow::Result<()> {
         templates::set_navbar_block(Some(block));
     }
 
+    // Pre-load the favicon content block so all pages show the favicon
+    if let Ok(Some(block)) = database::get_content(&app_state.db, "favicon").await {
+        templates::set_favicon_block(Some(block));
+    }
+
     // Pre-load footer content blocks so all pages show footer info
     if let Ok(footer_map) = database::get_contents_by_slugs(
         &app_state.db,

@@ -17,6 +17,7 @@ fn slug_label(slug: &str) -> &'static str {
         "footer-summer" => "Pied de page — En été",
         "driving-indications" => "Accès à la station",
         "pricing" => "Tarifs",
+        "favicon" => "Favicon du site",
         _ => "Bloc inconnu",
     }
 }

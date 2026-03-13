@@ -289,6 +289,14 @@ pub async fn content_save(
                     .flatten();
                 templates::set_navbar_block(block);
             }
+            // Refresh the favicon cache if the favicon block was updated
+            if slug == "favicon" {
+                let block = database::get_content(&state.db, "favicon")
+                    .await
+                    .ok()
+                    .flatten();
+                templates::set_favicon_block(block);
+            }
             // Refresh the footer blocks cache if a footer slug was updated
             if templates::is_footer_slug(&slug)
                 && let Ok(footer_map) = database::get_contents_by_slugs(

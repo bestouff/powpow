@@ -33,6 +33,9 @@ use maud::{DOCTYPE, Markup, PreEscaped, html};
 /// Cached navbar content block, shared across all pages.
 static NAVBAR_BLOCK: std::sync::RwLock<Option<ContentBlock>> = std::sync::RwLock::new(None);
 
+/// Cached favicon content block, shared across all pages.
+static FAVICON_BLOCK: std::sync::RwLock<Option<ContentBlock>> = std::sync::RwLock::new(None);
+
 /// Cached footer content blocks, shared across all pages.
 /// Stores blocks for slugs: `footer-contact`, `footer-calendar`, `footer-summer`.
 static FOOTER_BLOCKS: std::sync::RwLock<Option<ContentMap>> = std::sync::RwLock::new(None);
@@ -50,6 +53,18 @@ pub fn set_navbar_block(block: Option<ContentBlock>) {
 /// Read the cached navbar content block.
 fn get_navbar_block() -> Option<ContentBlock> {
     NAVBAR_BLOCK.read().ok().and_then(|g| g.clone())
+}
+
+/// Update the cached favicon content block (call at startup and when CMS content is saved).
+pub fn set_favicon_block(block: Option<ContentBlock>) {
+    if let Ok(mut guard) = FAVICON_BLOCK.write() {
+        *guard = block;
+    }
+}
+
+/// Read the cached favicon content block.
+fn get_favicon_block() -> Option<ContentBlock> {
+    FAVICON_BLOCK.read().ok().and_then(|g| g.clone())
 }
 
 /// Update the cached footer content blocks (call at startup and when a footer slug is saved).
@@ -249,6 +264,15 @@ fn page_with_footer(
     let nav = navbar(prefix, nav_kind, active, navbar_block);
     let v = static_version();
 
+    // Resolve favicon: use explicit parameter or fall back to global cache
+    let cached_favicon = get_favicon_block();
+    let favicon_block = footer_contents
+        .and_then(|c| {
+            let b = c.get("favicon");
+            b.image_id.map(|_| b)
+        })
+        .or(cached_favicon.as_ref().filter(|b| b.image_id.is_some()));
+
     // Resolve footer content: use explicit parameter or fall back to global cache
     let cached_footer = get_footer_blocks();
     let effective_footer: Option<&ContentMap> = footer_contents.or(cached_footer.as_ref());
@@ -265,6 +289,11 @@ fn page_with_footer(
                 link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.2.0/css/fontawesome.min.css" integrity="sha384-mj4mLShEAyWi4Bui9LmFkAjPYWof6WrG8DfS8ebHhjm4/MClMqMMHpQzehNk5HeM" crossorigin="anonymous";
                 link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.2.0/css/solid.min.css" integrity="sha384-LpGibDKKReBRP3epUOaN9WBgkrQ1pJIvrrTugkYxVQgDvYuMCRaXk6YkrZ/h3aWk" crossorigin="anonymous";
                 link rel="stylesheet" href={(p) "/static/powpow.css?v=" (v)};
+                @if let Some(fav) = favicon_block {
+                    @if let Some(img_id) = fav.image_id {
+                        link rel="icon" href=(format!("{p}/content-images/{img_id}"));
+                    }
+                }
                 (extra_head)
             }
             body data-prefix=(p) {
