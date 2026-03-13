@@ -222,6 +222,19 @@ pub fn index(
                         div .content.has-text-white {
                             (PreEscaped(block.render_body()))
                         }
+                        @if let Some(img_id) = block.image_id {
+                            img src=(format!("{p}/content-images/{img_id}"))
+                                alt=(block.title)
+                                style="max-width:100%;border-radius:6px;";
+                        }
+                        @if let Some(ref url) = block.link_url {
+                            @let label = block.link_label.as_deref().unwrap_or(url);
+                            div .has-text-centered {
+                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                    (label)
+                                }
+                            }
+                        }
                     }
                     div .column.is-5 {
                         div .section-golden {
@@ -339,17 +352,28 @@ pub fn index(
                                 alt=(block.title)
                                 style="max-width:100%;border-radius:6px;";
                         }
+                        @if let Some(ref url) = block.link_url {
+                            @let label = block.link_label.as_deref().unwrap_or(url);
+                            a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                (label)
+                            }
+                        }
                     }
                     div .column.is-6 {
                         @let block = contents.get("newsletter");
                         h2 .section-heading.has-text-white { (block.title) }
                         div .content.has-text-white {
                             (PreEscaped(block.render_body()))
-                            @if let Some(ref url) = block.link_url {
-                                @let label = block.link_label.as_deref().unwrap_or(url);
-                                a .btn-station.btn-station-primary href=(url) target="_blank" {
-                                    (label)
-                                }
+                        }
+                        @if let Some(img_id) = block.image_id {
+                            img src=(format!("{p}/content-images/{img_id}"))
+                                alt=(block.title)
+                                style="max-width:100%;border-radius:6px;";
+                        }
+                        @if let Some(ref url) = block.link_url {
+                            @let label = block.link_label.as_deref().unwrap_or(url);
+                            a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                (label)
                             }
                         }
                     }
