@@ -3056,6 +3056,7 @@ pub async fn get_recent_news(pool: &PgPool, limit: i64) -> Result<Vec<crate::mod
             },
         )
         .collect();
+
     if !items.is_empty() {
         let mut fake_news_position = 0;
         items.iter().enumerate().for_each(|(i, item)| {
@@ -3064,6 +3065,12 @@ pub async fn get_recent_news(pool: &PgPool, limit: i64) -> Result<Vec<crate::mod
             }
         });
         items.swap(fake_news_position, 0);
+
+        items[1..].sort_unstable_by(|a, b| {
+            b.pub_date
+                .unwrap_or_default()
+                .cmp(&a.pub_date.unwrap_or_default())
+        });
     }
     Ok(items)
 }

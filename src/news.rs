@@ -149,13 +149,13 @@ async fn fetch_and_parse(url: &str) -> anyhow::Result<Vec<ParsedItem>> {
         })
         .collect();
 
-    // Push a "fake news" item which is just the title+link of the feed
+    // Push a "fake news" item which is just the title+link+favicon of the feed
     items.push(ParsedItem {
         guid: String::new(),
         text: channel.title,
         link: channel.link,
         pub_date: None,
-        image_url: None,
+        image_url: channel.image.map(|image| image.url),
     });
 
     Ok(items)

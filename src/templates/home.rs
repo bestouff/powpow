@@ -263,8 +263,16 @@ pub fn index(
                 div .container {
                     h2 .section-heading.has-text-centered.has-text-white {
                         "Actualités "
+                    }
+                    h3 .has-text-centered {
                         a href=(news_items[0].link) {
                             (news_items[0].text)
+                            @if news_items[0].has_image {
+                                img src=(format!("{p}/news-images/{}", news_items[0].id))
+                                    width="16"
+                                    height="16"
+                                    alt="" loading="lazy";
+                            }
                         }
                     }
                     div .news-grid {
