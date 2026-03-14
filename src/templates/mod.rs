@@ -328,7 +328,19 @@ fn page_with_footer(
                 footer .footer.footer-station {
                     div .container {
                         div .columns {
-                            // Column 1: Contact + partners
+                            // Column 1: Summer link
+                            div .column.is-one-third {
+                                @if let Some(contents) = effective_footer {
+                                    (render_content_block(contents.get("footer-summer"), p, "h4", "title is-5 footer-heading"))
+                                }
+                            }
+                            // Column 2: Calendar
+                            div .column.is-one-third {
+                                @if let Some(contents) = effective_footer {
+                                    (render_content_block(contents.get("footer-calendar"), p, "h4", "title is-5 footer-heading"))
+                                }
+                            }
+                            // Column 3: Contact + partners
                             div .column.is-one-third {
                                 @if let Some(contents) = effective_footer {
                                     (render_content_block(contents.get("footer-contact"), p, "h4", "title is-5 footer-heading"))
@@ -344,18 +356,6 @@ fn page_with_footer(
                                     a href={(p) "/privacy"} { "Politique de confidentialité" }
                                     " · "
                                     a href={(p) "/tos"} { "Conditions d'utilisation" }
-                                }
-                            }
-                            // Column 2: Calendar
-                            div .column.is-one-third {
-                                @if let Some(contents) = effective_footer {
-                                    (render_content_block(contents.get("footer-calendar"), p, "h4", "title is-5 footer-heading"))
-                                }
-                            }
-                            // Column 3: Summer link
-                            div .column.is-one-third {
-                                @if let Some(contents) = effective_footer {
-                                    (render_content_block(contents.get("footer-summer"), p, "h4", "title is-5 footer-heading"))
                                 }
                             }
                         }
