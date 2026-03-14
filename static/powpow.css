@@ -18,6 +18,7 @@
   --color-status-closed: #b02b2c;
   --color-text-dark: #333;
   --color-switch-off: #ccc;
+  --color-steel-blue: #4682b4;
 }
 
 /* === Navbar station (dark navy, matching WordPress Enfold theme) === */
@@ -470,7 +471,9 @@
   align-items: center;
   justify-content: center;
   z-index: 1001;
-  transition: background 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
   line-height: 1;
   padding: 0;
 }
@@ -1210,4 +1213,54 @@ label.switch input[type="checkbox"]:disabled + .check {
 }
 .staff-next {
   right: 0.4rem;
+}
+
+/* === Contact email modal === */
+.contact-modal-card {
+  max-width: 540px;
+  width: 92vw;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.contact-modal-head {
+  background: var(--color-steel-blue);
+  border-bottom: none;
+}
+.contact-modal-head .modal-card-title {
+  color: #fff;
+  font-weight: 600;
+}
+.contact-modal-head .delete::before,
+.contact-modal-head .delete::after {
+  background-color: #fff;
+}
+.contact-modal-body {
+  background: var(--color-steel-blue);
+  padding: 1.25rem 1.5rem;
+}
+.contact-modal-body .input,
+.contact-modal-body .textarea {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.contact-modal-body .input:focus,
+.contact-modal-body .textarea:focus {
+  border-color: #fff;
+  box-shadow: 0 0 0 0.125em rgba(255, 255, 255, 0.25);
+}
+.contact-label {
+  color: #fff !important;
+}
+.contact-modal-foot {
+  background: var(--color-steel-blue);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  justify-content: flex-end;
+}
+.contact-link {
+  color: #fff;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+.contact-link:hover {
+  color: #fff;
+  opacity: 0.8;
 }

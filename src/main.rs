@@ -550,6 +550,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/me", get(routes::auth::api_me))
         .route("/logout", get(routes::auth::logout))
         .route("/health", get(routes::home::health_check))
+        .route("/contact", post(routes::home::contact_submit))
         .route("/privacy", get(routes::legal::privacy_page))
         .route("/tos", get(routes::legal::tos_page))
         .route("/photos", get(routes::photos::photo_page))

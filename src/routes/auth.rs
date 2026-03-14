@@ -338,6 +338,7 @@ pub async fn api_me(State(state): State<AppState>, jar: SignedCookieJar) -> impl
                     "id": staff.id,
                     "first_name": staff.first_name,
                     "last_name": staff.last_name,
+                    "email": staff.email,
                     "is_admin": staff.is_admin,
                     "is_god": staff.is_god,
                     "is_chief": is_chief,

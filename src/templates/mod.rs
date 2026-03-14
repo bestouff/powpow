@@ -333,6 +333,12 @@ fn page_with_footer(
                                 @if let Some(contents) = effective_footer {
                                     (render_content_block(contents.get("footer-contact"), p, "h4", "title is-5 footer-heading"))
                                 }
+                                p .mt-3 {
+                                    a #open-contact-modal .contact-link href="#" {
+                                        span .icon.mr-1 { i .fa-solid.fa-envelope {} }
+                                        "Envoyez-nous un mail !"
+                                    }
+                                }
                                 h4 .title.is-6.footer-heading.mt-4 { "Liens utiles" }
                                 p {
                                     a href={(p) "/privacy"} { "Politique de confidentialité" }
@@ -358,6 +364,61 @@ fn page_with_footer(
                                 a href="https://codeberg.org/bestouff/powpow" {
                                     "PowPow"
                                 } " v" (env!("CARGO_PKG_VERSION")) " pour " (get_entity_name())
+                            }
+                        }
+                    }
+                }
+
+                // ── Contact email modal ──────────────────────────────────
+                div #contact-modal .modal {
+                    div .modal-background {}
+                    div .modal-card.contact-modal-card {
+                        header .modal-card-head.contact-modal-head {
+                            p .modal-card-title { "Envoyez-nous un message" }
+                            button #close-contact-modal .delete aria-label="Fermer" {}
+                        }
+                        section .modal-card-body.contact-modal-body {
+                            form #contact-form {
+                                div .field {
+                                    label .label.contact-label { "Votre nom" }
+                                    div .control.has-icons-left {
+                                        input #contact-name .input name="name" type="text"
+                                              placeholder="Prénom Nom" required="true";
+                                        span .icon.is-left { i .fa-solid.fa-user {} }
+                                    }
+                                }
+                                div .field {
+                                    label .label.contact-label { "Votre email" }
+                                    div .control.has-icons-left {
+                                        input #contact-email .input name="email" type="email"
+                                              placeholder="vous@exemple.fr" required="true";
+                                        span .icon.is-left { i .fa-solid.fa-envelope {} }
+                                    }
+                                }
+                                div .field {
+                                    label .label.contact-label { "Objet" }
+                                    div .control.has-icons-left {
+                                        input #contact-subject .input name="subject" type="text"
+                                              placeholder="Objet de votre message" required="true";
+                                        span .icon.is-left { i .fa-solid.fa-tag {} }
+                                    }
+                                }
+                                div .field {
+                                    label .label.contact-label { "Message" }
+                                    div .control {
+                                        textarea #contact-message .textarea name="message"
+                                                 placeholder="Votre message\u{2026}" rows="5" required="true" {}
+                                    }
+                                }
+                            }
+                        }
+                        footer .modal-card-foot.contact-modal-foot {
+                            div .buttons {
+                                button #contact-submit .button.is-link {
+                                    span .icon { i .fa-solid.fa-paper-plane {} }
+                                    span { "Envoyer" }
+                                }
+                                button #cancel-contact-modal .button.is-danger { "Annuler" }
                             }
                         }
                     }
