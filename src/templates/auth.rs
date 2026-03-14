@@ -1,7 +1,8 @@
 use super::{NavKind, page};
-use maud::{Markup, html};
+use crate::models::ContentBlock;
+use maud::{Markup, PreEscaped, html};
 
-pub fn login_page(prefix: &str) -> Markup {
+pub fn login_page(prefix: &str, about_block: Option<&ContentBlock>) -> Markup {
     let content = html! {
         section .section {
             div .container {
@@ -39,6 +40,24 @@ pub fn login_page(prefix: &str) -> Markup {
                                 }
                                 div #error-box .d-none.notification.is-danger.is-light.mt-4 {
                                     p #error-text {}
+                                }
+                            }
+                        }
+                        @if let Some(block) = about_block {
+                            @if !block.body.is_empty() {
+                                div .section-golden.mt-5 {
+                                    h3 .title.is-4.has-text-centered { (block.title) }
+                                    div .content {
+                                        (PreEscaped(block.render_body()))
+                                    }
+                                    @if let Some(ref url) = block.link_url {
+                                        @let label = block.link_label.as_deref().unwrap_or(url);
+                                        div .has-text-centered {
+                                            a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                                (label)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

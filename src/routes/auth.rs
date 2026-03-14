@@ -15,9 +15,13 @@ pub struct StaffSearchQuery {
     q: Option<String>,
 }
 
-pub async fn login_page(headers: HeaderMap) -> impl IntoResponse {
+pub async fn login_page(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-    templates::login_page(&prefix)
+    let block = database::get_content(&state.db, "about-association")
+        .await
+        .ok()
+        .flatten();
+    templates::login_page(&prefix, block.as_ref())
 }
 
 pub async fn api_search_staff(
