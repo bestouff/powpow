@@ -21,6 +21,13 @@
   --color-steel-blue: #4682b4;
 }
 
+/* === CMS content: horizontally-scrollable tables on narrow screens === */
+.content table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* === Navbar station (dark navy, matching WordPress Enfold theme) === */
 .navbar-station {
   background-color: var(--color-navy) !important;
