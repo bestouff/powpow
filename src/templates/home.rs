@@ -310,6 +310,66 @@ pub fn index(
             }
         }
 
+        // ── Tarifs (pricing) ─────────────────────────────────────────
+        section #pricing .section.section-teal {
+            div .container {
+                @let block = contents.get("pricing");
+                h2 .section-heading.has-text-centered.has-text-white { (block.title) }
+                div .columns.is-centered {
+                    div .column.is-8 {
+                        div .content.has-text-white {
+                            (PreEscaped(block.render_body()))
+                        }
+                        @if let Some(img_id) = block.image_id {
+                            div .has-text-centered.mb-4 {
+                                img src=(format!("{p}/content-images/{img_id}"))
+                                    alt=(block.title)
+                                    style="max-width:100%;border-radius:6px;";
+                            }
+                        }
+                        @if let Some(ref url) = block.link_url {
+                            @let label = block.link_label.as_deref().unwrap_or(url);
+                            div .has-text-centered.mt-4 {
+                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                    (label)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Accès / Driving indications (olive) ─────────────────────
+        section #driving-indications .section.section-olive {
+            div .container {
+                @let block = contents.get("driving-indications");
+                h2 .section-heading.has-text-centered.has-text-white { (block.title) }
+                div .columns.is-centered {
+                    div .column.is-8 {
+                        @if let Some(img_id) = block.image_id {
+                            div .has-text-centered.mb-4 {
+                                img src=(format!("{p}/content-images/{img_id}"))
+                                    alt=(block.title)
+                                    style="max-width:100%;border-radius:6px;";
+                            }
+                        }
+                        div .content.has-text-white {
+                            (PreEscaped(block.render_body()))
+                        }
+                        @if let Some(ref url) = block.link_url {
+                            @let label = block.link_label.as_deref().unwrap_or(url);
+                            div .has-text-centered.mt-4 {
+                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                    (label)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Événements ───────────────────────────────────────────────
         section .section.section-brown {
             div .container {
@@ -375,66 +435,6 @@ pub fn index(
                             @let label = block.link_label.as_deref().unwrap_or(url);
                             a .btn-station.btn-station-primary href=(url) target="_blank" {
                                 (label)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ── Tarifs (pricing) ─────────────────────────────────────────
-        section #pricing .section.section-teal {
-            div .container {
-                @let block = contents.get("pricing");
-                h2 .section-heading.has-text-centered.has-text-white { (block.title) }
-                div .columns.is-centered {
-                    div .column.is-8 {
-                        div .content.has-text-white {
-                            (PreEscaped(block.render_body()))
-                        }
-                        @if let Some(img_id) = block.image_id {
-                            div .has-text-centered.mb-4 {
-                                img src=(format!("{p}/content-images/{img_id}"))
-                                    alt=(block.title)
-                                    style="max-width:100%;border-radius:6px;";
-                            }
-                        }
-                        @if let Some(ref url) = block.link_url {
-                            @let label = block.link_label.as_deref().unwrap_or(url);
-                            div .has-text-centered.mt-4 {
-                                a .btn-station.btn-station-primary href=(url) target="_blank" {
-                                    (label)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ── Accès / Driving indications (olive) ─────────────────────
-        section #driving-indications .section.section-olive {
-            div .container {
-                @let block = contents.get("driving-indications");
-                h2 .section-heading.has-text-centered.has-text-white { (block.title) }
-                div .columns.is-centered {
-                    div .column.is-8 {
-                        @if let Some(img_id) = block.image_id {
-                            div .has-text-centered.mb-4 {
-                                img src=(format!("{p}/content-images/{img_id}"))
-                                    alt=(block.title)
-                                    style="max-width:100%;border-radius:6px;";
-                            }
-                        }
-                        div .content.has-text-white {
-                            (PreEscaped(block.render_body()))
-                        }
-                        @if let Some(ref url) = block.link_url {
-                            @let label = block.link_label.as_deref().unwrap_or(url);
-                            div .has-text-centered.mt-4 {
-                                a .btn-station.btn-station-primary href=(url) target="_blank" {
-                                    (label)
-                                }
                             }
                         }
                     }
