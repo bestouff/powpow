@@ -70,18 +70,18 @@ pub fn index(
                     }
                     div .hero-buttons {
                         @if let (Some(url), Some(label)) = (block.link_url.as_ref(), block.link_label.as_ref())  {
-                            a .btn-station.btn-station-primary
+                            a .btn-station.btn-station-call-to-action
                             href=(url)
                             target="_blank" {
                                 (label)
                             }
                         }
                         @for (slug, anchor, css_class) in [
-                            ("infos-station", "infosplus", "btn-station-brown"),
-                            ("pricing", "pricing", "btn-station-teal"),
-                            ("ski-renting", "ski-renting", "btn-station-green"),
-                            ("driving-indications", "driving-indications", "btn-station-olive"),
-                            ("about-association", "about-association", "btn-station-golden"),
+                            ("infos-station", "infosplus", "btn-station-info"),
+                            ("pricing", "pricing", "btn-station-events"),
+                            ("ski-renting", "ski-renting", "btn-station-rental"),
+                            ("driving-indications", "driving-indications", "btn-station-directions"),
+                            ("about-association", "about-association", "btn-station-about-association"),
                         ] {
                             @let block = contents.get(slug);
                             @if !block.title.is_empty() {
@@ -97,7 +97,7 @@ pub fn index(
         }
 
         // ── Infos Station ────────────────────────────────────────────
-        section #infosplus .section.section-brown {
+        section #infosplus .section.section-info {
             div .container {
                 div .columns.is-multiline {
                     // Column 1: Station status
@@ -202,7 +202,7 @@ pub fn index(
                             }
                         }
                         div .mt-3 {
-                            a .btn-station.btn-station-primary
+                            a .btn-station.btn-station-call-to-action
                               href="https://www.helloasso.com/associations/agir-pour-la-station-de-ski-de-st-hil"
                               target="_blank" {
                                 "Vente en ligne"
@@ -214,7 +214,7 @@ pub fn index(
         }
 
         // ── About / Description ──────────────────────────────────────
-        section #about-association .section.section-navy {
+        section #about-association .section.section-navbar {
             div .container {
                 div .columns {
                     div .column.is-7 {
@@ -231,14 +231,14 @@ pub fn index(
                         @if let Some(ref url) = block.link_url {
                             @let label = block.link_label.as_deref().unwrap_or(url);
                             div .has-text-centered {
-                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
                                     (label)
                                 }
                             }
                         }
                     }
                     div .column.is-5 {
-                        div .section-golden {
+                        div .section-about-association {
                             @let block = contents.get("about-association");
                             h3 .title.is-4.has-text-centered { (block.title) }
                             div .content {
@@ -252,7 +252,7 @@ pub fn index(
                             @if let Some(ref url) = block.link_url {
                                 @let label = block.link_label.as_deref().unwrap_or(url);
                                 div .has-text-centered {
-                                    a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                    a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
                                         (label)
                                     }
                                 }
@@ -273,7 +273,7 @@ pub fn index(
 
         // ── Actualités (RSS) ───────────────────────────────────────────
         @if !news_items.is_empty() {
-            section .section.section-navy {
+            section .section.section-navbar {
                 div .container {
                     h2 .section-heading.has-text-centered.has-text-white {
                         "Actualités "
@@ -311,7 +311,7 @@ pub fn index(
         }
 
         // ── Accès / Driving indications (olive) ─────────────────────
-        section #driving-indications .section.section-olive {
+        section #driving-indications .section.section-directions {
             div .container {
                 @let block = contents.get("driving-indications");
                 h2 .section-heading.has-text-centered.has-text-white { (block.title) }
@@ -330,7 +330,7 @@ pub fn index(
                         @if let Some(ref url) = block.link_url {
                             @let label = block.link_label.as_deref().unwrap_or(url);
                             div .has-text-centered.mt-4 {
-                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
                                     (label)
                                 }
                             }
@@ -341,7 +341,7 @@ pub fn index(
         }
 
         // ── Tarifs (pricing) ─────────────────────────────────────────
-        section #pricing .section.section-teal {
+        section #pricing .section.section-events {
             div .container {
                 @let block = contents.get("pricing");
                 h2 .section-heading.has-text-centered.has-text-white { (block.title) }
@@ -360,7 +360,7 @@ pub fn index(
                         @if let Some(ref url) = block.link_url {
                             @let label = block.link_label.as_deref().unwrap_or(url);
                             div .has-text-centered.mt-4 {
-                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
                                     (label)
                                 }
                             }
@@ -371,7 +371,7 @@ pub fn index(
         }
 
         // ── Événements ───────────────────────────────────────────────
-        section .section.section-brown {
+        section .section.section-info {
             div .container {
                 @let block = contents.get("events");
                 h2 .section-heading.has-text-centered.has-text-white { (block.title) }
@@ -388,7 +388,7 @@ pub fn index(
                             }
                             @if let Some(ref url) = block.link_url {
                                 @let label = block.link_label.as_deref().unwrap_or(url);
-                                a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
                                     (label)
                                 }
                             }
@@ -399,7 +399,7 @@ pub fn index(
         }
 
         // ── Salle hors-sac + Newsletter ──────────────────────────────
-        section #ski-renting .section.section-green {
+        section #ski-renting .section.section-rental {
             div .container {
                 div .columns {
                     div .column.is-6 {
@@ -415,7 +415,7 @@ pub fn index(
                         }
                         @if let Some(ref url) = block.link_url {
                             @let label = block.link_label.as_deref().unwrap_or(url);
-                            a .btn-station.btn-station-primary href=(url) target="_blank" {
+                            a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
                                 (label)
                             }
                         }
@@ -433,7 +433,7 @@ pub fn index(
                         }
                         @if let Some(ref url) = block.link_url {
                             @let label = block.link_label.as_deref().unwrap_or(url);
-                            a .btn-station.btn-station-primary href=(url) target="_blank" {
+                            a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
                                 (label)
                             }
                         }

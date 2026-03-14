@@ -2,23 +2,23 @@
 
 /* === Color palette (CSS custom properties) === */
 :root {
-  --color-navy: #2d395c;
+  --color-navbar: #2d395c;
   --color-accent: #e37e26;
   --color-accent-dark: #c15c04;
   --color-hero-title: #e0710f;
-  --color-brown: #5f5144;
-  --color-olive: #635f3d;
-  --color-green: #90a843;
-  --color-teal: #426359;
-  --color-golden: #edae44;
-  --color-golden-border: #d99c2e;
+  --color-section-info: #5f5144;
+  --color-section-directions: #635f3d;
+  --color-section-rental: #90a843;
+  --color-section-events: #426359;
+  --color-about-association: #edae44;
+  --color-about-association-border: #d99c2e;
   --color-footer: #b8ae9c;
   --color-footer-hover: #a69c8a;
   --color-status-open: #83a846;
   --color-status-closed: #b02b2c;
   --color-text-dark: #333;
   --color-switch-off: #ccc;
-  --color-steel-blue: #4682b4;
+  --color-contact: #4682b4;
 }
 
 /* === CMS content: horizontally-scrollable tables on narrow screens === */
@@ -30,7 +30,7 @@
 
 /* === Navbar station (dark navy, matching WordPress Enfold theme) === */
 .navbar-station {
-  background-color: var(--color-navy) !important;
+  background-color: var(--color-navbar) !important;
   min-height: 3.5rem;
   box-shadow: 0 3px 5px 0 rgba(0, 0, 0, 0.3);
 }
@@ -76,11 +76,11 @@
   opacity: 1;
 }
 .navbar-station .navbar-menu {
-  background-color: var(--color-navy);
+  background-color: var(--color-navbar);
 }
 @media screen and (max-width: 1023px) {
   .navbar-station .navbar-menu.is-active {
-    background-color: var(--color-navy);
+    background-color: var(--color-navbar);
   }
 }
 .navbar-logo-title {
@@ -200,20 +200,20 @@
 .btn-station:hover {
   transform: translateY(-1px);
 }
-.btn-station-primary {
+.btn-station-call-to-action {
   background: var(--color-accent);
   color: #fff !important;
   border: 2px solid var(--color-accent-dark);
 }
-.btn-station-primary:hover {
+.btn-station-call-to-action:hover {
   background: var(--color-accent-dark);
 }
-.btn-station-subtle {
+.btn-station-muted {
   background: var(--color-footer);
   color: #fff !important;
   border: 2px solid var(--color-footer);
 }
-.btn-station-subtle:hover {
+.btn-station-muted:hover {
   background: var(--color-footer-hover);
   border-color: var(--color-footer-hover);
 }
@@ -225,80 +225,80 @@
 .btn-station-outline:hover {
   background: rgba(255, 255, 255, 0.15);
 }
-.btn-station-brown {
-  background: var(--color-brown);
+.btn-station-info {
+  background: var(--color-section-info);
   color: #fff !important;
-  border: 2px solid var(--color-brown);
+  border: 2px solid var(--color-section-info);
 }
-.btn-station-olive {
-  background: var(--color-olive);
+.btn-station-directions {
+  background: var(--color-section-directions);
   color: #fff !important;
-  border: 2px solid var(--color-olive);
+  border: 2px solid var(--color-section-directions);
 }
-.btn-station-teal {
-  background: var(--color-teal);
+.btn-station-events {
+  background: var(--color-section-events);
   color: #fff !important;
-  border: 2px solid var(--color-teal);
+  border: 2px solid var(--color-section-events);
 }
-.btn-station-green {
-  background: var(--color-green);
+.btn-station-rental {
+  background: var(--color-section-rental);
   color: #fff !important;
-  border: 2px solid var(--color-green);
+  border: 2px solid var(--color-section-rental);
 }
-.btn-station-navy {
-  background: var(--color-navy);
+.btn-station-nav {
+  background: var(--color-navbar);
   color: #fff !important;
-  border: 2px solid var(--color-navy);
+  border: 2px solid var(--color-navbar);
 }
-.btn-station-golden {
-  background: var(--color-golden);
+.btn-station-about-association {
+  background: var(--color-about-association);
   color: #fff !important;
-  border: 2px solid var(--color-golden);
+  border: 2px solid var(--color-about-association);
 }
 
 /* === Section background themes === */
-.section-brown {
-  background-color: var(--color-brown);
+.section-info {
+  background-color: var(--color-section-info);
   color: #fff;
 }
-.section-brown a {
+.section-info a {
   color: var(--color-accent);
 }
-.section-navy {
-  background-color: var(--color-navy);
+.section-navbar {
+  background-color: var(--color-navbar);
   color: #fff;
 }
-.section-navy a {
+.section-navbar a {
   color: var(--color-accent);
 }
-.section-olive {
-  background-color: var(--color-olive);
+.section-directions {
+  background-color: var(--color-section-directions);
   color: #fff;
 }
-.section-olive a {
+.section-directions a {
   color: var(--color-accent);
 }
-.section-green {
-  background-color: var(--color-green);
+.section-rental {
+  background-color: var(--color-section-rental);
   color: #fff;
 }
-.section-green a {
+.section-rental a {
   color: #fff;
   text-decoration: underline;
 }
-.section-teal {
-  background-color: var(--color-teal);
+.section-events {
+  background-color: var(--color-section-events);
   color: #fff;
 }
-.section-teal a {
+.section-events a {
   color: var(--color-accent);
 }
-.section-golden {
-  background-color: var(--color-golden);
+.section-about-association {
+  background-color: var(--color-about-association);
   color: var(--color-text-dark);
   border-radius: 6px;
   padding: 1.5rem;
-  border: 1px solid var(--color-golden-border);
+  border: 1px solid var(--color-about-association-border);
 }
 
 /* === Station status badge === */
@@ -356,7 +356,7 @@
   background: var(--color-status-closed);
 }
 .equip-bar-fill.is-partial {
-  background: var(--color-golden);
+  background: var(--color-about-association);
 }
 .equip-status {
   font-size: 0.8rem;
@@ -391,7 +391,7 @@
   background: var(--color-status-closed);
 }
 .equip-legend-dot.is-partial {
-  background: var(--color-golden);
+  background: var(--color-about-association);
 }
 
 /* === Dicton du jour === */
@@ -445,14 +445,14 @@
   padding: 2rem 1.5rem;
 }
 .footer-station a {
-  color: var(--color-navy);
+  color: var(--color-navbar);
   text-decoration: underline;
 }
 .footer-station a:hover {
   color: var(--color-accent);
 }
 .footer-heading {
-  color: var(--color-navy) !important;
+  color: var(--color-navbar) !important;
 }
 
 /* === Fullscreen image modal === */
@@ -1240,7 +1240,7 @@ label.switch input[type="checkbox"]:disabled + .check {
   overflow: hidden;
 }
 .contact-modal-head {
-  background: var(--color-steel-blue);
+  background: var(--color-contact);
   border-bottom: none;
 }
 .contact-modal-head .modal-card-title {
@@ -1252,7 +1252,7 @@ label.switch input[type="checkbox"]:disabled + .check {
   background-color: #fff;
 }
 .contact-modal-body {
-  background: var(--color-steel-blue);
+  background: var(--color-contact);
   padding: 1.25rem 1.5rem;
 }
 .contact-modal-body .input,
@@ -1268,7 +1268,7 @@ label.switch input[type="checkbox"]:disabled + .check {
   color: #fff !important;
 }
 .contact-modal-foot {
-  background: var(--color-steel-blue);
+  background: var(--color-contact);
   border-top: 1px solid rgba(255, 255, 255, 0.15);
   justify-content: flex-end;
 }

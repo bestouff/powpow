@@ -44,7 +44,7 @@ pub fn render_content_block(
         }
         @if let Some(ref url) = block.link_url {
             @let label = block.link_label.as_deref().unwrap_or(url);
-            a .btn-station.btn-station-primary href=(url) target="_blank" {
+            a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
                 (label)
             }
         }

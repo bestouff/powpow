@@ -45,7 +45,7 @@ pub fn login_page(prefix: &str, about_block: Option<&ContentBlock>) -> Markup {
                         }
                         @if let Some(block) = about_block {
                             @if !block.body.is_empty() {
-                                div .section-golden.mt-5 {
+                                div .section-about-association.mt-5 {
                                     h3 .title.is-4.has-text-centered { (block.title) }
                                     div .content {
                                         (PreEscaped(block.render_body()))
@@ -53,7 +53,7 @@ pub fn login_page(prefix: &str, about_block: Option<&ContentBlock>) -> Markup {
                                     @if let Some(ref url) = block.link_url {
                                         @let label = block.link_label.as_deref().unwrap_or(url);
                                         div .has-text-centered {
-                                            a .btn-station.btn-station-primary href=(url) target="_blank" {
+                                            a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
                                                 (label)
                                             }
                                         }
