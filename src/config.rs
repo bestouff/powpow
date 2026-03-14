@@ -33,6 +33,8 @@ pub struct AppConfig {
     pub backup_token: String,
     pub huggingface_token: String,
     pub rss_news_feed: String,
+    pub entity_name: String,
+    pub entity_email: String,
 }
 
 impl AppConfig {
@@ -76,6 +78,8 @@ impl AppConfig {
             backup_token: env::var("BACKUP_TOKEN").unwrap_or_default(),
             huggingface_token: env::var("HUGGINGFACE_TOKEN").unwrap_or_default(),
             rss_news_feed: env::var("RSS_NEWS_FEED").unwrap_or_default(),
+            entity_name: env::var("ENTITY_NAME").unwrap_or_else(|_| "AG'HIL".into()),
+            entity_email: env::var("ENTITY_EMAIL").unwrap_or_default(),
         })
     }
 }

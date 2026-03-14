@@ -2552,7 +2552,7 @@ pub async fn backup_all_tables(pool: &PgPool) -> Result<String> {
     let mut sql = String::new();
 
     // Header
-    sql.push_str("-- AGHIL database backup\n");
+    sql.push_str("-- PowPow database backup\n");
     sql.push_str(&format!(
         "-- Generated at {}\n\n",
         chrono::Utc::now().to_rfc3339()

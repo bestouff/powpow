@@ -190,7 +190,7 @@ pub fn calendar(
         }
     };
 
-    let title = format!("Planning {} - AGHIL", atelier.name);
+    let title = format!("Planning {} - PowPow", atelier.name);
     page(
         &title,
         p,
@@ -619,7 +619,7 @@ pub fn calendar_editor(
     };
 
     page(
-        "Gestion des besoins - AGHIL",
+        "Gestion des besoins - PowPow",
         prefix,
         &NavKind::Standard,
         "calendar",

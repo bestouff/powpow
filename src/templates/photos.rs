@@ -191,7 +191,7 @@ pub fn photo_page(prefix: &str, photos: &[(PhotoMeta, String)], is_admin: bool) 
     let script = html! {};
 
     page(
-        "Photos - AGHIL",
+        "Photos - PowPow",
         prefix,
         &NavKind::StaffOnly,
         "",

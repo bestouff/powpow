@@ -213,7 +213,7 @@ pub fn staff_list(
     };
 
     page(
-        "Liste des Staff - AGHIL",
+        "Liste des Staff - PowPow",
         prefix,
         &NavKind::Standard,
         "admin",
@@ -705,7 +705,7 @@ pub fn person_detail(
 
     let extra_scripts = html! {};
 
-    let title = format!("{} {} - AGHIL", staff.first_name, staff.last_name);
+    let title = format!("{} {} - PowPow", staff.first_name, staff.last_name);
     page(
         &title,
         p,

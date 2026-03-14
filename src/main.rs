@@ -182,6 +182,14 @@ pub(crate) async fn resolve_staff_if_god(
     if staff.is_god { Some(staff) } else { None }
 }
 
+/// Standard HTML signature block for outgoing emails.
+pub(crate) fn email_signature(entity: &str) -> String {
+    format!(
+        "<p><em>— PowPow v{version} pour {entity} — le gestionnaire de station qui ne dort jamais</em></p>",
+        version = env!("CARGO_PKG_VERSION"),
+    )
+}
+
 pub(crate) async fn send_notification_email(
     state: &AppState,
     to_addresses: &[String],
@@ -423,6 +431,9 @@ async fn main() -> anyhow::Result<()> {
         templates::set_footer_blocks(models::ContentMap::new(footer_map));
     }
 
+    // Set entity name for footer and email signatures
+    templates::set_entity_name(app_state.config.entity_name.clone());
+
     // Build router
     let app = Router::new()
         .route("/", get(routes::home::index))
@@ -539,8 +550,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/me", get(routes::auth::api_me))
         .route("/logout", get(routes::auth::logout))
         .route("/health", get(routes::home::health_check))
-        .route("/privacy", get(routes::static_pages::privacy_page))
-        .route("/tos", get(routes::static_pages::tos_page))
+        .route("/privacy", get(routes::legal::privacy_page))
+        .route("/tos", get(routes::legal::tos_page))
         .route("/photos", get(routes::photos::photo_page))
         .route("/photos/upload", post(routes::photos::upload_photo))
         .route("/photos/{id}", get(routes::photos::display_photo))
@@ -564,8 +575,8 @@ async fn main() -> anyhow::Result<()> {
             "/admin/contents/{slug}",
             get(routes::content::content_edit).post(routes::content::content_save),
         )
-        .route("/static/powpow.css", get(routes::static_pages::serve_css))
-        .route("/static/powpow.js", get(routes::static_pages::serve_js))
+        .route("/static/powpow.css", get(routes::legal::serve_css))
+        .route("/static/powpow.js", get(routes::legal::serve_js))
         .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024))
         .layer(axum::middleware::from_fn(security_headers))
         .with_state(app_state);

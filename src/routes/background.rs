@@ -162,10 +162,13 @@ pub async fn weekly_morning_email_loop(state: AppState) {
             body.push_str(&templates::render_upcoming_week_email(&upcoming));
         }
 
-        body.push_str("<p><em>— PowPow pour AG'HIL</em></p>");
+        body.push_str(&crate::email_signature(&state.config.entity_name));
 
-        let subject = "AGHIL — Récapitulatif du lundi matin";
-        send_notification_email(&state, &admin_emails, subject, &body).await;
+        let subject = format!(
+            "{} — Récapitulatif du lundi matin",
+            state.config.entity_name
+        );
+        send_notification_email(&state, &admin_emails, &subject, &body).await;
         info!("Weekly email: sent to {} admins", admin_emails.len());
 
         // Sleep 60s to avoid double-send on the same minute

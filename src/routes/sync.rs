@@ -564,16 +564,17 @@ pub async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usiz
             .unwrap_or_default();
         if !admin_emails.is_empty() {
             let subject = format!(
-                "AGHIL — {} nouvelle(s) adhésion(s) à importer",
-                new_unimported
+                "{} — {} nouvelle(s) adhésion(s) à importer",
+                state.config.entity_name, new_unimported
             );
             let html_body = format!(
                 r"<p>Bonjour,</p>
 <p><strong>{count}</strong> nouvelle(s) adhésion(s) HelloAsso sont en attente d'import ({total} au total).</p>
-<p>Connectez-vous à AGHIL pour les traiter.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
+<p>Connectez-vous à PowPow pour les traiter.</p>
+{sig}",
                 count = new_unimported,
                 total = unimported_after,
+                sig = crate::email_signature(&state.config.entity_name),
             );
             send_notification_email(state, &admin_emails, &subject, &html_body).await;
         }

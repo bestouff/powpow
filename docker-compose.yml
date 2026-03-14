@@ -45,6 +45,8 @@ services:
       BACKUP_TOKEN: ${BACKUP_TOKEN:-}
       HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
       RSS_NEWS_FEED: ${RSS_NEWS_FEED:-}
+      ENTITY_NAME: ${ENTITY_NAME:-}
+      ENTITY_EMAIL: ${ENTITY_EMAIL:-}
       RUST_LOG: debug
     depends_on:
       postgres:

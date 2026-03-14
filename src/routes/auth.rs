@@ -150,11 +150,15 @@ async fn send_login_email_smtp(
 
     let html_body = format!(
         r#"<p>Bonjour {},</p>
-<p>Cliquez sur le lien ci-dessous pour vous connecter à AGHIL :</p>
+<p>Cliquez sur le lien ci-dessous pour vous connecter à PowPow :</p>
 <p><a href="{}" style="display:inline-block;padding:12px 24px;background:#3273dc;color:white;text-decoration:none;border-radius:4px;">Se connecter</a></p>
 <p>Ou copiez ce lien : {}</p>
-<p><em>Ce lien est à usage unique.</em></p>"#,
-        staff.first_name, login_url, login_url
+<p><em>Ce lien est à usage unique.</em></p>
+{}"#,
+        staff.first_name,
+        login_url,
+        login_url,
+        crate::email_signature(&state.config.entity_name),
     );
 
     let from = match state.config.smtp_from.parse::<lettre::message::Mailbox>() {
@@ -192,7 +196,7 @@ async fn send_login_email_smtp(
     let email = match lettre::Message::builder()
         .from(from)
         .to(to)
-        .subject("Connexion AGHIL")
+        .subject(format!("{} — Connexion PowPow", state.config.entity_name))
         .header(lettre::message::header::ContentType::TEXT_HTML)
         .body(html_body)
     {
@@ -273,8 +277,10 @@ async fn send_login_email_gmail(
     };
 
     // Build RFC 2822 message with HTML content
+    let sig = crate::email_signature(&state.config.entity_name);
     let raw_message = format!(
-        "From: {from}\r\nTo: {to_address}\r\nSubject: Connexion AGHIL\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>Bonjour {first_name},</p>\n<p>Cliquez sur le lien ci-dessous pour vous connecter à AGHIL :</p>\n<p><a href=\"{url}\" style=\"display:inline-block;padding:12px 24px;background:#3273dc;color:white;text-decoration:none;border-radius:4px;\">Se connecter</a></p>\n<p>Ou copiez ce lien : {url}</p>\n<p><em>Ce lien est à usage unique.</em></p>",
+        "From: {from}\r\nTo: {to_address}\r\nSubject: {entity} — Connexion PowPow\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>Bonjour {first_name},</p>\n<p>Cliquez sur le lien ci-dessous pour vous connecter à PowPow :</p>\n<p><a href=\"{url}\" style=\"display:inline-block;padding:12px 24px;background:#3273dc;color:white;text-decoration:none;border-radius:4px;\">Se connecter</a></p>\n<p>Ou copiez ce lien : {url}</p>\n<p><em>Ce lien est à usage unique.</em></p>\n{sig}",
+        entity = state.config.entity_name,
         first_name = staff.first_name,
         url = login_url,
     );

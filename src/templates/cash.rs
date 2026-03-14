@@ -97,7 +97,7 @@ pub fn cash_list(cash_payments: Vec<(Cash, bool)>, current_season: i16, prefix: 
     };
 
     page(
-        "Paiements espèces / chèques - AGHIL",
+        "Paiements espèces / chèques - PowPow",
         prefix,
         &NavKind::Standard,
         "admin",
@@ -218,7 +218,7 @@ pub fn cash_form(prefix: &str) -> Markup {
     };
 
     page(
-        "Nouveau paiement - AGHIL",
+        "Nouveau paiement - PowPow",
         prefix,
         &NavKind::Standard,
         "admin",
@@ -292,7 +292,7 @@ pub fn cash_import_form(
         allow_create: true,
         name_choice_value: "cash",
         name_choice_label: "Du paiement:",
-        page_title: "Importer paiement - AGHIL",
+        page_title: "Importer paiement - PowPow",
         page_heading: "Importer un paiement",
         detail_title: "Détails du paiement",
         back_suffix: "/cash",

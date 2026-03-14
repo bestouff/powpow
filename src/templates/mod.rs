@@ -5,10 +5,10 @@ mod cash;
 mod content;
 mod content_admin;
 mod home;
+mod legal;
 mod membership;
 mod photos;
 mod staff;
-mod static_pages;
 
 pub use admin::{
     admin_page, audit_page, qualifications_page, restore_page, restore_result, validation_page,
@@ -19,13 +19,13 @@ pub use cash::{cash_form, cash_import_form, cash_list};
 pub use content::render_content_block;
 pub use content_admin::{content_edit_page, content_list_page};
 pub use home::index;
+pub use legal::legal_page;
 pub use membership::{
     already_imported_page, import_result, import_staff_form, membership_list_with_filters,
     user_detail,
 };
 pub use photos::photo_page;
 pub use staff::{person_detail, staff_list};
-pub use static_pages::static_page;
 
 use crate::models::{ContentBlock, ContentMap, StaffMatchType, StaffWithSeason};
 use maud::{DOCTYPE, Markup, PreEscaped, html};
@@ -82,6 +82,25 @@ fn get_footer_blocks() -> Option<ContentMap> {
 /// Check whether a given slug is a footer-related slug that should trigger a cache refresh.
 pub fn is_footer_slug(slug: &str) -> bool {
     FOOTER_SLUGS.contains(&slug)
+}
+
+/// Cached entity name, used in the page footer and email signatures.
+static ENTITY_NAME: std::sync::RwLock<String> = std::sync::RwLock::new(String::new());
+
+/// Set the entity name (call once at startup from config).
+pub fn set_entity_name(name: String) {
+    if let Ok(mut guard) = ENTITY_NAME.write() {
+        *guard = name;
+    }
+}
+
+/// Read the entity name, falling back to `"AG'HIL"` if unset.
+fn get_entity_name() -> String {
+    ENTITY_NAME
+        .read()
+        .ok()
+        .filter(|g| !g.is_empty())
+        .map_or_else(|| "AG'HIL".into(), |g| g.clone())
 }
 
 /// Short hex hash of embedded CSS+JS for cache-busting query params.
@@ -337,7 +356,7 @@ fn page_with_footer(
                             p .is-size-7 {
                                 a href="https://codeberg.org/bestouff/powpow" {
                                     "PowPow"
-                                } " v" (env!("CARGO_PKG_VERSION")) " pour AG'HIL"
+                                } " v" (env!("CARGO_PKG_VERSION")) " pour " (get_entity_name())
                             }
                         }
                     }

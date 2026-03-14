@@ -51,7 +51,7 @@ pub fn login_page(prefix: &str) -> Markup {
     let extra_scripts = html! {};
 
     page(
-        "Connexion - AGHIL",
+        "Connexion - PowPow",
         prefix,
         &NavKind::LoginOnly,
         "",

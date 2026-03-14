@@ -20,6 +20,8 @@ fn slug_label(slug: &str) -> &'static str {
         "favicon" => "Favicon du site",
         "trail-map" => "Plan des pistes",
         "navbar" => "Barre de navigation",
+        "privacy" => "Politique de confidentialité",
+        "tos" => "Conditions d'utilisation",
         _ => "Bloc inconnu",
     }
 }
@@ -95,7 +97,7 @@ pub fn content_list_page(prefix: &str, blocks: &[ContentBlock]) -> Markup {
     };
 
     page(
-        "Contenu éditorial - AGHIL",
+        "Contenu éditorial - PowPow",
         prefix,
         &NavKind::Standard,
         "admin",
@@ -288,7 +290,7 @@ pub fn content_edit_page(
     };
 
     page(
-        &format!("Modifier «{}» - AGHIL", label),
+        &format!("Modifier «{}» - PowPow", label),
         prefix,
         &NavKind::Standard,
         "admin",

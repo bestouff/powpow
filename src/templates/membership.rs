@@ -305,7 +305,7 @@ pub fn already_imported_page(membership: Membership, season: i16, prefix: &str) 
     };
 
     page(
-        "Adhésion déjà importée - AGHIL",
+        "Adhésion déjà importée - PowPow",
         prefix,
         &NavKind::Standard,
         "",
@@ -386,7 +386,7 @@ pub fn import_staff_form(
         allow_create: !name_already_exists,
         name_choice_value: "membership",
         name_choice_label: "De l'adhésion:",
-        page_title: "Importer Staff - AGHIL",
+        page_title: "Importer Staff - PowPow",
         page_heading: "Importer un Staff",
         detail_title: "Détails de l'Adhésion",
         back_suffix: "/online",
@@ -557,7 +557,7 @@ pub fn import_result(success: bool, message: &str, prefix: &str) -> Markup {
         }
     };
 
-    let page_title = format!("{title} - AGHIL");
+    let page_title = format!("{title} - PowPow");
     page(
         &page_title,
         prefix,

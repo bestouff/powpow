@@ -82,7 +82,7 @@ pub fn restore_page(prefix: &str) -> Markup {
     let extra_scripts = html! {};
 
     page(
-        "Restaurer la base de données - AGHIL",
+        "Restaurer la base de données - PowPow",
         prefix,
         &NavKind::Standard,
         "",
@@ -136,7 +136,7 @@ pub fn restore_result(prefix: &str, success: bool, message: &str) -> Markup {
         }
     };
 
-    let page_title = format!("{title} - AGHIL");
+    let page_title = format!("{title} - PowPow");
     page(
         &page_title,
         prefix,
@@ -211,7 +211,7 @@ pub fn audit_page(
     };
 
     page(
-        "Journal d'audit - AGHIL",
+        "Journal d'audit - PowPow",
         prefix,
         &NavKind::Full,
         "admin",
@@ -403,7 +403,7 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
     };
 
     page(
-        "Administration - AGHIL",
+        "Administration - PowPow",
         prefix,
         &NavKind::Standard,
         "admin",
@@ -500,7 +500,7 @@ pub fn validation_page(pending: &[(Staff, Atelier)], prefix: &str) -> Markup {
     let script = html! {};
 
     page(
-        "Validations - AGHIL",
+        "Validations - PowPow",
         prefix,
         &NavKind::LoginOnly,
         "",
@@ -776,7 +776,7 @@ document.querySelectorAll('.sq-delete-btn').forEach(btn => {{
     };
 
     page(
-        "Qualifications - AGHIL",
+        "Qualifications - PowPow",
         prefix,
         &NavKind::Standard,
         "admin",

@@ -448,16 +448,17 @@ pub async fn toggle_role(
                                 chiefs.iter().map(|c| c.email.clone()).collect();
                             if !chief_emails.is_empty() {
                                 let subject = format!(
-                                    "AGHIL — {} demande à rejoindre {}",
-                                    staff_name, atelier_name
+                                    "{} — {} demande à rejoindre {}",
+                                    state_clone.config.entity_name, staff_name, atelier_name
                                 );
                                 let html_body = format!(
                                     r"<p>Bonjour,</p>
 <p><strong>{staff}</strong> souhaite rejoindre l'atelier <strong>{atelier}</strong> et attend votre validation.</p>
-<p>Connectez-vous à AGHIL pour valider ou refuser cette demande.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
+<p>Connectez-vous à PowPow pour valider ou refuser cette demande.</p>
+{sig}",
                                     staff = staff_name,
                                     atelier = atelier_name,
+                                    sig = crate::email_signature(&state_clone.config.entity_name),
                                 );
                                 send_notification_email(
                                     &state_clone,
@@ -569,13 +570,17 @@ pub async fn toggle_role(
 
                     // Notification: role validated
                     if validated == Some(true) {
-                        let subject =
-                            format!("AGHIL — Votre rôle dans {} a été validé", atelier_name);
+                        let subject = format!(
+                            "{} — Votre rôle dans {} a été validé",
+                            state_clone.config.entity_name, atelier_name
+                        );
                         let html_body = format!(
                             r"<p>Bonjour {},</p>
 <p>Votre demande pour rejoindre l'atelier <strong>{}</strong> a été validée. Vous pouvez dès maintenant vous inscrire aux créneaux sur le calendrier.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
-                            staff.first_name, atelier_name,
+{}",
+                            staff.first_name,
+                            atelier_name,
+                            crate::email_signature(&state_clone.config.entity_name),
                         );
                         send_notification_email(
                             &state_clone,
@@ -590,23 +595,33 @@ pub async fn toggle_role(
                     if let Some(is_chief) = chief {
                         let (subject, html_body) = if is_chief {
                             (
-                                format!("AGHIL — Vous êtes maintenant chef de {}", atelier_name),
+                                format!(
+                                    "{} — Vous êtes maintenant chef de {}",
+                                    state_clone.config.entity_name, atelier_name
+                                ),
                                 format!(
                                     r"<p>Bonjour {},</p>
 <p>Vous avez été nommé(e) <strong>chef</strong> de l'atelier <strong>{}</strong>.</p>
 <p>Vous recevrez désormais les notifications liées à cet atelier.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
-                                    staff.first_name, atelier_name,
+{}",
+                                    staff.first_name,
+                                    atelier_name,
+                                    crate::email_signature(&state_clone.config.entity_name),
                                 ),
                             )
                         } else {
                             (
-                                format!("AGHIL — Vous n'êtes plus chef de {}", atelier_name),
+                                format!(
+                                    "{} — Vous n'êtes plus chef de {}",
+                                    state_clone.config.entity_name, atelier_name
+                                ),
                                 format!(
                                     r"<p>Bonjour {},</p>
 <p>Vous n'êtes plus chef de l'atelier <strong>{}</strong>.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
-                                    staff.first_name, atelier_name,
+{}",
+                                    staff.first_name,
+                                    atelier_name,
+                                    crate::email_signature(&state_clone.config.entity_name),
                                 ),
                             )
                         };

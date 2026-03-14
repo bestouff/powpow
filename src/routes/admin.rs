@@ -81,35 +81,40 @@ pub async fn api_update_admin_flags(
                 let old_god = old_staff.is_god;
                 let new_staff = staff.clone();
                 tokio::spawn(async move {
+                    let entity = &state_clone.config.entity_name;
                     // Admin flag changed
                     if !old_admin && new_staff.is_admin {
-                        let subject = "AGHIL — Vous avez maintenant les droits administrateur";
+                        let subject =
+                            format!("{entity} — Vous avez maintenant les droits administrateur");
                         let html_body = format!(
                             r"<p>Bonjour {},</p>
-<p>Vous avez maintenant les <strong>droits administrateur</strong> sur AGHIL.</p>
+<p>Vous avez maintenant les <strong>droits administrateur</strong> sur PowPow.</p>
 <p>Vous pouvez gérer les adhésions, le staff et les paiements espèces.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
+{}",
                             new_staff.first_name,
+                            crate::email_signature(entity),
                         );
                         send_notification_email(
                             &state_clone,
                             std::slice::from_ref(&new_staff.email),
-                            subject,
+                            &subject,
                             &html_body,
                         )
                         .await;
                     } else if old_admin && !new_staff.is_admin {
-                        let subject = "AGHIL — Vos droits administrateur ont été retirés";
+                        let subject =
+                            format!("{entity} — Vos droits administrateur ont été retirés");
                         let html_body = format!(
                             r"<p>Bonjour {},</p>
-<p>Vos <strong>droits administrateur</strong> sur AGHIL ont été retirés.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
+<p>Vos <strong>droits administrateur</strong> sur PowPow ont été retirés.</p>
+{}",
                             new_staff.first_name,
+                            crate::email_signature(entity),
                         );
                         send_notification_email(
                             &state_clone,
                             std::slice::from_ref(&new_staff.email),
-                            subject,
+                            &subject,
                             &html_body,
                         )
                         .await;
@@ -117,32 +122,34 @@ pub async fn api_update_admin_flags(
 
                     // God flag changed
                     if !old_god && new_staff.is_god {
-                        let subject = "AGHIL — Vous avez maintenant les droits God";
+                        let subject = format!("{entity} — Vous avez maintenant les droits God");
                         let html_body = format!(
                             r"<p>Bonjour {},</p>
-<p>Vous avez maintenant les <strong>droits God</strong> sur AGHIL.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
+<p>Vous avez maintenant les <strong>droits God</strong> sur PowPow.</p>
+{}",
                             new_staff.first_name,
+                            crate::email_signature(entity),
                         );
                         send_notification_email(
                             &state_clone,
                             std::slice::from_ref(&new_staff.email),
-                            subject,
+                            &subject,
                             &html_body,
                         )
                         .await;
                     } else if old_god && !new_staff.is_god {
-                        let subject = "AGHIL — Vos droits God ont été retirés";
+                        let subject = format!("{entity} — Vos droits God ont été retirés");
                         let html_body = format!(
                             r"<p>Bonjour {},</p>
-<p>Vos <strong>droits God</strong> sur AGHIL ont été retirés.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
+<p>Vos <strong>droits God</strong> sur PowPow ont été retirés.</p>
+{}",
                             new_staff.first_name,
+                            crate::email_signature(entity),
                         );
                         send_notification_email(
                             &state_clone,
                             std::slice::from_ref(&new_staff.email),
-                            subject,
+                            &subject,
                             &html_body,
                         )
                         .await;
@@ -364,7 +371,7 @@ pub async fn backup_database(
     )
     .await;
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-    let filename = format!("aghil_backup_{}.sql", timestamp);
+    let filename = format!("powpow_backup_{}.sql", timestamp);
 
     match database::backup_all_tables(&state.db).await {
         Ok(sql) => Response::builder()

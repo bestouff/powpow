@@ -121,16 +121,23 @@ pub async fn create_cash(
                     .await
                     .unwrap_or_default();
                 if !admin_emails.is_empty() {
-                    let subject = "AGHIL — Nouveau paiement espèces à importer";
+                    let subject = format!(
+                        "{} — Nouveau paiement espèces à importer",
+                        state_clone.config.entity_name
+                    );
                     let html_body = format!(
                         r"<p>Bonjour,</p>
 <p>Un nouveau paiement espèces/chèque a été enregistré :</p>
 <p><strong>{} {}</strong> — {}€</p>
-<p>Connectez-vous à AGHIL pour l'importer.</p>
-<p><em>— PowPow pour AG'HIL</em></p>",
-                        first_name, last_name, amount,
+<p>Connectez-vous à PowPow pour l'importer.</p>
+{}",
+                        first_name,
+                        last_name,
+                        amount,
+                        crate::email_signature(&state_clone.config.entity_name),
                     );
-                    send_notification_email(&state_clone, &admin_emails, subject, &html_body).await;
+                    send_notification_email(&state_clone, &admin_emails, &subject, &html_body)
+                        .await;
                 }
             });
 

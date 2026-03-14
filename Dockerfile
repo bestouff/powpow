@@ -22,7 +22,6 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY static ./static
 COPY migrations ./migrations
-COPY privacy.md tos.md ./
 RUN cargo build --release
 
 # Runtime stage - using trixie for GLIBC 2.38+ (required by aws-lc-sys in reqwest 0.13)
