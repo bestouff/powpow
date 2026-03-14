@@ -79,7 +79,7 @@ pub fn index(
                         @for (slug, anchor, css_class) in [
                             ("infos-station", "infosplus", "btn-station-brown"),
                             ("pricing", "pricing", "btn-station-teal"),
-                            ("salle-hors-sac", "salle-hors-sac", "btn-station-green"),
+                            ("ski-renting", "ski-renting", "btn-station-green"),
                             ("driving-indications", "driving-indications", "btn-station-olive"),
                             ("about-association", "about-association", "btn-station-golden"),
                         ] {
@@ -399,7 +399,7 @@ pub fn index(
         }
 
         // ── Salle hors-sac + Newsletter ──────────────────────────────
-        section #salle-hors-sac .section.section-green {
+        section #ski-renting .section.section-green {
             div .container {
                 div .columns {
                     div .column.is-6 {
@@ -421,7 +421,7 @@ pub fn index(
                         }
                     }
                     div .column.is-6 {
-                        @let block = contents.get("newsletter");
+                        @let block = contents.get("ski-renting");
                         h2 .section-heading.has-text-white { (block.title) }
                         div .content.has-text-white {
                             (PreEscaped(block.render_body()))

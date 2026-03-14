@@ -11,7 +11,7 @@ fn slug_label(slug: &str) -> &'static str {
         "about-association" => "À propos — L'association (encadré doré)",
         "events" => "Événements",
         "salle-hors-sac" => "Salle hors-sac",
-        "newsletter" => "Newsletter et adhésion",
+        "ski-renting" => "Location de matériel de ski",
         "footer-contact" => "Pied de page — Contact",
         "footer-calendar" => "Pied de page — Calendrier",
         "footer-summer" => "Pied de page — En été",
