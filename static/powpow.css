@@ -301,6 +301,265 @@
   border: 1px solid var(--color-about-association-border);
 }
 
+/* --- Dark-background sections: explicit white for all content elements --- */
+.section-info .content h1,
+.section-info .content h2,
+.section-info .content h3,
+.section-info .content h4,
+.section-info .content h5,
+.section-info .content h6,
+.section-navbar .content h1,
+.section-navbar .content h2,
+.section-navbar .content h3,
+.section-navbar .content h4,
+.section-navbar .content h5,
+.section-navbar .content h6,
+.section-directions .content h1,
+.section-directions .content h2,
+.section-directions .content h3,
+.section-directions .content h4,
+.section-directions .content h5,
+.section-directions .content h6,
+.section-events .content h1,
+.section-events .content h2,
+.section-events .content h3,
+.section-events .content h4,
+.section-events .content h5,
+.section-events .content h6,
+.section-rental .content h1,
+.section-rental .content h2,
+.section-rental .content h3,
+.section-rental .content h4,
+.section-rental .content h5,
+.section-rental .content h6 {
+  color: #fff;
+}
+.section-info .content strong,
+.section-navbar .content strong,
+.section-directions .content strong,
+.section-events .content strong,
+.section-rental .content strong {
+  color: #fff;
+}
+.section-info .content em,
+.section-navbar .content em,
+.section-directions .content em,
+.section-events .content em,
+.section-rental .content em {
+  color: inherit;
+}
+.section-info .content th,
+.section-navbar .content th,
+.section-directions .content th,
+.section-events .content th,
+.section-rental .content th {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.section-info .content td,
+.section-navbar .content td,
+.section-directions .content td,
+.section-events .content td,
+.section-rental .content td {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.section-info .content thead th,
+.section-navbar .content thead th,
+.section-directions .content thead th,
+.section-events .content thead th,
+.section-rental .content thead th {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.section-info .content thead td,
+.section-navbar .content thead td,
+.section-directions .content thead td,
+.section-events .content thead td,
+.section-rental .content thead td {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.section-info .content tbody tr:nth-child(even),
+.section-navbar .content tbody tr:nth-child(even),
+.section-directions .content tbody tr:nth-child(even),
+.section-events .content tbody tr:nth-child(even),
+.section-rental .content tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+.section-info .content blockquote,
+.section-navbar .content blockquote,
+.section-directions .content blockquote,
+.section-events .content blockquote,
+.section-rental .content blockquote {
+  color: rgba(255, 255, 255, 0.9);
+  border-left-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+.section-info .content code,
+.section-navbar .content code,
+.section-directions .content code,
+.section-events .content code,
+.section-rental .content code {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+.section-info .content pre,
+.section-navbar .content pre,
+.section-directions .content pre,
+.section-events .content pre,
+.section-rental .content pre {
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.25);
+}
+.section-info .content hr,
+.section-navbar .content hr,
+.section-directions .content hr,
+.section-events .content hr,
+.section-rental .content hr {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+.section-info .content li::marker,
+.section-navbar .content li::marker,
+.section-directions .content li::marker,
+.section-events .content li::marker,
+.section-rental .content li::marker {
+  color: rgba(255, 255, 255, 0.7);
+}
+.section-info .content figcaption,
+.section-navbar .content figcaption,
+.section-directions .content figcaption,
+.section-events .content figcaption,
+.section-rental .content figcaption {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* --- Golden section: explicit dark text for all content elements --- */
+.section-about-association .content h1,
+.section-about-association .content h2,
+.section-about-association .content h3,
+.section-about-association .content h4,
+.section-about-association .content h5,
+.section-about-association .content h6 {
+  color: var(--color-text-dark);
+}
+.section-about-association .content strong {
+  color: var(--color-text-dark);
+}
+.section-about-association .content a {
+  color: var(--color-navbar);
+  text-decoration: underline;
+}
+.section-about-association .content a:hover {
+  color: var(--color-accent-dark);
+}
+.section-about-association .content th {
+  color: var(--color-text-dark);
+  border-color: var(--color-about-association-border);
+}
+.section-about-association .content td {
+  color: var(--color-text-dark);
+  border-color: var(--color-about-association-border);
+}
+.section-about-association .content thead th {
+  background-color: rgba(0, 0, 0, 0.08);
+  border-color: var(--color-about-association-border);
+}
+.section-about-association .content blockquote {
+  color: var(--color-text-dark);
+  border-left-color: var(--color-about-association-border);
+  background-color: rgba(0, 0, 0, 0.04);
+}
+.section-about-association .content code {
+  color: var(--color-text-dark);
+  background-color: rgba(0, 0, 0, 0.06);
+}
+.section-about-association .content hr {
+  background-color: var(--color-about-association-border);
+}
+
+/* --- Reset for .box inside dark sections (white background, Bulma defaults) --- */
+.section-info .box .content h1,
+.section-info .box .content h2,
+.section-info .box .content h3,
+.section-info .box .content h4,
+.section-info .box .content h5,
+.section-info .box .content h6,
+.section-navbar .box .content h1,
+.section-navbar .box .content h2,
+.section-navbar .box .content h3,
+.section-navbar .box .content h4,
+.section-navbar .box .content h5,
+.section-navbar .box .content h6 {
+  color: var(--color-text-dark);
+}
+.section-info .box .content strong,
+.section-navbar .box .content strong {
+  color: var(--color-text-dark);
+}
+.section-info .box .content th,
+.section-info .box .content td,
+.section-navbar .box .content th,
+.section-navbar .box .content td {
+  color: var(--color-text-dark);
+  border-color: var(--bulma-border, #dbdbdb);
+}
+.section-info .box .content thead th,
+.section-navbar .box .content thead th {
+  background-color: transparent;
+  border-color: var(--bulma-border, #dbdbdb);
+}
+.section-info .box .content tbody tr:nth-child(even),
+.section-navbar .box .content tbody tr:nth-child(even) {
+  background-color: transparent;
+}
+.section-info .box .content blockquote,
+.section-navbar .box .content blockquote {
+  color: var(--color-text-dark);
+  border-left-color: var(--bulma-border, #dbdbdb);
+  background-color: transparent;
+}
+.section-info .box .content code,
+.section-navbar .box .content code {
+  color: var(--color-text-dark);
+  background-color: var(--bulma-code-background, #f5f5f5);
+}
+.section-info .box .content pre,
+.section-navbar .box .content pre {
+  color: var(--color-text-dark);
+  background-color: var(--bulma-pre-background, #f5f5f5);
+}
+.section-info .box .content hr,
+.section-navbar .box .content hr {
+  background-color: var(--bulma-border, #dbdbdb);
+}
+.section-info .box .content a,
+.section-navbar .box .content a {
+  color: var(--bulma-link, #485fc7);
+}
+
+/* --- Footer: explicit styling for content elements --- */
+.footer-station .content h1,
+.footer-station .content h2,
+.footer-station .content h3,
+.footer-station .content h4,
+.footer-station .content h5,
+.footer-station .content h6 {
+  color: var(--color-navbar);
+}
+.footer-station .content strong {
+  color: var(--color-text-dark);
+}
+.footer-station .content th,
+.footer-station .content td {
+  color: var(--color-text-dark);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+.footer-station .content thead th {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
 /* === Station status badge === */
 .station-status-badge {
   display: inline-flex;
