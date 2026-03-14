@@ -279,6 +279,10 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                             "Gestion du staff"
                         }
                         div .buttons {
+                            a .button.is-link href={(p) "/calendar"} {
+                                span .icon { i .fa-solid.fa-calendar-days {} }
+                                span { "Planning" }
+                            }
                             a .button.is-link href={(p) "/staff"} {
                                 span .icon { i .fa-solid.fa-user-group {} }
                                 span { "Voir le staff" }

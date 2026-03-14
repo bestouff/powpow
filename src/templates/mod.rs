@@ -213,7 +213,8 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBloc
                 div #main-navbar .navbar-menu {
                     div .navbar-end {
                         a .navbar-item .is-active[active == "calendar"]
-                          href={(p) "/calendar"} {
+                          href={(p) "/calendar"}
+                          style=[admin_hide.then_some("display:none")] {
                             span .icon.mr-1 { i .fa-solid.fa-calendar-days {} }
                             "Planning"
                         }

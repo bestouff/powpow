@@ -23,9 +23,14 @@ async fn resolve_caller(jar: &SignedCookieJar, state: &AppState) -> Option<crate
         .flatten()
 }
 
-pub async fn index(headers: HeaderMap, State(state): State<AppState>) -> impl IntoResponse {
+pub async fn index(
+    headers: HeaderMap,
+    jar: SignedCookieJar,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
     let current_season = get_current_season();
+    let logged_in = resolve_caller(&jar, &state).await.is_some();
 
     // Public frontpage data
     let equipments = database::get_all_equipments(&state.db)
@@ -64,6 +69,7 @@ pub async fn index(headers: HeaderMap, State(state): State<AppState>) -> impl In
         &contents,
         dicton.as_deref(),
         &news_items,
+        logged_in,
     )
 }
 

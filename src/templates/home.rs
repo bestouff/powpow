@@ -13,6 +13,7 @@ pub fn index(
     contents: &ContentMap,
     dicton: Option<&str>,
     news_items: &[NewsRow],
+    logged_in: bool,
 ) -> Markup {
     let p = prefix;
 
@@ -448,10 +449,16 @@ pub fn index(
         }
     };
 
+    let nav_kind = if logged_in {
+        NavKind::Standard
+    } else {
+        NavKind::LoginOnly
+    };
+
     page_with_footer(
         None,
         prefix,
-        &NavKind::LoginOnly,
+        &nav_kind,
         "",
         extra_head,
         content,
