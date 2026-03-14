@@ -661,14 +661,19 @@ impl ContentBlock {
     ///
     /// Uses `pulldown-cmark` for Markdown→HTML then `ammonia` to strip
     /// dangerous tags (`<script>`, `<iframe>`, event-handler attributes, …)
-    /// while keeping safe formatting elements.
+    /// while keeping safe formatting elements.  All links open in a new tab.
     #[must_use]
     pub fn render_body(&self) -> String {
         use pulldown_cmark::{Options, Parser, html};
         let parser = Parser::new_ext(&self.body, Options::all());
         let mut html_output = String::new();
         html::push_html(&mut html_output, parser);
-        ammonia::clean(&html_output)
+        ammonia::Builder::default()
+            .add_tag_attributes("a", &["target"])
+            .set_tag_attribute_value("a", "target", "_blank")
+            .link_rel(Some("noopener noreferrer"))
+            .clean(&html_output)
+            .to_string()
     }
 }
 

@@ -279,7 +279,7 @@ pub fn index(
                         "Actualités "
                     }
                     h3 .has-text-centered {
-                        a href=(news_items[0].link) {
+                        a href=(news_items[0].link) target="_blank" rel="noopener" {
                             (news_items[0].text)
                             @if news_items[0].has_image {
                                 img src=(format!("{p}/news-images/{}", news_items[0].id))
