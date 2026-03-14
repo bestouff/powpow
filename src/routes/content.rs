@@ -142,7 +142,7 @@ pub async fn content_edit(
 /// Save a content block (multipart form: title, body, link fields + optional image).
 #[allow(clippy::too_many_lines)]
 pub async fn content_save(
-    RequireAdmin(_staff): RequireAdmin,
+    RequireAdmin(staff): RequireAdmin,
     headers: HeaderMap,
     State(state): State<AppState>,
     Path(slug): Path<String>,
@@ -249,8 +249,10 @@ pub async fn content_save(
     // Resolve image_id: upload new, remove, or keep existing
     let existing_block = database::get_content(&state.db, &slug).await.ok().flatten();
     let mut image_id = existing_block.as_ref().and_then(|b| b.image_id);
+    let mut image_changed = false;
 
     if let Some((data, ct, fname)) = image_data {
+        image_changed = true;
         // Delete old image if replacing
         if let Some(old_id) = image_id {
             let _ = database::delete_content_image(&state.db, old_id).await;
@@ -267,6 +269,7 @@ pub async fn content_save(
             let _ = database::delete_content_image(&state.db, old_id).await;
         }
         image_id = None;
+        image_changed = true;
     }
 
     match database::update_content(
@@ -281,6 +284,24 @@ pub async fn content_save(
     .await
     {
         Ok(()) => {
+            // Audit trail
+            let mut details = format!("slug={slug} title=«{title}»");
+            if image_changed {
+                if image_id.is_some() {
+                    details.push_str(" image=modifiée");
+                } else {
+                    details.push_str(" image=supprimée");
+                }
+            }
+            let _ = database::insert_audit(
+                &state.db,
+                Some(staff.id),
+                &format!("{} {}", staff.first_name, staff.last_name),
+                "Modification contenu CMS",
+                &details,
+            )
+            .await;
+
             // Refresh the navbar logo cache if the navbar block was updated
             if slug == "navbar" {
                 let block = database::get_content(&state.db, "navbar")
