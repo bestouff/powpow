@@ -3086,6 +3086,75 @@ pub async fn get_news_image(pool: &PgPool, id: uuid::Uuid) -> Result<Option<(Vec
     Ok(row)
 }
 
+/// Create a new atelier.
+pub async fn create_atelier(
+    pool: &PgPool,
+    name: &str,
+    slug: &str,
+    icon: &str,
+    needs_validation: bool,
+    default_nightly: bool,
+    opening_day_typical_needed: i16,
+) -> Result<Atelier> {
+    let atelier = sqlx::query_as::<_, Atelier>(
+        r"INSERT INTO ateliers (id, name, slug, icon, needs_validation, default_nightly, opening_day_typical_needed)
+          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+          RETURNING *",
+    )
+    .bind(name)
+    .bind(slug)
+    .bind(icon)
+    .bind(needs_validation)
+    .bind(default_nightly)
+    .bind(opening_day_typical_needed)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(atelier)
+}
+
+/// Update an existing atelier.
+#[allow(clippy::too_many_arguments)]
+pub async fn update_atelier(
+    pool: &PgPool,
+    id: uuid::Uuid,
+    name: &str,
+    slug: &str,
+    icon: &str,
+    needs_validation: bool,
+    default_nightly: bool,
+    opening_day_typical_needed: i16,
+) -> Result<Atelier> {
+    let atelier = sqlx::query_as::<_, Atelier>(
+        r"UPDATE ateliers
+          SET name = $2, slug = $3, icon = $4, needs_validation = $5,
+              default_nightly = $6, opening_day_typical_needed = $7
+          WHERE id = $1
+          RETURNING *",
+    )
+    .bind(id)
+    .bind(name)
+    .bind(slug)
+    .bind(icon)
+    .bind(needs_validation)
+    .bind(default_nightly)
+    .bind(opening_day_typical_needed)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(atelier)
+}
+
+/// Delete an atelier by ID.
+pub async fn delete_atelier(pool: &PgPool, id: uuid::Uuid) -> Result<()> {
+    sqlx::query(r"DELETE FROM ateliers WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
 /// Keep only the `keep` most recent news items, deleting the rest.
 pub async fn prune_old_news(pool: &PgPool, keep: i64) -> Result<u64> {
     let result = sqlx::query(

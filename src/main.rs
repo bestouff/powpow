@@ -524,6 +524,12 @@ async fn main() -> anyhow::Result<()> {
             "/qualifications",
             get(routes::admin::qualifications_page_handler),
         )
+        .route("/settings", get(routes::settings::settings_page_handler))
+        .route("/api/ateliers", post(routes::settings::api_create_atelier))
+        .route(
+            "/api/ateliers/{id}",
+            post(routes::settings::api_update_atelier).delete(routes::settings::api_delete_atelier),
+        )
         .route(
             "/api/qualifications",
             post(routes::admin::api_create_qualification),

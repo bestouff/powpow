@@ -8,6 +8,7 @@ mod home;
 mod legal;
 mod membership;
 mod photos;
+mod settings;
 mod staff;
 
 pub use admin::{
@@ -25,6 +26,7 @@ pub use membership::{
     user_detail,
 };
 pub use photos::photo_page;
+pub use settings::settings_page;
 pub use staff::{person_detail, staff_list};
 
 use crate::models::{ContentBlock, ContentMap, StaffMatchType, StaffWithSeason};

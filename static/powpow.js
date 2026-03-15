@@ -1842,3 +1842,5 @@ function scrollCalendarToToday() {
     scroll.scrollLeft = Math.max(0, targetLeft - nameWidth - 16);
   }, 50);
 }
+
+

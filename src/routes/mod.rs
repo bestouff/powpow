@@ -8,5 +8,6 @@ pub mod home;
 pub mod legal;
 pub mod membership;
 pub mod photos;
+pub mod settings;
 pub mod staff;
 pub mod sync;

@@ -301,10 +301,6 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                                     span .icon { i .fa-solid.fa-clipboard-list {} }
                                     span { "Journal d'audit" }
                                 }
-                                a .button.is-link.is-light href={(p) "/qualifications"} {
-                                    span .icon { i .fa-solid.fa-certificate {} }
-                                    span { "Qualifications" }
-                                }
                             }
                         }
                     }
@@ -391,12 +387,20 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                         div .box {
                             h3 .title.is-5.mb-3 {
                                 span .icon.mr-2 { i .fa-solid.fa-pen-to-square {} }
-                                "Contenu éditorial"
+                                "Gestion du site"
                             }
                             div .buttons {
                                 a .button.is-info href={(p) "/admin/contents"} {
                                     span .icon { i .fa-solid.fa-pen-to-square {} }
-                                    span { "Gérer le contenu du site" }
+                                    span { "Gérer le contenu des sections" }
+                                }
+                                a .button.is-link.is-light href={(p) "/qualifications"} {
+                                    span .icon { i .fa-solid.fa-certificate {} }
+                                    span { "Qualifications" }
+                                }
+                                a .button.is-warning.is-light href={(p) "/settings"} {
+                                    span .icon { i .fa-solid.fa-gear {} }
+                                    span { "Paramètres" }
                                 }
                             }
                         }
