@@ -28,6 +28,8 @@ pub fn calendar(
     viewer_id: Option<uuid::Uuid>,
     _is_admin: bool,
     opening_days: &[crate::models::OpeningDay],
+    show_past: bool,
+    today: chrono::NaiveDate,
 ) -> Markup {
     let p = prefix;
 
@@ -64,9 +66,35 @@ pub fn calendar(
 
                 div .atelier-nav {
                     @for a in all_ateliers {
-                        a .navbar-item.is-active[a.id == atelier.id] href={(p) "/calendar/" (a.slug)} {
+                        @let show_past_param = if show_past { "?show_past=true" } else { "" };
+                        a .navbar-item.is-active[a.id == atelier.id] href={(p) "/calendar/" (a.slug) (show_past_param)} {
                             span .icon { i class={"fa-solid fa-" (a.icon)} {} }
                             "\u{00a0}" (a.name)
+                        }
+                    }
+                }
+
+                // Toggle: show past days
+                @let toggle_href = if show_past {
+                    format!("{p}/calendar/{}", atelier.slug)
+                } else {
+                    format!("{p}/calendar/{}?show_past=true", atelier.slug)
+                };
+                div .mb-3 {
+                    a .nightly-switch href=(toggle_href) style="text-decoration:none" {
+                        span class={
+                            "side-label" @if !show_past { " is-active" }
+                        } {
+                            i .fa-solid.fa-forward {} " À venir"
+                        }
+                        label .switch {
+                            input type="checkbox" disabled checked[show_past];
+                            span .check {}
+                        }
+                        span class={
+                            "side-label" @if show_past { " is-active" }
+                        } {
+                            i .fa-solid.fa-clock-rotate-left {} " Tout"
                         }
                     }
                 }
@@ -91,11 +119,13 @@ pub fn calendar(
                                     };
                                     @let day_date = need.day.format("%d/%m").to_string();
                                     @let is_sunday = need.day.weekday() == chrono::Weekday::Sun;
+                                    @let is_past = need.day < today;
+                                    @let is_today = need.day == today;
                                     @let filled_first: i16 = staff_list.iter().filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(f, _)| *f)).count() as i16;
                                     @let filled_second: i16 = staff_list.iter().filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(_, se)| *se)).count() as i16;
                                     @let both_complete = filled_first >= need.quantity && filled_second >= need.quantity;
                                     @let (first_label_h, second_label_h) = if need.nightly { ("soir", "nuit") } else { ("matin", "après-midi") };
-                                    th .cal-day-col.has-text-centered.cal-sunday[is_sunday].cal-complete[both_complete].cal-danger[!both_complete] {
+                                    th .cal-day-col.has-text-centered.cal-sunday[is_sunday].cal-complete[both_complete].cal-danger[!both_complete].cal-past[is_past].cal-today[is_today] {
                                         div .cal-day-name { (day_name) }
                                         div .cal-day-date { (day_date) }
                                         div .cal-day-count {
@@ -115,7 +145,8 @@ pub fn calendar(
                                 td .cal-name-col { strong { "Ouverture" } }
                                 @for need in needs {
                                     @let is_sunday = need.day.weekday() == chrono::Weekday::Sun;
-                                    td .has-text-centered.cal-sunday[is_sunday] {
+                                    @let is_past = need.day < today;
+                                    td .has-text-centered.cal-sunday[is_sunday].cal-past[is_past] {
                                         @if let Some(od) = opening_map.get(&need.day) {
                                             @match od.status {
                                                 crate::models::OpeningDayStatus::Reserved => {
@@ -146,8 +177,9 @@ pub fn calendar(
                                         @let (first_label, second_label) = if need.nightly { ("soir", "nuit") } else { ("matin", "après-midi") };
                                         @let is_active = first_half || second_half;
                                         @let is_sunday = need.day.weekday() == chrono::Weekday::Sun;
+                                        @let is_past = need.day < today;
                                         @let is_complete = complete_needs.contains(&need.id);
-                                        td .cal-cell.has-text-centered.cal-active[is_active].cal-sunday[is_sunday].cal-complete[is_complete].cal-danger[!is_complete] {
+                                        td .cal-cell.has-text-centered.cal-active[is_active].cal-sunday[is_sunday].cal-complete[is_complete].cal-danger[!is_complete].cal-past[is_past] {
                                             label .cal-check title=(if need.nightly { "Soirée" } else { "Matin" }) {
                                                 input .presence-cb type="checkbox"
                                                     data-need=(need.id)
@@ -282,6 +314,7 @@ pub fn render_upcoming_week_email(upcoming: &[(chrono::NaiveDate, String, i16, i
     html
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn calendar_editor(
     all_ateliers: &[Atelier],
     editable_ids: &[uuid::Uuid],
@@ -290,6 +323,8 @@ pub fn calendar_editor(
     logged_in: bool,
     is_admin: bool,
     opening_days: &[crate::models::OpeningDay],
+    show_past: bool,
+    today: chrono::NaiveDate,
 ) -> Markup {
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -383,10 +418,36 @@ pub fn calendar_editor(
                     div .calendar-links {
                         span .has-text-grey.mr-1.cal-label { "Plannings :" }
                         @for a in all_ateliers {
-                            a .tag.is-medium.is-link.is-light href={(p) "/calendar/" (a.slug)} {
+                            @let show_past_param = if show_past { "?show_past=true" } else { "" };
+                            a .tag.is-medium.is-link.is-light href={(p) "/calendar/" (a.slug) (show_past_param)} {
                                 span .icon { i class={"fa-solid fa-" (a.icon)} {} }
                                 "\u{00a0}" (a.name)
                             }
+                        }
+                    }
+                }
+
+                // Toggle: show past days
+                @let toggle_href = if show_past {
+                    format!("{p}/calendar")
+                } else {
+                    format!("{p}/calendar?show_past=true")
+                };
+                div .mb-3 {
+                    a .nightly-switch href=(toggle_href) style="text-decoration:none" {
+                        span class={
+                            "side-label" @if !show_past { " is-active" }
+                        } {
+                            i .fa-solid.fa-forward {} " À venir"
+                        }
+                        label .switch {
+                            input type="checkbox" disabled checked[show_past];
+                            span .check {}
+                        }
+                        span class={
+                            "side-label" @if show_past { " is-active" }
+                        } {
+                            i .fa-solid.fa-clock-rotate-left {} " Tout"
                         }
                     }
                 }
@@ -415,7 +476,11 @@ pub fn calendar_editor(
                             tr {
                                 th .cal-name-col rowspan="2" { "Atelier" }
                                 @for d in &days {
-                                    th .day-start colspan=(subcols(d)) {
+                                    @let is_past = *d < today;
+                                    @let is_today = *d == today;
+                                    th class={
+                                        "day-start" @if is_past { " cal-past" } @if is_today { " cal-today" }
+                                    } colspan=(subcols(d)) {
                                         (day_abbrev(*d)) " " (format!("{:02}", d.day())) "/" (format!("{:02}", d.month()))
                                     }
                                 }
@@ -423,18 +488,25 @@ pub fn calendar_editor(
                             // Header row 2: sub-column labels
                             tr {
                                 @for d in &days {
+                                    @let is_past = *d < today;
                                     @let (has_day, has_night) = day_types.get(d).copied().unwrap_or((false, false));
                                     @if has_day && has_night {
-                                        th .day-start { "matin" }
-                                        th { "a-m" }
-                                        th { "soir" }
-                                        th { "nuit" }
+                                        th class={
+                                            "day-start" @if is_past { " cal-past" }
+                                        } { "matin" }
+                                        th .cal-past[is_past] { "a-m" }
+                                        th .cal-past[is_past] { "soir" }
+                                        th .cal-past[is_past] { "nuit" }
                                     } @else if has_night {
-                                        th .day-start { "soir" }
-                                        th { "nuit" }
+                                        th class={
+                                            "day-start" @if is_past { " cal-past" }
+                                        } { "soir" }
+                                        th .cal-past[is_past] { "nuit" }
                                     } @else {
-                                        th .day-start { "matin" }
-                                        th { "a-m" }
+                                        th class={
+                                            "day-start" @if is_past { " cal-past" }
+                                        } { "matin" }
+                                        th .cal-past[is_past] { "a-m" }
                                     }
                                 }
                             }
@@ -443,7 +515,10 @@ pub fn calendar_editor(
                                 td .cal-name-col { strong { "Ouverture" } }
                                 @for d in &days {
                                     @let n_sub = subcols(d);
-                                    td .day-start.has-text-centered colspan=(n_sub) {
+                                    @let is_past = *d < today;
+                                    td class={
+                                        "day-start has-text-centered" @if is_past { " cal-past" }
+                                    } colspan=(n_sub) {
                                         @if let Some(od) = opening_map.get(d) {
                                             @let (tag_class, tag_label) = match od.status {
                                                 crate::models::OpeningDayStatus::Reserved => ("is-info", "Prévu"),
@@ -477,12 +552,18 @@ pub fn calendar_editor(
                                         @let mixed = has_day && has_night;
                                         @let n_subcols = if mixed { 4_usize } else { 2_usize };
                                         @let day_str = d.format("%Y-%m-%d").to_string();
+                                        @let is_past = *d < today;
+                                        @let past_cls = if is_past { " cal-past" } else { "" };
                                         @let entry = needs_map.get(&(atelier.id, *d));
                                         @match entry {
                                             None => {
                                                 @for idx in 0..n_subcols {
-                                                    @let cls = if idx == 0 { "day-cell day-start" } else { "day-cell" };
-                                                    td class=(cls) data-day=(&day_str) {}
+                                                    @let cls = if idx == 0 {
+                                                        format!("day-cell day-start{past_cls}")
+                                                    } else {
+                                                        format!("day-cell{past_cls}")
+                                                    };
+                                                    td class=(&cls) data-day=(&day_str) {}
                                                 }
                                             },
                                             Some((need, h1, h2)) => {
@@ -491,24 +572,29 @@ pub fn calendar_editor(
                                                 @let pad_after = if mixed && !need.nightly { 2_usize } else { 0_usize };
                                                 // Padding cells before (for nightly needs in mixed days)
                                                 @for idx in 0..pad_before {
-                                                    @let cls = if idx == 0 { "day-cell day-start" } else { "day-cell" };
-                                                    td class=(cls) data-day=(&day_str) {}
+                                                    @let cls = if idx == 0 {
+                                                        format!("day-cell day-start{past_cls}")
+                                                    } else {
+                                                        format!("day-cell{past_cls}")
+                                                    };
+                                                    td class=(&cls) data-day=(&day_str) {}
                                                 }
                                                 // First half cell
                                                 @let style_h1 = if *h1 >= qty { "cell-ok" } else { "cell-deficit" };
                                                 @let cls_h1 = if pad_before == 0 {
-                                                    format!("day-cell has-text-centered {style_h1} day-start")
+                                                    format!("day-cell has-text-centered {style_h1} day-start{past_cls}")
                                                 } else {
-                                                    format!("day-cell has-text-centered {style_h1}")
+                                                    format!("day-cell has-text-centered {style_h1}{past_cls}")
                                                 };
                                                 td class=(&cls_h1) data-day=(&day_str) { (h1) "/" (qty) }
                                                 // Second half cell
                                                 @let style_h2 = if *h2 >= qty { "cell-ok" } else { "cell-deficit" };
-                                                @let cls_h2 = format!("day-cell has-text-centered {style_h2}");
+                                                @let cls_h2 = format!("day-cell has-text-centered {style_h2}{past_cls}");
                                                 td class=(&cls_h2) data-day=(&day_str) { (h2) "/" (qty) }
                                                 // Padding cells after (for day needs in mixed days)
                                                 @for _idx in 0..pad_after {
-                                                    td .day-cell data-day=(&day_str) {}
+                                                    @let cls = format!("day-cell{past_cls}");
+                                                    td class=(&cls) data-day=(&day_str) {}
                                                 }
                                             },
                                         }

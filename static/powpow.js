@@ -49,6 +49,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initPersonDetail(prefix);
   initCalendarView(prefix);
   initCalendarEditor(prefix);
+  scrollCalendarToToday();
   initLoginPage(prefix);
   initQualificationsPage(prefix);
   initValidationPage(prefix);
@@ -1072,7 +1073,7 @@ function initCalendarEditor(prefix) {
 
   function fetchAddDayNeeds() {
     document.getElementById("add-no-selection").style.display = "none";
-    document.getElementById("add-edit-panel").style.display = "";
+    document.getElementById("add-edit-panel").classList.remove("d-none");
     document.getElementById("add-panel-title").textContent =
       formatDateTitle(addSelectedDay);
     fetch(prefix + "/api/calendar/needs-by-day?day=" + addSelectedDay)
@@ -1819,4 +1820,25 @@ function initStaffCarousel(prefix) {
       goTo(current + 1);
     }, 4000);
   });
+}
+
+// --- Scroll calendar to today's column ---
+function scrollCalendarToToday() {
+  var scroll = document.querySelector(".cal-scroll");
+  if (!scroll) return;
+  // Find today's column, or fall back to the first non-past column
+  var target =
+    scroll.querySelector("thead .cal-today") ||
+    scroll.querySelector("thead th:not(.cal-past):not(.cal-name-col)");
+  if (!target) return;
+  // Wait for layout, then scroll so target is visible near the left
+  setTimeout(function () {
+    // Use offsetLeft relative to the table, which matches scrollLeft space
+    var table = scroll.querySelector("table");
+    if (!table) return;
+    var targetLeft = target.offsetLeft;
+    var nameCol = scroll.querySelector(".cal-name-col");
+    var nameWidth = nameCol ? nameCol.offsetWidth : 0;
+    scroll.scrollLeft = Math.max(0, targetLeft - nameWidth - 16);
+  }, 50);
 }

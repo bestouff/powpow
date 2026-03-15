@@ -16,11 +16,18 @@ use crate::{
     database, get_prefix, models, templates,
 };
 
+#[derive(Debug, Deserialize)]
+pub struct CalendarViewQuery {
+    #[serde(default)]
+    show_past: bool,
+}
+
 pub async fn calendar_view(
     RequireStaff(me_staff): RequireStaff,
     headers: HeaderMap,
     State(state): State<AppState>,
     axum::extract::Path(slug): axum::extract::Path<String>,
+    Query(query): Query<CalendarViewQuery>,
 ) -> Response {
     let prefix = get_prefix(&headers);
     let me = Some(me_staff);
@@ -41,13 +48,18 @@ pub async fn calendar_view(
         }
     };
 
-    // Fetch needs (only today and future), staff, all ateliers
+    // Fetch needs, optionally filtering to today+future only
     let today = chrono::Utc::now().date_naive();
     let needs = match database::get_needs_for_atelier(&state.db, atelier.id).await {
-        Ok(n) => n
-            .into_iter()
-            .filter(|need| need.day >= today)
-            .collect::<Vec<_>>(),
+        Ok(n) => {
+            if query.show_past {
+                n
+            } else {
+                n.into_iter()
+                    .filter(|need| need.day >= today)
+                    .collect::<Vec<_>>()
+            }
+        }
         Err(e) => {
             error!("Error fetching needs: {}", e);
             return (
@@ -118,6 +130,8 @@ pub async fn calendar_view(
         me.as_ref().map(|s| s.id),
         me.as_ref().is_some_and(|s| s.is_admin),
         &opening_days,
+        query.show_past,
+        today,
     )
     .into_response()
 }
@@ -428,6 +442,7 @@ pub async fn calendar_landing(
     jar: SignedCookieJar,
     headers: HeaderMap,
     State(state): State<AppState>,
+    Query(query): Query<CalendarViewQuery>,
 ) -> Response {
     let prefix = get_prefix(&headers);
 
@@ -470,7 +485,12 @@ pub async fn calendar_landing(
     };
 
     let today = chrono::Local::now().date_naive();
-    let future_needs = database::get_all_future_needs_with_counts(&state.db, today)
+    let from_date = if query.show_past {
+        chrono::NaiveDate::from_ymd_opt(2000, 1, 1).unwrap_or(today)
+    } else {
+        today
+    };
+    let future_needs = database::get_all_future_needs_with_counts(&state.db, from_date)
         .await
         .unwrap_or_default();
 
@@ -491,6 +511,8 @@ pub async fn calendar_landing(
         staff.is_some(),
         is_admin,
         &opening_days,
+        query.show_past,
+        today,
     )
     .into_response()
 }

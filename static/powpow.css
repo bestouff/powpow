@@ -968,7 +968,7 @@ tr.inactive-staff {
 
 /* === Calendar view (from calendar()) === */
 .cal-scroll {
-  overflow-x: auto;
+  overflow: auto;
   max-height: 85vh;
 }
 .cal-table {
@@ -990,25 +990,31 @@ tr.inactive-staff {
   background: var(--bulma-scheme-main-bis) !important;
 }
 .cal-name-col {
-  position: sticky;
-  left: 0;
-  z-index: 2;
   min-width: 150px;
 }
-.cal-table thead th.cal-name-col {
-  z-index: 5;
-  background: var(--bulma-scheme-main-bis) !important;
+@media (min-width: 1024px) {
+  .cal-name-col {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bulma-scheme-main);
+    border-right: 2px solid var(--bulma-border) !important;
+  }
+  .cal-table thead th.cal-name-col {
+    z-index: 5;
+    background: var(--bulma-scheme-main-bis) !important;
+  }
+  .cal-opening-row td.cal-name-col {
+    background: var(--bulma-scheme-main-bis) !important;
+  }
+  .cal-table tbody tr:nth-child(even) td.cal-name-col {
+    background: var(--bulma-background);
+  }
 }
 .cal-table tbody tr:nth-child(odd) td {
   background: var(--bulma-scheme-main);
 }
 .cal-table tbody tr:nth-child(even) td {
-  background: var(--bulma-background);
-}
-.cal-table tbody tr:nth-child(odd) td.cal-name-col {
-  background: var(--bulma-scheme-main);
-}
-.cal-table tbody tr:nth-child(even) td.cal-name-col {
   background: var(--bulma-background);
 }
 .cal-sunday {
@@ -1082,6 +1088,16 @@ tr.inactive-staff {
 }
 .cal-opening-row td {
   background: var(--bulma-scheme-main-bis) !important;
+}
+.cal-past {
+  opacity: 0.55;
+}
+.cal-table thead th.cal-past {
+  background: var(--bulma-scheme-main-ter) !important;
+}
+.cal-today {
+  border-left: 3px solid var(--bulma-link) !important;
+  border-right: 3px solid var(--bulma-link) !important;
 }
 
 /* === Calendar editor (from calendar_editor()) === */
@@ -1214,6 +1230,10 @@ label.switch input[type="checkbox"]:checked + .check::before {
 label.switch input[type="checkbox"]:disabled + .check {
   opacity: 0.5;
   cursor: not-allowed;
+}
+a.nightly-switch label.switch input[type="checkbox"]:disabled + .check {
+  opacity: 1;
+  cursor: pointer;
 }
 
 /* Datepicker overrides */
