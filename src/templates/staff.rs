@@ -237,10 +237,12 @@ pub fn person_detail(
     payment_history: &[crate::models::PaymentHistoryEntry],
     person_calendar: &[(crate::models::Need, String, String, String, bool, bool)],
     person_qualifications: &[(crate::models::StaffQualif, String, Option<i16>)],
+    all_qualifications: &[crate::models::Qualification],
 ) -> Markup {
     let p = prefix;
     let can_edit_ateliers = is_self || is_admin;
     let can_edit_contact = is_self || is_admin;
+    let can_manage_qualifs = is_self || is_admin;
 
     let comment_display = if staff.comment.is_empty() {
         "\u{2014}"
@@ -271,18 +273,6 @@ pub fn person_detail(
             .any(|(id, _, _, _)| *id == need.atelier)
         {
             atelier_order.push((need.atelier, name.clone(), slug.clone(), icon.clone()));
-        }
-    }
-
-    // Deduplicate qualifications: keep only the most recent per qualification id
-    // (input is sorted by name, obtained_date DESC so first occurrence per id is the latest)
-    let mut deduped_qualifications: Vec<&(crate::models::StaffQualif, String, Option<i16>)> =
-        Vec::new();
-    let mut seen_qual_ids: Vec<i32> = Vec::new();
-    for entry in person_qualifications {
-        if !seen_qual_ids.contains(&entry.0.qualification) {
-            seen_qual_ids.push(entry.0.qualification);
-            deduped_qualifications.push(entry);
         }
     }
 
@@ -505,30 +495,133 @@ pub fn person_detail(
                         }
 
                         // Formations box
-                        @if !deduped_qualifications.is_empty() {
+                        @if can_manage_qualifs || !person_qualifications.is_empty() {
                             div .box {
                                 h2 .title.is-4 {
                                     span .icon { i .fa-solid.fa-certificate {} }
                                     "\u{00a0}Formations"
                                 }
-                                div .tags.are-medium {
-                                    @for (sq, name, duration) in &deduped_qualifications {
-                                        @let expired = duration.is_some_and(|d| {
-                                            let months = u32::from(d.unsigned_abs()) * 12;
-                                            let expiry = sq.obtained_date + chrono::Months::new(months);
-                                            expiry < chrono::Utc::now().date_naive()
-                                        });
-                                        @let (tag_class, icon_class) = if expired {
-                                            ("is-danger is-light", "fa-solid fa-triangle-exclamation")
-                                        } else {
-                                            ("is-success is-light", "fa-solid fa-circle-check")
-                                        };
-                                        span class={"tag " (tag_class)} {
-                                            span .icon { i class=(icon_class) {} }
-                                            "\u{00a0}" (name)
-                                            @if let Some(d) = duration {
-                                                @let expiry_date = sq.obtained_date + chrono::Months::new(u32::from(d.unsigned_abs()) * 12);
-                                                small .ml-1 { " (" (expiry_date.format("%m/%Y")) ")" }
+
+                                @if !person_qualifications.is_empty() {
+                                    div .table-container {
+                                        table .table.is-striped.is-hoverable.is-fullwidth {
+                                            thead {
+                                                tr {
+                                                    th { "Qualification" }
+                                                    th { "Obtenu le" }
+                                                    th { "Statut" }
+                                                    th { "Justificatif" }
+                                                    @if can_manage_qualifs {
+                                                        th {}
+                                                    }
+                                                }
+                                            }
+                                            tbody {
+                                                @for (sq, name, duration) in person_qualifications {
+                                                    @let expired = duration.is_some_and(|d| {
+                                                        let months = u32::from(d.unsigned_abs()) * 12;
+                                                        let expiry = sq.obtained_date + chrono::Months::new(months);
+                                                        expiry < chrono::Utc::now().date_naive()
+                                                    });
+                                                    @let (tag_class, tag_text) = if expired {
+                                                        ("is-danger", "Expirée")
+                                                    } else if duration.is_some() {
+                                                        ("is-success", "Valide")
+                                                    } else {
+                                                        ("is-success", "Permanent")
+                                                    };
+                                                    tr {
+                                                        td { (name) }
+                                                        td { (sq.obtained_date.format("%d/%m/%Y")) }
+                                                        td {
+                                                            span class={"tag " (tag_class)} { (tag_text) }
+                                                            @if let Some(d) = duration {
+                                                                @let expiry_date = sq.obtained_date + chrono::Months::new(u32::from(d.unsigned_abs()) * 12);
+                                                                small .ml-1.has-text-grey { " → " (expiry_date.format("%d/%m/%Y")) }
+                                                            }
+                                                        }
+                                                        td .pq-proof-cell data-id=(sq.id) {
+                                                            @if sq.has_training_proof {
+                                                                a .button.is-small.is-info.is-outlined
+                                                                    href={(p) "/staff-qualif/" (sq.id) "/proof"}
+                                                                    target="_blank" {
+                                                                    span .icon { i .fa-solid.fa-file-image {} }
+                                                                    span { "Voir" }
+                                                                }
+                                                                @if can_manage_qualifs {
+                                                                    button .button.is-small.is-danger.is-outlined.ml-1.pq-proof-delete-btn
+                                                                        data-id=(sq.id) {
+                                                                        span .icon { i .fa-solid.fa-xmark {} }
+                                                                    }
+                                                                }
+                                                            } @else if can_manage_qualifs {
+                                                                label .button.is-small.is-link.is-outlined {
+                                                                    span .icon { i .fa-solid.fa-upload {} }
+                                                                    span { "Ajouter" }
+                                                                    input .pq-proof-upload type="file"
+                                                                        data-id=(sq.id)
+                                                                        accept="image/*,application/pdf"
+                                                                        style="display:none";
+                                                                }
+                                                            } @else {
+                                                                span .has-text-grey-light { "\u{2014}" }
+                                                            }
+                                                        }
+                                                        @if can_manage_qualifs {
+                                                            td {
+                                                                button .button.is-small.is-danger.is-outlined.pq-delete-btn
+                                                                    data-id=(sq.id) {
+                                                                    span .icon { i .fa-solid.fa-trash {} }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } @else {
+                                    p .has-text-grey-light.mb-4 { "Aucune qualification enregistrée" }
+                                }
+
+                                // Add form (self or admin)
+                                @if can_manage_qualifs && !all_qualifications.is_empty() {
+                                    hr;
+                                    h3 .title.is-6 { "Ajouter une qualification" }
+                                    div .columns.is-multiline {
+                                        div .column.is-one-third {
+                                            div .field {
+                                                label .label { "Qualification" }
+                                                div .control {
+                                                    div .select.is-fullwidth {
+                                                        select #pq-qual {
+                                                            option value="" { "Choisir..." }
+                                                            @for qual in all_qualifications {
+                                                                option value=(qual.id) { (qual.name) }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        div .column.is-one-third {
+                                            div .field {
+                                                label .label { "Date d'obtention" }
+                                                div .control {
+                                                    input .input #pq-date type="date"
+                                                        value=(chrono::Utc::now().date_naive());
+                                                }
+                                            }
+                                        }
+                                        div .column.is-narrow {
+                                            div .field {
+                                                label .label { "\u{00a0}" }
+                                                div .control {
+                                                    button .button.is-success #add-pq-btn {
+                                                        span .icon { i .fa-solid.fa-plus {} }
+                                                        span { "Ajouter" }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -703,7 +796,71 @@ pub fn person_detail(
         }
     };
 
-    let extra_scripts = html! {};
+    let extra_scripts = html! {
+        @if can_manage_qualifs {
+            script {
+                (maud::PreEscaped(format!(r#"(function() {{
+    const PREFIX = "{}";
+    const STAFF_ID = "{}";
+    const IS_ADMIN = {};
+
+    // Use admin API if admin, self-service API if self
+    const addUrl = IS_ADMIN ? PREFIX + '/api/staff-qualif' : PREFIX + '/api/my/staff-qualif';
+    const deleteUrl = function(id) {{
+        return IS_ADMIN ? PREFIX + '/api/staff-qualif/' + id : PREFIX + '/api/my/staff-qualif/' + id;
+    }};
+
+    const addBtn = document.getElementById('add-pq-btn');
+    if (addBtn) {{
+        addBtn.addEventListener('click', async () => {{
+            const qual = document.getElementById('pq-qual').value;
+            const date = document.getElementById('pq-date').value;
+            if (!qual || !date) {{ alert('Tous les champs sont requis'); return; }}
+            const res = await fetch(addUrl, {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ staff_id: STAFF_ID, qualification_id: parseInt(qual), obtained_date: date }})
+            }});
+            if (res.ok) {{ location.reload(); }}
+            else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+        }});
+    }}
+
+    document.querySelectorAll('.pq-delete-btn').forEach(btn => {{
+        btn.addEventListener('click', async () => {{
+            if (!confirm('Supprimer cette qualification ?')) return;
+            const res = await fetch(deleteUrl(btn.dataset.id), {{ method: 'DELETE' }});
+            if (res.ok) {{ location.reload(); }}
+            else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+        }});
+    }});
+
+    document.querySelectorAll('.pq-proof-upload').forEach(inp => {{
+        inp.addEventListener('change', async () => {{
+            const file = inp.files[0];
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('proof', file);
+            const res = await fetch(PREFIX + '/api/staff-qualif/' + inp.dataset.id + '/proof', {{
+                method: 'POST', body: fd
+            }});
+            if (res.ok) {{ location.reload(); }}
+            else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+        }});
+    }});
+
+    document.querySelectorAll('.pq-proof-delete-btn').forEach(btn => {{
+        btn.addEventListener('click', async () => {{
+            if (!confirm('Supprimer le justificatif ?')) return;
+            const res = await fetch(PREFIX + '/api/staff-qualif/' + btn.dataset.id + '/proof', {{ method: 'DELETE' }});
+            if (res.ok) {{ location.reload(); }}
+            else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+        }});
+    }});
+}})();"#, p, staff.id, is_admin)))
+            }
+        }
+    };
 
     let title = format!("{} {} - PowPow", staff.first_name, staff.last_name);
     page(

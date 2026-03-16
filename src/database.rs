@@ -1167,10 +1167,12 @@ pub async fn get_all_qualifications(pool: &PgPool) -> Result<Vec<Qualification>>
 
 /// Get all staff qualification records
 pub async fn get_all_staff_qualifications(pool: &PgPool) -> Result<Vec<StaffQualif>> {
-    let staff_qualifs =
-        sqlx::query_as::<_, StaffQualif>(r"SELECT * FROM staff_qualif ORDER BY obtained_date DESC")
-            .fetch_all(pool)
-            .await?;
+    let staff_qualifs = sqlx::query_as::<_, StaffQualif>(
+        r"SELECT id, staff, qualification, obtained_date, training_proof_mime
+          FROM staff_qualif ORDER BY obtained_date DESC",
+    )
+    .fetch_all(pool)
+    .await?;
 
     Ok(staff_qualifs)
 }
@@ -1181,7 +1183,8 @@ pub async fn get_staff_qualifications_for_person(
     staff_id: uuid::Uuid,
 ) -> Result<Vec<(StaffQualif, String, Option<i16>)>> {
     let rows = sqlx::query(
-        r"SELECT sq.id, sq.staff, sq.qualification, sq.obtained_date, q.name, q.duration
+        r"SELECT sq.id, sq.staff, sq.qualification, sq.obtained_date,
+                sq.training_proof_mime, q.name, q.duration
           FROM staff_qualif sq
           JOIN qualifications q ON q.id = sq.qualification
           WHERE sq.staff = $1
@@ -1194,11 +1197,13 @@ pub async fn get_staff_qualifications_for_person(
     let mut results = Vec::new();
     for row in &rows {
         use sqlx::Row;
+        let proof_mime: Option<String> = row.try_get("training_proof_mime")?;
         let sq = StaffQualif {
             id: row.try_get("id")?,
             staff: row.try_get("staff")?,
             qualification: row.try_get("qualification")?,
             obtained_date: row.try_get("obtained_date")?,
+            has_training_proof: proof_mime.is_some(),
         };
         let name: String = row.try_get("name")?;
         let duration: Option<i16> = row.try_get("duration")?;
@@ -1270,6 +1275,7 @@ pub async fn get_all_staff_qualifications_detailed(
 ) -> Result<Vec<(StaffQualif, String, String, Option<i16>)>> {
     let rows = sqlx::query(
         r"SELECT sq.id, sq.staff, sq.qualification, sq.obtained_date,
+                sq.training_proof_mime,
                 s.first_name, s.last_name, q.name AS qual_name, q.duration
          FROM staff_qualif sq
          JOIN staff s ON s.id = sq.staff
@@ -1282,11 +1288,13 @@ pub async fn get_all_staff_qualifications_detailed(
     let mut results = Vec::new();
     for row in &rows {
         use sqlx::Row;
+        let proof_mime: Option<String> = row.try_get("training_proof_mime")?;
         let sq = StaffQualif {
             id: row.try_get("id")?,
             staff: row.try_get("staff")?,
             qualification: row.try_get("qualification")?,
             obtained_date: row.try_get("obtained_date")?,
+            has_training_proof: proof_mime.is_some(),
         };
         let first_name: String = row.try_get("first_name")?;
         let last_name: String = row.try_get("last_name")?;
@@ -1297,6 +1305,80 @@ pub async fn get_all_staff_qualifications_detailed(
     }
 
     Ok(results)
+}
+
+/// Set training proof image for a staff qualification
+pub async fn set_training_proof(
+    pool: &PgPool,
+    staff_qualif_id: i32,
+    data: &[u8],
+    mime: &str,
+) -> Result<()> {
+    sqlx::query(
+        r"UPDATE staff_qualif SET training_proof_data = $1, training_proof_mime = $2 WHERE id = $3",
+    )
+    .bind(data)
+    .bind(mime)
+    .bind(staff_qualif_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Get training proof image for a staff qualification
+pub async fn get_training_proof(
+    pool: &PgPool,
+    staff_qualif_id: i32,
+) -> Result<Option<(Vec<u8>, String)>> {
+    let row = sqlx::query(
+        r"SELECT training_proof_data, training_proof_mime FROM staff_qualif WHERE id = $1",
+    )
+    .bind(staff_qualif_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(row) = row {
+        use sqlx::Row;
+        let data: Option<Vec<u8>> = row.try_get("training_proof_data")?;
+        let mime: Option<String> = row.try_get("training_proof_mime")?;
+        if let (Some(data), Some(mime)) = (data, mime) {
+            return Ok(Some((data, mime)));
+        }
+    }
+
+    Ok(None)
+}
+
+/// Clear training proof image for a staff qualification
+pub async fn clear_training_proof(pool: &PgPool, staff_qualif_id: i32) -> Result<()> {
+    sqlx::query(
+        r"UPDATE staff_qualif SET training_proof_data = NULL, training_proof_mime = NULL WHERE id = $1",
+    )
+    .bind(staff_qualif_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Get the owner (staff UUID) of a staff qualification record
+pub async fn get_staff_qualif_owner(
+    pool: &PgPool,
+    staff_qualif_id: i32,
+) -> Result<Option<uuid::Uuid>> {
+    let row = sqlx::query(r"SELECT staff FROM staff_qualif WHERE id = $1")
+        .bind(staff_qualif_id)
+        .fetch_optional(pool)
+        .await?;
+
+    if let Some(row) = row {
+        use sqlx::Row;
+        let staff: uuid::Uuid = row.try_get("staff")?;
+        return Ok(Some(staff));
+    }
+
+    Ok(None)
 }
 
 /// Update a staff member's comment

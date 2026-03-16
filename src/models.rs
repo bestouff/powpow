@@ -270,6 +270,7 @@ pub struct StaffQualif {
     pub staff: uuid::Uuid,
     pub qualification: i32,
     pub obtained_date: chrono::NaiveDate,
+    pub has_training_proof: bool,
 }
 
 impl FromRow<'_, sqlx::postgres::PgRow> for StaffQualif {
@@ -279,6 +280,10 @@ impl FromRow<'_, sqlx::postgres::PgRow> for StaffQualif {
             staff: row.try_get("staff")?,
             qualification: row.try_get("qualification")?,
             obtained_date: row.try_get("obtained_date")?,
+            has_training_proof: row
+                .try_get::<Option<String>, _>("training_proof_mime")
+                .unwrap_or(None)
+                .is_some(),
         })
     }
 }

@@ -546,6 +546,22 @@ async fn main() -> anyhow::Result<()> {
             "/api/staff-qualif/{id}",
             delete(routes::admin::api_delete_staff_qualif),
         )
+        .route(
+            "/api/my/staff-qualif",
+            post(routes::staff::api_add_own_staff_qualif),
+        )
+        .route(
+            "/api/my/staff-qualif/{id}",
+            delete(routes::staff::api_delete_own_staff_qualif),
+        )
+        .route(
+            "/api/staff-qualif/{id}/proof",
+            post(routes::staff::upload_training_proof).delete(routes::staff::delete_training_proof),
+        )
+        .route(
+            "/staff-qualif/{id}/proof",
+            get(routes::staff::serve_training_proof),
+        )
         .route("/login", get(routes::auth::login_page))
         .route("/api/staff/search", get(routes::auth::api_search_staff))
         .route(

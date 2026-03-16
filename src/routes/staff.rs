@@ -1,7 +1,8 @@
 use axum::{
     Json,
-    extract::{Query, State},
-    http::{HeaderMap, StatusCode},
+    body::Body,
+    extract::{Multipart, Query, State},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::cookie::SignedCookieJar;
@@ -304,6 +305,15 @@ pub async fn view_person(
             }
         };
 
+    // Fetch all qualification types (for self-service add form)
+    let all_qualifications = if is_self || is_viewer_admin {
+        database::get_all_qualifications(&state.db)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
     // Fetch person calendar (upcoming needs + presence across all ateliers)
     // Visible to self, admins, and chiefs
     let person_calendar = if is_self || is_viewer_admin || is_viewer_chief {
@@ -331,6 +341,7 @@ pub async fn view_person(
         &payment_history,
         &person_calendar,
         &person_qualifications,
+        &all_qualifications,
     )
     .into_response()
 }
@@ -799,6 +810,329 @@ pub async fn api_create_staff_minimal(
         ),
         Err(e) => {
             error!("Error creating staff: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}
+
+// --- Self-service qualification management ---
+
+/// Allowed image MIME types for training proof uploads.
+const ALLOWED_PROOF_TYPES: &[&str] = &[
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/avif",
+    "application/pdf",
+];
+
+/// Add a qualification for the logged-in staff member (self-service).
+pub async fn api_add_own_staff_qualif(
+    RequireStaff(me): RequireStaff,
+    State(state): State<AppState>,
+    Json(payload): Json<crate::routes::admin::AddStaffQualifRequest>,
+) -> impl IntoResponse {
+    // Only allow adding qualifications for yourself
+    if payload.staff_id != me.id {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Accès refusé"})),
+        );
+    }
+
+    match database::add_staff_qualif(
+        &state.db,
+        payload.staff_id,
+        payload.qualification_id,
+        payload.obtained_date,
+    )
+    .await
+    {
+        Ok(sq) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(me.id),
+                &format!("{} {}", me.first_name, me.last_name),
+                "Ajout qualification (self)",
+                &format!(
+                    "staff={} qualification={} date={}",
+                    sq.staff, sq.qualification, sq.obtained_date
+                ),
+            )
+            .await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"success": true, "id": sq.id})),
+            )
+        }
+        Err(e) => {
+            error!("Error adding own staff qualification: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}
+
+/// Delete a qualification for the logged-in staff member (self-service).
+pub async fn api_delete_own_staff_qualif(
+    RequireStaff(me): RequireStaff,
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<i32>,
+) -> impl IntoResponse {
+    // Verify ownership
+    match database::get_staff_qualif_owner(&state.db, id).await {
+        Ok(Some(owner)) if owner == me.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({"error": "Accès refusé"})),
+            );
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Non trouvé"})),
+            );
+        }
+        Err(e) => {
+            error!("Error checking staff qualif owner: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            );
+        }
+    }
+
+    match database::delete_staff_qualif(&state.db, id).await {
+        Ok(()) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(me.id),
+                &format!("{} {}", me.first_name, me.last_name),
+                "Suppression qualification (self)",
+                &format!("id={id}"),
+            )
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"success": true})))
+        }
+        Err(e) => {
+            error!("Error deleting own staff qualification: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}
+
+// --- Training proof image management ---
+
+/// Upload a training proof image for a staff qualification.
+/// Allowed for the owner of the qualification or admins.
+pub async fn upload_training_proof(
+    RequireStaff(me): RequireStaff,
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<i32>,
+    mut multipart: Multipart,
+) -> impl IntoResponse {
+    // Check ownership or admin
+    let owner = match database::get_staff_qualif_owner(&state.db, id).await {
+        Ok(Some(o)) => o,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Non trouvé"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            error!("Error checking staff qualif owner: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+
+    if owner != me.id && !me.is_admin && !me.is_god {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Accès refusé"})),
+        )
+            .into_response();
+    }
+
+    // Parse multipart
+    let mut proof_data: Option<(Vec<u8>, String)> = None;
+
+    loop {
+        match multipart.next_field().await {
+            Ok(Some(field)) => {
+                let name = field.name().unwrap_or("").to_string();
+                if name == "proof" {
+                    let content_type = field
+                        .content_type()
+                        .unwrap_or("application/octet-stream")
+                        .to_string();
+                    match field.bytes().await {
+                        Ok(data) if !data.is_empty() => {
+                            if ALLOWED_PROOF_TYPES
+                                .iter()
+                                .any(|&a| a.eq_ignore_ascii_case(&content_type))
+                            {
+                                proof_data = Some((data.to_vec(), content_type));
+                            } else {
+                                return (
+                                    StatusCode::BAD_REQUEST,
+                                    Json(serde_json::json!({
+                                        "error": format!(
+                                            "Type de fichier non autorisé : {}. Formats acceptés : JPEG, PNG, GIF, WebP, AVIF, PDF.",
+                                            content_type
+                                        )
+                                    })),
+                                )
+                                    .into_response();
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("Failed to read proof data: {}", e);
+                            return (
+                                StatusCode::BAD_REQUEST,
+                                Json(serde_json::json!({"error": format!("Erreur lecture fichier: {}", e)})),
+                            )
+                                .into_response();
+                        }
+                    }
+                }
+            }
+            Ok(None) => break,
+            Err(e) => {
+                error!("Multipart stream error: {}", e);
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": format!("Erreur upload: {}", e)})),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    let Some((data, mime)) = proof_data else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Aucun fichier reçu"})),
+        )
+            .into_response();
+    };
+
+    match database::set_training_proof(&state.db, id, &data, &mime).await {
+        Ok(()) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(me.id),
+                &format!("{} {}", me.first_name, me.last_name),
+                "Upload justificatif",
+                &format!("staff_qualif={id} size={}", data.len()),
+            )
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"success": true}))).into_response()
+        }
+        Err(e) => {
+            error!("Error saving training proof: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Serve the training proof image for a staff qualification.
+pub async fn serve_training_proof(
+    RequireStaff(_me): RequireStaff,
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<i32>,
+) -> Response {
+    match database::get_training_proof(&state.db, id).await {
+        Ok(Some((data, mime))) => {
+            let content_type = header::HeaderValue::from_str(&mime)
+                .unwrap_or_else(|_| header::HeaderValue::from_static("application/octet-stream"));
+            let mut response = Response::new(Body::from(data));
+            response
+                .headers_mut()
+                .insert(header::CONTENT_TYPE, content_type);
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                header::HeaderValue::from_static("private, max-age=3600"),
+            );
+            response.headers_mut().insert(
+                header::HeaderName::from_static("x-content-type-options"),
+                header::HeaderValue::from_static("nosniff"),
+            );
+            response
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            error!("Error fetching training proof: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// Delete the training proof image for a staff qualification.
+/// Allowed for the owner or admins.
+pub async fn delete_training_proof(
+    RequireStaff(me): RequireStaff,
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<i32>,
+) -> impl IntoResponse {
+    // Check ownership or admin
+    match database::get_staff_qualif_owner(&state.db, id).await {
+        Ok(Some(owner)) if owner == me.id || me.is_admin || me.is_god => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({"error": "Accès refusé"})),
+            );
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Non trouvé"})),
+            );
+        }
+        Err(e) => {
+            error!("Error checking staff qualif owner: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            );
+        }
+    }
+
+    match database::clear_training_proof(&state.db, id).await {
+        Ok(()) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(me.id),
+                &format!("{} {}", me.first_name, me.last_name),
+                "Suppression justificatif",
+                &format!("staff_qualif={id}"),
+            )
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"success": true})))
+        }
+        Err(e) => {
+            error!("Error clearing training proof: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": e.to_string()})),

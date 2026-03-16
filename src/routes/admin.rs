@@ -648,10 +648,10 @@ pub async fn api_delete_qualification(
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct AddStaffQualifRequest {
-    staff_id: uuid::Uuid,
-    qualification_id: i32,
-    obtained_date: chrono::NaiveDate,
+pub struct AddStaffQualifRequest {
+    pub staff_id: uuid::Uuid,
+    pub qualification_id: i32,
+    pub obtained_date: chrono::NaiveDate,
 }
 
 pub async fn api_add_staff_qualif(

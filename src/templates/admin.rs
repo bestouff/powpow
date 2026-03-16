@@ -673,6 +673,7 @@ pub fn qualifications_page(
                                             th { "Qualification" }
                                             th { "Obtenu le" }
                                             th { "Statut" }
+                                            th { "Justificatif" }
                                             th {}
                                         }
                                     }
@@ -703,6 +704,29 @@ pub fn qualifications_page(
                                                         small .ml-1.has-text-grey { " → " (expiry_date.format("%d/%m/%Y")) }
                                                     }
                                                 }
+                                                td .proof-cell data-id=(sq.id) {
+                                                    @if sq.has_training_proof {
+                                                        a .button.is-small.is-info.is-outlined
+                                                            href={(p) "/staff-qualif/" (sq.id) "/proof"}
+                                                            target="_blank" {
+                                                            span .icon { i .fa-solid.fa-file-image {} }
+                                                            span { "Voir" }
+                                                        }
+                                                        button .button.is-small.is-danger.is-outlined.ml-1.proof-delete-btn
+                                                            data-id=(sq.id) {
+                                                            span .icon { i .fa-solid.fa-xmark {} }
+                                                        }
+                                                    } @else {
+                                                        label .button.is-small.is-link.is-outlined {
+                                                            span .icon { i .fa-solid.fa-upload {} }
+                                                            span { "Ajouter" }
+                                                            input .proof-upload type="file"
+                                                                data-id=(sq.id)
+                                                                accept="image/*,application/pdf"
+                                                                style="display:none";
+                                                        }
+                                                    }
+                                                }
                                                 td {
                                                     button .button.is-small.is-danger.is-outlined.sq-delete-btn
                                                         data-id=(sq.id) {
@@ -713,7 +737,7 @@ pub fn qualifications_page(
                                         }
                                         @if staff_qualifs.is_empty() {
                                             tr {
-                                                td colspan="5" .has-text-centered.has-text-grey-light.py-5 {
+                                                td colspan="6" .has-text-centered.has-text-grey-light.py-5 {
                                                     "Aucune qualification attribuée"
                                                 }
                                             }
@@ -775,6 +799,29 @@ document.querySelectorAll('.sq-delete-btn').forEach(btn => {{
     btn.addEventListener('click', async () => {{
         if (!confirm('Supprimer cette qualification ?')) return;
         const res = await fetch(PREFIX + '/api/staff-qualif/' + btn.dataset.id, {{ method: 'DELETE' }});
+        if (res.ok) {{ location.reload(); }}
+        else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+    }});
+}});
+
+document.querySelectorAll('.proof-upload').forEach(inp => {{
+    inp.addEventListener('change', async () => {{
+        const file = inp.files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('proof', file);
+        const res = await fetch(PREFIX + '/api/staff-qualif/' + inp.dataset.id + '/proof', {{
+            method: 'POST', body: fd
+        }});
+        if (res.ok) {{ location.reload(); }}
+        else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
+    }});
+}});
+
+document.querySelectorAll('.proof-delete-btn').forEach(btn => {{
+    btn.addEventListener('click', async () => {{
+        if (!confirm('Supprimer le justificatif ?')) return;
+        const res = await fetch(PREFIX + '/api/staff-qualif/' + btn.dataset.id + '/proof', {{ method: 'DELETE' }});
         if (res.ok) {{ location.reload(); }}
         else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
     }});
