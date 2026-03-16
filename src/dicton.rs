@@ -342,7 +342,11 @@ fn pick_saint_du_jour(
     let doy = today.ordinal0() as usize;
     let idx = doy % staff.len();
     let (s, _) = &staff[idx];
-    Some(format!("{} {}", s.first_name, s.last_name))
+    Some(format!(
+        "{} {}.",
+        s.first_name,
+        s.last_name.chars().next().unwrap_or('X')
+    ))
 }
 
 // ── Hugging Face Inference API (chat completion) ─────────────────────
