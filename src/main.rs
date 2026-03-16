@@ -333,7 +333,30 @@ async fn main() -> anyhow::Result<()> {
 
     // Setup database
     let db = database::setup_database(&config.database_url).await?;
-    database::run_migrations(&db).await?;
+    let migrations_applied = database::run_migrations(&db).await?;
+
+    // Audit: log application startup with version
+    let version = env!("CARGO_PKG_VERSION");
+    let _ = database::insert_audit(
+        &db,
+        None,
+        "Système",
+        "Démarrage application",
+        &format!("PowPow v{version}"),
+    )
+    .await;
+
+    // Audit: log database migrations if any were applied
+    if migrations_applied > 0 {
+        let _ = database::insert_audit(
+            &db,
+            None,
+            "Système",
+            "Migrations base de données",
+            &format!("{migrations_applied} migration(s) appliquée(s)"),
+        )
+        .await;
+    }
 
     // Clone config for AppState before partial moves
     let app_config = config.clone();

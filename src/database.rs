@@ -32,13 +32,33 @@ pub async fn setup_database(database_url: &str) -> Result<PgPool> {
     Ok(pool)
 }
 
-pub async fn run_migrations(pool: &PgPool) -> Result<()> {
+pub async fn run_migrations(pool: &PgPool) -> Result<i64> {
     info!("Running database migrations");
+
+    // Count existing migrations before running
+    let before: i64 =
+        sqlx::query_scalar(r"SELECT COUNT(*) FROM _sqlx_migrations WHERE success = true")
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0);
 
     sqlx::migrate!("./migrations").run(pool).await?;
 
-    info!("Database migrations completed");
-    Ok(())
+    // Count after
+    let after: i64 =
+        sqlx::query_scalar(r"SELECT COUNT(*) FROM _sqlx_migrations WHERE success = true")
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0);
+
+    let applied = after - before;
+    if applied > 0 {
+        info!("Applied {applied} new migration(s) (total: {after})");
+    } else {
+        info!("Database already up to date ({after} migrations)");
+    }
+
+    Ok(applied)
 }
 
 pub async fn upsert_user(pool: &PgPool, user: &User) -> Result<User> {
