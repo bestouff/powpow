@@ -27,7 +27,22 @@ fn strip_accents(s: &str) -> String {
 }
 
 pub async fn setup_database(database_url: &str) -> Result<PgPool> {
-    info!("Connecting to database: {}", database_url);
+    // Redact password from URL before logging (postgres://user:PASSWORD@host/db)
+    let redacted = if let Some(at_pos) = database_url.find('@') {
+        let prefix = &database_url[..at_pos];
+        if let Some(colon_pos) = prefix.rfind(':') {
+            format!(
+                "{}:****{}",
+                &database_url[..colon_pos],
+                &database_url[at_pos..]
+            )
+        } else {
+            database_url.to_string()
+        }
+    } else {
+        database_url.to_string()
+    };
+    info!("Connecting to database: {}", redacted);
     let pool = PgPool::connect(database_url).await?;
     Ok(pool)
 }
