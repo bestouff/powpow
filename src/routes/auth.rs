@@ -282,9 +282,16 @@ async fn send_login_email_gmail(
 
     // Build RFC 2822 message with HTML content
     let sig = crate::email_signature(&state.config.entity_name);
+    let subject_text = format!("{} \u{2014} Connexion PowPow", state.config.entity_name);
+    let encoded_subject = format!(
+        "=?UTF-8?B?{}?=",
+        base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            subject_text.as_bytes(),
+        )
+    );
     let raw_message = format!(
-        "From: {from}\r\nTo: {to_address}\r\nSubject: {entity} — Connexion PowPow\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>Bonjour {first_name},</p>\n<p>Cliquez sur le lien ci-dessous pour vous connecter à PowPow :</p>\n<p><a href=\"{url}\" style=\"display:inline-block;padding:12px 24px;background:#3273dc;color:white;text-decoration:none;border-radius:4px;\">Se connecter</a></p>\n<p>Ou copiez ce lien : {url}</p>\n<p><em>Ce lien est à usage unique.</em></p>\n{sig}",
-        entity = state.config.entity_name,
+        "From: {from}\r\nTo: {to_address}\r\nSubject: {encoded_subject}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>Bonjour {first_name},</p>\n<p>Cliquez sur le lien ci-dessous pour vous connecter à PowPow :</p>\n<p><a href=\"{url}\" style=\"display:inline-block;padding:12px 24px;background:#3273dc;color:white;text-decoration:none;border-radius:4px;\">Se connecter</a></p>\n<p>Ou copiez ce lien : {url}</p>\n<p><em>Ce lien est à usage unique.</em></p>\n{sig}",
         first_name = staff.first_name,
         url = login_url,
     );
