@@ -119,7 +119,7 @@ fn static_version() -> &'static str {
         format!("{:x}", hasher.finish())
     })
 }
-use phonenumber::Mode;
+use rlibphonenumber::{PHONE_NUMBER_UTIL, PhoneNumberFormat};
 
 /// Simple HTML escaping for minimal security (kept for email template which returns String)
 pub fn escape_html_public(s: &str) -> String {
@@ -148,8 +148,10 @@ pub fn format_phone_international(phone: &str) -> String {
     }
 
     // Try to parse with France as default country
-    match phonenumber::parse(Some(phonenumber::country::Id::FR), phone) {
-        Ok(number) => number.format().mode(Mode::International).to_string(),
+    match PHONE_NUMBER_UTIL.parse_with_default_region(phone, "FR") {
+        Ok(number) => PHONE_NUMBER_UTIL
+            .format(&number, PhoneNumberFormat::International)
+            .into_owned(),
         Err(_) => phone.to_string(), // Return original if parsing fails
     }
 }
@@ -832,4 +834,70 @@ fn render_import_form(ctx: &ImportContext, candidates: &[StaffWithSeason], prefi
         content,
         html! {},
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_phone_international;
+
+    #[test]
+    fn french_mobile_national_format() {
+        // 10-digit French mobile without country code
+        assert_eq!(
+            format_phone_international("0612345678"),
+            "+33 6 12 34 56 78"
+        );
+    }
+
+    #[test]
+    fn french_mobile_with_country_code() {
+        assert_eq!(
+            format_phone_international("+33612345678"),
+            "+33 6 12 34 56 78"
+        );
+    }
+
+    #[test]
+    fn french_landline() {
+        // French landline (01 = Île-de-France)
+        assert_eq!(
+            format_phone_international("0145678901"),
+            "+33 1 45 67 89 01"
+        );
+    }
+
+    #[test]
+    fn french_number_with_spaces() {
+        assert_eq!(
+            format_phone_international("06 12 34 56 78"),
+            "+33 6 12 34 56 78"
+        );
+    }
+
+    #[test]
+    fn french_number_with_dots() {
+        assert_eq!(
+            format_phone_international("06.12.34.56.78"),
+            "+33 6 12 34 56 78"
+        );
+    }
+
+    #[test]
+    fn international_non_french() {
+        // Swiss number — should be parsed correctly since it has +41 prefix
+        assert_eq!(
+            format_phone_international("+41446681800"),
+            "+41 44 668 18 00"
+        );
+    }
+
+    #[test]
+    fn empty_string() {
+        assert_eq!(format_phone_international(""), "");
+    }
+
+    #[test]
+    fn garbage_returns_original() {
+        assert_eq!(format_phone_international("not a phone"), "not a phone");
+    }
 }
