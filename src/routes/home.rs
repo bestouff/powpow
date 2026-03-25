@@ -30,6 +30,8 @@ pub async fn index(
     jar: SignedCookieJar,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
+    const HOW_MANY_NEWS: i64 = 6;
+
     let prefix = get_prefix(&headers);
     let current_season = get_current_season();
     let logged_in = resolve_caller(&jar, &state).await.is_some();
@@ -58,7 +60,6 @@ pub async fn index(
         dicton::get_or_generate(&state.db, current_season, &state.config.huggingface_token).await;
 
     // Fetch news items from the database (synced by background task)
-    const HOW_MANY_NEWS: i64 = 6;
     // (Add 1 for the fake title news)
     let news_items = database::get_recent_news(&state.db, HOW_MANY_NEWS + 1)
         .await

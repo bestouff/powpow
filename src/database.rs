@@ -2969,24 +2969,38 @@ pub async fn is_station_open_today(pool: &PgPool) -> Result<bool> {
     Ok(row.is_some())
 }
 
-/// Get photo IDs for the hero slideshow (`is_frontpage` only).
-pub async fn get_all_photo_ids(pool: &PgPool) -> Result<Vec<uuid::Uuid>> {
-    let rows = sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM photos WHERE is_frontpage = TRUE ORDER BY created_at",
+/// Get photo IDs and photographer names for the hero slideshow (`is_frontpage` only).
+pub async fn get_all_photo_ids(pool: &PgPool) -> Result<Vec<(uuid::Uuid, String)>> {
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String)>(
+        "SELECT p.id, s.first_name, s.last_name
+         FROM photos p
+         JOIN staff s ON p.photographer_id = s.id
+         WHERE p.is_frontpage = TRUE
+         ORDER BY p.created_at",
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows)
+    Ok(rows
+        .into_iter()
+        .map(|(id, first, last)| (id, format!("{first} {last}")))
+        .collect())
 }
 
-/// Get photo IDs tagged as staff photos (`is_staff` only).
-pub async fn get_staff_photo_ids(pool: &PgPool) -> Result<Vec<uuid::Uuid>> {
-    let rows = sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM photos WHERE is_staff = TRUE ORDER BY created_at",
+/// Get photo IDs and photographer names tagged as staff photos (`is_staff` only).
+pub async fn get_staff_photo_ids(pool: &PgPool) -> Result<Vec<(uuid::Uuid, String)>> {
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String)>(
+        "SELECT p.id, s.first_name, s.last_name
+         FROM photos p
+         JOIN staff s ON p.photographer_id = s.id
+         WHERE p.is_staff = TRUE
+         ORDER BY p.created_at",
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows)
+    Ok(rows
+        .into_iter()
+        .map(|(id, first, last)| (id, format!("{first} {last}")))
+        .collect())
 }
 
 // ── CMS content functions ────────────────────────────────────────────

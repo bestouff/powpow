@@ -8,8 +8,8 @@ pub fn index(
     prefix: &str,
     equipments: &[Equipment],
     station_open: bool,
-    photo_ids: &[uuid::Uuid],
-    staff_photo_ids: &[uuid::Uuid],
+    photo_ids: &[(uuid::Uuid, String)],
+    staff_photo_ids: &[(uuid::Uuid, String)],
     contents: &ContentMap,
     dicton: Option<&str>,
     news_items: &[NewsRow],
@@ -46,8 +46,14 @@ pub fn index(
         .count();
     let total_tows = tows.len();
 
-    // Build JSON array of photo IDs for the hero slideshow
-    let photo_ids_json = serde_json::to_string(photo_ids).unwrap_or_else(|_| "[]".to_string());
+    // Build JSON array of photo objects for the hero slideshow
+    let photo_ids_json = serde_json::to_string(
+        &photo_ids
+            .iter()
+            .map(|(id, name)| serde_json::json!({"id": id, "name": name}))
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_else(|_| "[]".to_string());
 
     let extra_head = html! {};
 
@@ -258,7 +264,12 @@ pub fn index(
                                 }
                             }
                             @if !staff_photo_ids.is_empty() {
-                                @let staff_ids_json = serde_json::to_string(staff_photo_ids).unwrap_or_else(|_| "[]".to_string());
+                                @let staff_ids_json = serde_json::to_string(
+                                    &staff_photo_ids
+                                        .iter()
+                                        .map(|(id, name)| serde_json::json!({"id": id, "name": name}))
+                                        .collect::<Vec<_>>(),
+                                ).unwrap_or_else(|_| "[]".to_string());
                                 div .staff-carousel data-prefix=(p) data-photos=(staff_ids_json) {
                                     div .staff-carousel-track {}
                                     button .staff-carousel-btn.staff-prev type="button" { "❮" }

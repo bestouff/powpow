@@ -73,13 +73,13 @@ function initHeroSlideshow(prefix) {
   var container = document.querySelector(".hero-slides");
   if (!container) return;
 
-  var photoIds;
+  var photos;
   try {
-    photoIds = JSON.parse(container.dataset.photos || "[]");
+    photos = JSON.parse(container.dataset.photos || "[]");
   } catch (e) {
-    photoIds = [];
+    photos = [];
   }
-  if (photoIds.length === 0) {
+  if (photos.length === 0) {
     // No photos — show a plain gradient background
     container.style.background =
       "linear-gradient(135deg, #2d395c 0%, #4a6fa5 100%)";
@@ -89,22 +89,28 @@ function initHeroSlideshow(prefix) {
   var pfx = container.dataset.prefix || "";
 
   // Shuffle so each page load shows a different sequence (Fisher-Yates)
-  for (var i = photoIds.length - 1; i > 0; i--) {
+  for (var i = photos.length - 1; i > 0; i--) {
     var j = Math.floor(Math.random() * (i + 1));
-    var tmp = photoIds[i];
-    photoIds[i] = photoIds[j];
-    photoIds[j] = tmp;
+    var tmp = photos[i];
+    photos[i] = photos[j];
+    photos[j] = tmp;
   }
 
   // Create slide elements
-  photoIds.forEach(function (id, i) {
+  photos.forEach(function (photo, i) {
     var slide = document.createElement("div");
     slide.className = "hero-slide" + (i === 0 ? " is-active" : "");
-    slide.style.backgroundImage = "url(" + pfx + "/photos/" + id + ")";
+    slide.style.backgroundImage = "url(" + pfx + "/photos/" + photo.id + ")";
     container.appendChild(slide);
   });
 
-  if (photoIds.length <= 1) return;
+  // Create a single credit overlay above the hero overlay
+  var credit = document.createElement("span");
+  credit.className = "photo-credit hero-credit";
+  credit.textContent = photos[0].name ? "\u00A9 " + photos[0].name : "";
+  container.parentElement.appendChild(credit);
+
+  if (photos.length <= 1) return;
 
   // Rotate slides
   var current = 0;
@@ -113,6 +119,9 @@ function initHeroSlideshow(prefix) {
     slides[current].classList.remove("is-active");
     current = (current + 1) % slides.length;
     slides[current].classList.add("is-active");
+    credit.textContent = photos[current].name
+      ? "\u00A9 " + photos[current].name
+      : "";
   }, 5000);
 
   // Parallax effect: move slides at half scroll speed
@@ -1760,13 +1769,13 @@ function initStaffCarousel(prefix) {
   var container = document.querySelector(".staff-carousel");
   if (!container) return;
 
-  var photoIds;
+  var photos;
   try {
-    photoIds = JSON.parse(container.dataset.photos || "[]");
+    photos = JSON.parse(container.dataset.photos || "[]");
   } catch (e) {
-    photoIds = [];
+    photos = [];
   }
-  if (photoIds.length === 0) {
+  if (photos.length === 0) {
     container.style.display = "none";
     return;
   }
@@ -1776,23 +1785,32 @@ function initStaffCarousel(prefix) {
   var prevBtn = container.querySelector(".staff-prev");
   var nextBtn = container.querySelector(".staff-next");
 
-  // Create img elements
-  photoIds.forEach(function (id) {
+  // Create slide wrappers with img + credit overlay
+  photos.forEach(function (photo) {
+    var wrapper = document.createElement("div");
+    wrapper.className = "staff-carousel-slide";
     var img = document.createElement("img");
-    img.src = pfx + "/photos/" + id;
+    img.src = pfx + "/photos/" + photo.id;
     img.alt = "Staff";
     img.loading = "lazy";
-    track.appendChild(img);
+    wrapper.appendChild(img);
+    if (photo.name) {
+      var credit = document.createElement("span");
+      credit.className = "photo-credit";
+      credit.textContent = "\u00A9 " + photo.name;
+      wrapper.appendChild(credit);
+    }
+    track.appendChild(wrapper);
   });
 
-  if (photoIds.length <= 1) {
+  if (photos.length <= 1) {
     prevBtn.style.display = "none";
     nextBtn.style.display = "none";
     return;
   }
 
   var current = 0;
-  var total = photoIds.length;
+  var total = photos.length;
 
   function goTo(idx) {
     current = (idx + total) % total;
