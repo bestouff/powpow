@@ -3153,7 +3153,7 @@ pub async fn get_recent_news(pool: &PgPool, limit: i64) -> Result<Vec<crate::mod
     >(
         "SELECT id, guid, text, link, pub_date, (image_data IS NOT NULL) AS has_image
          FROM news
-         ORDER BY pub_date DESC NULLS LAST
+         ORDER BY pub_date DESC NULLS FIRST
          LIMIT $1",
     )
     .bind(limit)

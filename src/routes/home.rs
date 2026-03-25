@@ -58,7 +58,9 @@ pub async fn index(
         dicton::get_or_generate(&state.db, current_season, &state.config.huggingface_token).await;
 
     // Fetch news items from the database (synced by background task)
-    let news_items = database::get_recent_news(&state.db, 6)
+    const HOW_MANY_NEWS: i64 = 6;
+    // (Add 1 for the fake title news)
+    let news_items = database::get_recent_news(&state.db, HOW_MANY_NEWS + 1)
         .await
         .unwrap_or_default();
 
