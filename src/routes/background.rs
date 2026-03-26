@@ -1,4 +1,4 @@
-use chrono::TimeDelta;
+use chrono::{TimeDelta, Timelike};
 use tracing::info;
 
 use crate::{
@@ -6,7 +6,10 @@ use crate::{
 };
 
 /// Compute the next occurrence of 5:00 AM local time strictly after `from_when`.
-pub fn next_5am_local(
+///
+/// Used only in tests; retained as a utility for potential future scheduling needs.
+#[cfg(test)]
+fn next_5am_local(
     from_when: chrono::DateTime<chrono::Local>,
 ) -> Option<chrono::DateTime<chrono::Local>> {
     let today_5am = from_when.date_naive().and_hms_opt(5, 0, 0)?;
@@ -22,44 +25,55 @@ pub fn next_5am_local(
     }
 }
 
+/// Interval between news-feed sync runs (15 minutes).
+const NEWS_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
 /// Background loop that preloads the dicton du jour and news feed.
 ///
-/// Runs once immediately at startup, then sleeps until the next 5:00 AM local
-/// time and repeats every day so the first visitor of the morning gets an
-/// instant page load.
+/// Runs both dicton + news once at startup, then:
+/// - re-syncs news every 15 minutes,
+/// - regenerates the dicton once a day at 5:00 AM local time.
 pub async fn daily_preload_loop(state: AppState) {
+    let feed_url = state.config.rss_news_feed.clone();
+    let has_feed = !feed_url.is_empty();
+
+    // ── Startup: one-shot preload of both dicton and news ───────
+    let season = get_current_season();
+    let hf_token = state.config.huggingface_token.clone();
+
+    info!("preload: generating dicton du jour");
+    let _ = dicton::get_or_generate(&state.db, season, &hf_token).await;
+
+    if has_feed {
+        info!("preload: syncing news feed");
+        news::sync_news(&state.db, &feed_url).await;
+    }
+
+    info!("preload: startup done");
+
+    // ── Steady-state loop ───────────────────────────────────────
+    // Sleep in 15-minute increments for news sync.
+    // Regenerate dicton when we cross the 5 AM boundary.
+    let mut last_dicton_date = chrono::Local::now().date_naive();
+
     loop {
-        // ── Preload ─────────────────────────────────────────────────
-        let season = get_current_season();
-        let hf_token = state.config.huggingface_token.clone();
-        let feed_url = state.config.rss_news_feed.clone();
+        tokio::time::sleep(NEWS_SYNC_INTERVAL).await;
 
-        info!("daily preload: generating dicton du jour");
-        let _ = dicton::get_or_generate(&state.db, season, &hf_token).await;
-
-        if !feed_url.is_empty() {
-            info!("daily preload: syncing news feed");
+        // News sync every 15 minutes
+        if has_feed {
             news::sync_news(&state.db, &feed_url).await;
         }
 
-        info!("daily preload: done");
-
-        // ── Sleep until next 5 AM ───────────────────────────────────
+        // Dicton: regenerate once per calendar day, at or after 5 AM
         let now = chrono::Local::now();
-        let Some(target) = next_5am_local(now) else {
-            // Fallback: sleep 1 hour and retry
-            tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
-            continue;
-        };
-
-        let sleep_duration = (target - now)
-            .to_std()
-            .unwrap_or(tokio::time::Duration::from_secs(3600));
-        info!(
-            "daily preload: next run in {} seconds (at ~05:00)",
-            sleep_duration.as_secs()
-        );
-        tokio::time::sleep(sleep_duration).await;
+        let today = now.date_naive();
+        if today > last_dicton_date && now.hour() >= 5 {
+            let season = get_current_season();
+            let hf_token = state.config.huggingface_token.clone();
+            info!("preload: daily dicton regeneration");
+            let _ = dicton::get_or_generate(&state.db, season, &hf_token).await;
+            last_dicton_date = today;
+        }
     }
 }
 

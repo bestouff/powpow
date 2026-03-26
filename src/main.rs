@@ -431,8 +431,6 @@ async fn main() -> anyhow::Result<()> {
     // Clone state for background tasks before it moves into the router
     let state_for_weekly = app_state.clone();
     let state_for_preload = app_state.clone();
-    let news_pool = app_state.db.clone();
-    let news_feed_url = app_state.config.rss_news_feed.clone();
 
     // Pre-load the navbar content block so all pages show the logo
     if let Ok(Some(block)) = database::get_content(&app_state.db, "navbar").await {
@@ -632,10 +630,10 @@ async fn main() -> anyhow::Result<()> {
         state_for_weekly,
     ));
 
-    // Spawn RSS news sync background loop
-    tokio::spawn(news::sync_news_loop(news_pool, news_feed_url));
-
-    // Spawn daily 5 AM preload (dicton du jour + news), runs once at startup too
+    // Spawn background preload loop:
+    // - runs dicton + news sync once at startup
+    // - re-syncs news every 15 minutes
+    // - regenerates dicton daily at 5 AM
     tokio::spawn(routes::background::daily_preload_loop(state_for_preload));
 
     // Start server

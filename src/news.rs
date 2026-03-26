@@ -18,31 +18,7 @@ const MAX_IMAGE_BYTES: usize = 2 * 1024 * 1024;
 /// Image download / RSS fetch timeout.
 const FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// Interval between successive sync runs after the first.
-const SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(15 * 60);
-
-/// Allowed image MIME types.
-const ALLOWED_IMAGE_TYPES: &[&str] = &[
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-    "image/avif",
-];
-
 // ── Public API ──────────────────────────────────────────────────────
-
-/// Background loop: sync immediately, then every 15 minutes.
-pub async fn sync_news_loop(pool: PgPool, feed_url: String) {
-    if feed_url.is_empty() {
-        info!("news: RSS_NEWS_FEED not configured, news sync disabled");
-        return;
-    }
-    loop {
-        sync_news(&pool, &feed_url).await;
-        tokio::time::sleep(SYNC_INTERVAL).await;
-    }
-}
 
 /// Fetch the RSS feed, upsert every item into the database, and prune old rows.
 pub async fn sync_news(pool: &PgPool, feed_url: &str) {
@@ -237,8 +213,8 @@ fn decode_xml_entities(s: &str) -> String {
 
 /// Download an image, returning `(bytes, mime_type)`.
 ///
-/// Returns `None` if the download fails, exceeds 2 MB, or the MIME type
-/// is not in the allow-list.
+/// Returns `None` if the download fails, exceeds 2 MB, or the body is not
+/// a recognised image format (validated by magic bytes).
 async fn download_image(client: &reqwest::Client, url: &str) -> Option<(Vec<u8>, String)> {
     let resp = match client.get(url).send().await {
         Ok(r) => r,
@@ -253,22 +229,6 @@ async fn download_image(client: &reqwest::Client, url: &str) -> Option<(Vec<u8>,
         && cl as usize > MAX_IMAGE_BYTES
     {
         warn!("news: image too large ({cl} bytes), skipping {url}");
-        return None;
-    }
-
-    let content_type = resp
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("image/jpeg")
-        .split(';')
-        .next()
-        .unwrap_or("image/jpeg")
-        .trim()
-        .to_lowercase();
-
-    if !ALLOWED_IMAGE_TYPES.iter().any(|&a| a == content_type) {
-        warn!("news: unsupported image type {content_type}, skipping {url}");
         return None;
     }
 
@@ -288,7 +248,34 @@ async fn download_image(client: &reqwest::Client, url: &str) -> Option<(Vec<u8>,
         return None;
     }
 
-    Some((data, content_type))
+    // Validate the body is actually an image by checking magic bytes.
+    // This protects against CDN error pages (e.g. "URL signature expired")
+    // that may be served with a misleading Content-Type or URL extension.
+    let Some(mime) = mime_from_magic(&data) else {
+        warn!("news: body is not a recognised image format, skipping {url}");
+        return None;
+    };
+
+    Some((data, mime.to_string()))
+}
+
+/// Detect image MIME type from the first bytes of the body (magic bytes).
+///
+/// Returns `None` if the body doesn't start with a recognised image signature.
+fn mime_from_magic(data: &[u8]) -> Option<&'static str> {
+    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if data.starts_with(b"\xff\xd8\xff") {
+        Some("image/jpeg")
+    } else if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else if data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else if data.len() >= 12 && &data[4..12] == b"ftypavif" {
+        Some("image/avif")
+    } else {
+        None
+    }
 }
 
 // ── HTML strip helper ───────────────────────────────────────────────
@@ -389,5 +376,43 @@ mod tests {
             decode_xml_entities("https://example.com/img.jpg"),
             "https://example.com/img.jpg"
         );
+    }
+
+    #[test]
+    fn test_magic_png() {
+        let data = b"\x89PNG\r\n\x1a\nrest of file";
+        assert_eq!(mime_from_magic(data), Some("image/png"));
+    }
+
+    #[test]
+    fn test_magic_jpeg() {
+        let data = b"\xff\xd8\xff\xe0rest of file";
+        assert_eq!(mime_from_magic(data), Some("image/jpeg"));
+    }
+
+    #[test]
+    fn test_magic_gif89a() {
+        let data = b"GIF89a...";
+        assert_eq!(mime_from_magic(data), Some("image/gif"));
+    }
+
+    #[test]
+    fn test_magic_webp() {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"RIFF");
+        data.extend_from_slice(&[0, 0, 0, 0]); // file size placeholder
+        data.extend_from_slice(b"WEBP");
+        assert_eq!(mime_from_magic(&data), Some("image/webp"));
+    }
+
+    #[test]
+    fn test_magic_text_rejected() {
+        // "URL signature expired" — should NOT be detected as an image
+        assert_eq!(mime_from_magic(b"URL signature expired"), None);
+    }
+
+    #[test]
+    fn test_magic_empty() {
+        assert_eq!(mime_from_magic(b""), None);
     }
 }
