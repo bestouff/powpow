@@ -3117,10 +3117,22 @@ pub async fn get_content_image_filename(pool: &PgPool, id: uuid::Uuid) -> Result
 
 // ── News (RSS feed items) ───────────────────────────────────────────
 
+/// Return the set of RSS `guid`s that already have image data stored.
+pub async fn news_guids_with_images(pool: &PgPool) -> Result<std::collections::HashSet<String>> {
+    let rows = sqlx::query_scalar::<_, String>(
+        "SELECT guid FROM news WHERE image_data IS NOT NULL AND guid <> ''",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().collect())
+}
+
 /// Upsert a news item by its RSS `guid`.
 ///
-/// If a row with the same `guid` already exists, its text, link, `pub_date`,
-/// and image columns are updated.
+/// If a row with the same `guid` already exists, its text, link, and
+/// `pub_date` are always updated.  Image columns use `COALESCE` so that
+/// a NULL from a failed or skipped download never overwrites a previously
+/// stored image.
 pub async fn upsert_news_item(
     pool: &PgPool,
     guid: &str,
@@ -3137,8 +3149,8 @@ pub async fn upsert_news_item(
          SET text = EXCLUDED.text,
              link = EXCLUDED.link,
              pub_date = EXCLUDED.pub_date,
-             image_data = EXCLUDED.image_data,
-             image_mime = EXCLUDED.image_mime",
+             image_data = COALESCE(EXCLUDED.image_data, news.image_data),
+             image_mime = COALESCE(EXCLUDED.image_mime, news.image_mime)",
     )
     .bind(guid)
     .bind(text)

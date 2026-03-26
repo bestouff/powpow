@@ -54,15 +54,26 @@ pub async fn sync_news(pool: &PgPool, feed_url: &str) {
         }
     };
 
+    // Find out which guids already have an image stored so we can skip
+    // re-downloading them every cycle.
+    let have_images = database::news_guids_with_images(pool)
+        .await
+        .unwrap_or_default();
+
     let client = reqwest::Client::builder()
         .timeout(FETCH_TIMEOUT)
         .build()
         .unwrap_or_default();
 
     for item in &items {
-        let image = match item.image_url {
-            Some(ref url) => download_image(&client, url).await,
-            None => None,
+        let image = if have_images.contains(&item.guid) {
+            // Already stored — no need to download again.
+            None
+        } else {
+            match item.image_url {
+                Some(ref url) => download_image(&client, url).await,
+                None => None,
+            }
         };
 
         if let Err(e) = database::upsert_news_item(
