@@ -2,7 +2,7 @@
 
 **Pistes, Organisation, Week-end, Planning, Optimisation, Wouah!**
 
-PowPow is a web application for managing volunteers, memberships, and plannings for a French ski station. It integrates with [HelloAsso](https://helloasso.com/) for billing and with [Mailchimp](https://mailchimp.com/) for mailings to staff.
+PowPow is a web application for managing volunteers, memberships, and plannings for a ski station in the French Alps, in Chartreuse, in the beautiful village of Le Plateau des Petites Roches: https://station-ski-saint-hilaire.fr/. It integrates with [HelloAsso](https://helloasso.com/) for billing and with [Mailchimp](https://mailchimp.com/) for mailings to staff.
 
 > NB: the primary source is on [Codeberg](https://codeberg.org/bestouff/powpow), if you are on GitHub you're just seeing a copy for visibility
 
@@ -95,7 +95,7 @@ Full database backup (JSON export of all 17+ tables) and restore, accessible via
 | CSS framework    | [Bulma](https://bulma.io/)                                              |
 | Email            | [Lettre](https://github.com/lettre/lettre) (SMTP) or Gmail API          |
 | Markdown         | [pulldown-cmark](https://github.com/pulldown-cmark/pulldown-cmark) 0.13 |
-| HTML sanitizer   | [ammonia](https://github.com/rust-ammonia/ammonia)                       |
+| HTML sanitizer   | [ammonia](https://github.com/rust-ammonia/ammonia)                      |
 | RSS parsing      | [rss](https://crates.io/crates/rss) 2.0                                 |
 | Containerization | Docker with multi-stage build (cargo-chef for layer caching)            |
 
