@@ -388,14 +388,14 @@ pub fn person_detail(
                                 div .field.mb-3 {
                                     label .checkbox {
                                         input type="checkbox" #admin-cb checked[staff.is_admin];
-                                        span .icon.has-text-info { i .fa-solid.fa-check {} }
+                                        span .icon.has-text-warning { i .fa-solid.fa-crown {} }
                                         span { "Admin" }
                                     }
                                 }
                                 div .field {
                                     label .checkbox {
                                         input type="checkbox" #god-cb checked[staff.is_god];
-                                        span .icon.has-text-warning { i .fa-solid.fa-crown {} }
+                                        span .icon.has-text-danger { i .fa-solid.fa-hamsa {} }
                                         span { "God" }
                                     }
                                 }
