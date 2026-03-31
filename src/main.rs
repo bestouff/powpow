@@ -100,6 +100,7 @@ pub struct AppState {
     pub config: AppConfig,
     pub cookie_key: Key,
     pub gmail_client: Option<std::sync::Arc<gmail::GmailClient>>,
+    pub sync_in_progress: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl axum::extract::FromRef<AppState> for Key {
@@ -426,6 +427,7 @@ async fn main() -> anyhow::Result<()> {
         config: app_config,
         cookie_key,
         gmail_client,
+        sync_in_progress: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
 
     // Clone state for background tasks before it moves into the router

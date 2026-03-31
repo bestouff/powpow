@@ -400,28 +400,6 @@ pub struct HelloAssoTokenResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HelloAssoUserResponse {
-    pub data: Vec<HelloAssoUser>,
-    pub pagination: HelloAssoPagination,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HelloAssoEventResponse {
-    pub data: Vec<HelloAssoEvent>,
-    pub pagination: HelloAssoPagination,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HelloAssoEvent {
-    pub id: i64,
-    pub title: String,
-    pub description: Option<String>,
-    pub start_date: Option<DateTime<Utc>>,
-    pub end_date: Option<DateTime<Utc>>,
-    pub location: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HelloAssoOrder {
     pub id: i64,
     pub date: DateTime<Utc>,

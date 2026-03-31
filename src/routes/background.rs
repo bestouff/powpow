@@ -1,5 +1,5 @@
 use chrono::{TimeDelta, Timelike};
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     AppState, database, dicton, get_current_season, news, send_notification_email, templates,
@@ -64,7 +64,7 @@ pub async fn daily_preload_loop(state: AppState) {
             news::sync_news(&state.db, &feed_url).await;
         }
 
-        // Dicton: regenerate once per calendar day, at or after 5 AM
+        // Daily tasks: regenerate dicton and full HelloAsso re-sync at/after 5 AM
         let now = chrono::Local::now();
         let today = now.date_naive();
         if today > last_dicton_date && now.hour() >= 5 {
@@ -72,6 +72,29 @@ pub async fn daily_preload_loop(state: AppState) {
             let hf_token = state.config.huggingface_token.clone();
             info!("preload: daily dicton regeneration");
             let _ = dicton::get_or_generate(&state.db, season, &hf_token).await;
+
+            // Daily full HelloAsso re-sync as safety net
+            info!("preload: daily HelloAsso full re-sync");
+            match super::sync::sync_users_from_helloasso(&state).await {
+                Ok((u, m)) => {
+                    info!(
+                        "preload: daily HelloAsso sync complete — {} users, {} memberships",
+                        u, m
+                    );
+                    let _ = database::insert_audit(
+                        &state.db,
+                        None,
+                        "Système",
+                        "Synchronisation HelloAsso quotidienne",
+                        &format!("{} utilisateurs, {} adhésions", u, m),
+                    )
+                    .await;
+                }
+                Err(e) => {
+                    error!("preload: daily HelloAsso sync failed: {}", e);
+                }
+            }
+
             last_dicton_date = today;
         }
     }
