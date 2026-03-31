@@ -3,7 +3,7 @@ use axum::{
     body::Bytes,
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
-    response::{Html, IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::cookie::SignedCookieJar;
 use serde::Deserialize;
@@ -243,20 +243,16 @@ pub async fn sync_users(
                 ),
             )
             .await;
-            Html(format!(
-                "<div class='alert alert-success'>Successfully synchronized {} users and {} memberships</div>",
+            info!(
+                "Manual sync completed: {} users, {} memberships",
                 user_count, membership_count
-            )).into_response()
+            );
         }
         Err(e) => {
             error!("Error syncing users: {}", e);
-            Html(format!(
-                "<div class='alert alert-danger'>Error syncing users: {}</div>",
-                e
-            ))
-            .into_response()
         }
     }
+    Redirect::to("/online").into_response()
 }
 
 /// Webhook handler (POST): parses the notification payload, immediately
