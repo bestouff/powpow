@@ -665,6 +665,120 @@ pub async fn toggle_role(
 }
 
 #[derive(Deserialize)]
+pub struct UnimportPath {
+    pub id: uuid::Uuid,
+    pub payment_id: uuid::Uuid,
+}
+
+/// GET: return JSON with consequences of unimporting this payment.
+pub async fn unimport_consequences(
+    RequireAdmin(admin): RequireAdmin,
+    State(state): State<AppState>,
+    axum::extract::Path(UnimportPath { id, payment_id }): axum::extract::Path<UnimportPath>,
+) -> impl IntoResponse {
+    let _ = admin;
+
+    let (season, is_helloasso) = match database::get_payment_season(&state.db, payment_id, id).await
+    {
+        Ok(Some(pair)) => pair,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Paiement introuvable"})),
+            );
+        }
+        Err(e) => {
+            error!("Error looking up payment: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            );
+        }
+    };
+
+    match database::get_unimport_consequences(&state.db, id, payment_id, season).await {
+        Ok(consequences) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "season": season,
+                "is_helloasso": is_helloasso,
+                "presence_count": consequences.presences,
+                "role_count": consequences.roles,
+                "other_payment_count": consequences.other_payments,
+            })),
+        ),
+        Err(e) => {
+            error!("Error getting unimport consequences: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}
+
+/// POST: actually perform the unimport (delete payment record).
+pub async fn do_unimport(
+    RequireAdmin(admin): RequireAdmin,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Path(UnimportPath { id, payment_id }): axum::extract::Path<UnimportPath>,
+) -> Response {
+    let prefix = get_prefix(&headers);
+
+    let (season, _is_helloasso) =
+        match database::get_payment_season(&state.db, payment_id, id).await {
+            Ok(Some(pair)) => pair,
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error": "Paiement introuvable"})),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                error!("Error looking up payment for unimport: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": e.to_string()})),
+                )
+                    .into_response();
+            }
+        };
+
+    // Get staff name for audit
+    let staff_name = match database::get_staff_by_id(&state.db, id).await {
+        Ok(Some(s)) => format!("{} {}", s.first_name, s.last_name),
+        _ => id.to_string(),
+    };
+
+    match database::delete_payment(&state.db, payment_id).await {
+        Ok(_) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(admin.id),
+                &format!("{} {}", admin.first_name, admin.last_name),
+                "Annulation adhésion",
+                &format!(
+                    "{} — saison {} (payment {})",
+                    staff_name, season, payment_id
+                ),
+            )
+            .await;
+            Redirect::to(&format!("{prefix}/person/{id}")).into_response()
+        }
+        Err(e) => {
+            error!("Error deleting payment: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
 pub(crate) struct UpdateCommentPayload {
     comment: String,
 }

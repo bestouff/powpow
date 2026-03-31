@@ -378,6 +378,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Cash {
 // Payment history (unified view of HelloAsso + cash payments for a staff member)
 #[derive(Debug, Clone, Serialize)]
 pub struct PaymentHistoryEntry {
+    pub payment_id: uuid::Uuid,
     pub season: i16,
     pub source: String,       // "helloasso", "cash", "check"
     pub date: Option<String>, // formatted DD/MM/YYYY

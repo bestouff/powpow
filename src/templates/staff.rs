@@ -787,7 +787,65 @@ pub fn person_detail(
                                             }
                                         }
                                     }
+                                    @if is_admin {
+                                        div .column.is-narrow {
+                                            button .button.is-danger.is-small.is-outlined
+                                                data-payment-id=(entry.payment_id)
+                                                data-staff-id=(staff.id)
+                                                onclick="openUnimportModal(this)" {
+                                                span .icon.is-small { i .fa-solid.fa-triangle-exclamation {} }
+                                                span { "Annulation" }
+                                            }
+                                        }
+                                    }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // Unimport confirmation modal (admin only)
+                @if is_admin && !payment_history.is_empty() {
+                    div .modal #unimport-modal {
+                        div .modal-background onclick="closeUnimportModal()" {}
+                        div .modal-card {
+                            header .modal-card-head {
+                                p .modal-card-title {
+                                    span .icon.has-text-danger { i .fa-solid.fa-triangle-exclamation {} }
+                                    " Annulation d'adhésion"
+                                }
+                                button .delete onclick="closeUnimportModal()" aria-label="close" {}
+                            }
+                            section .modal-card-body {
+                                div #unimport-loading .has-text-centered {
+                                    span .icon.is-large { i .fa-solid.fa-spinner.fa-spin {} }
+                                }
+                                div #unimport-content .is-hidden {
+                                    div .notification.is-warning.is-light {
+                                        p {
+                                            strong { "Attention" }
+                                            " — ceci va annuler l'adhésion pour la saison "
+                                            strong #unimport-season {}
+                                            "."
+                                        }
+                                        p .mt-2 {
+                                            "Vous pourrez la ré-importer dans "
+                                            a #unimport-reimport-link href="" {}
+                                            "."
+                                        }
+                                    }
+                                    div #unimport-warnings {}
+                                }
+                                div #unimport-error .notification.is-danger.is-hidden {}
+                            }
+                            footer .modal-card-foot {
+                                form #unimport-form method="post" {
+                                    button .button.is-danger type="submit" #unimport-confirm disabled {
+                                        span .icon { i .fa-solid.fa-trash {} }
+                                        span { "Confirmer l'annulation" }
+                                    }
+                                }
+                                button .button onclick="closeUnimportModal()" { "Annuler" }
                             }
                         }
                     }
@@ -858,6 +916,88 @@ pub fn person_detail(
         }});
     }});
 }})();"#, p, staff.id, is_admin)))
+            }
+        }
+        @if is_admin && !payment_history.is_empty() {
+            script {
+                (maud::PreEscaped(format!(r#"(function() {{
+    const PREFIX = "{}";
+    const modal = document.getElementById('unimport-modal');
+    const form = document.getElementById('unimport-form');
+    const loading = document.getElementById('unimport-loading');
+    const content = document.getElementById('unimport-content');
+    const errorDiv = document.getElementById('unimport-error');
+    const seasonSpan = document.getElementById('unimport-season');
+    const reimportLink = document.getElementById('unimport-reimport-link');
+    const warningsDiv = document.getElementById('unimport-warnings');
+    const confirmBtn = document.getElementById('unimport-confirm');
+
+    window.openUnimportModal = async function(btn) {{
+        const paymentId = btn.dataset.paymentId;
+        const staffId = btn.dataset.staffId;
+        modal.classList.add('is-active');
+        loading.classList.remove('is-hidden');
+        content.classList.add('is-hidden');
+        errorDiv.classList.add('is-hidden');
+        confirmBtn.disabled = true;
+        warningsDiv.innerHTML = '';
+
+        form.action = PREFIX + '/api/person/' + staffId + '/unimport/' + paymentId;
+
+        try {{
+            const res = await fetch(PREFIX + '/api/person/' + staffId + '/unimport/' + paymentId);
+            if (!res.ok) {{
+                const e = await res.json();
+                throw new Error(e.error || 'Erreur serveur');
+            }}
+            const data = await res.json();
+            seasonSpan.textContent = data.season;
+
+            if (data.is_helloasso) {{
+                reimportLink.href = PREFIX + '/online';
+                reimportLink.textContent = 'les adhésions en ligne';
+            }} else {{
+                reimportLink.href = PREFIX + '/cash';
+                reimportLink.textContent = 'les paiements espèces/chèques';
+            }}
+
+            let warnings = [];
+            if (data.presence_count > 0) {{
+                warnings.push('<span class="icon has-text-warning"><i class="fa-solid fa-calendar-xmark"></i></span> ' +
+                    data.presence_count + ' créneau(x) de planning resteront enregistrés pour ce bénévole.');
+            }}
+            if (data.role_count > 0) {{
+                warnings.push('<span class="icon has-text-info"><i class="fa-solid fa-users"></i></span> ' +
+                    data.role_count + ' inscription(s) à des ateliers resteront enregistrées.');
+            }}
+            if (data.other_payment_count === 0) {{
+                warnings.push('<span class="icon has-text-danger"><i class="fa-solid fa-user-slash"></i></span> ' +
+                    'C\'est la dernière adhésion de ce bénévole — la fiche restera mais sans aucune cotisation.');
+            }}
+            if (warnings.length > 0) {{
+                warningsDiv.innerHTML = '<div class="notification is-info is-light mt-3"><ul>' +
+                    warnings.map(function(w) {{ return '<li class="mb-1">' + w + '</li>'; }}).join('') +
+                    '</ul></div>';
+            }}
+
+            loading.classList.add('is-hidden');
+            content.classList.remove('is-hidden');
+            confirmBtn.disabled = false;
+        }} catch (err) {{
+            loading.classList.add('is-hidden');
+            errorDiv.textContent = err.message;
+            errorDiv.classList.remove('is-hidden');
+        }}
+    }};
+
+    window.closeUnimportModal = function() {{
+        modal.classList.remove('is-active');
+    }};
+
+    document.addEventListener('keydown', function(e) {{
+        if (e.key === 'Escape') closeUnimportModal();
+    }});
+}})();"#, p)))
             }
         }
     };

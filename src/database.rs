@@ -1456,6 +1456,7 @@ pub async fn get_staff_payment_history(
 ) -> Result<Vec<PaymentHistoryEntry>> {
     let rows = sqlx::query(
         r"SELECT
+            p.id AS payment_id,
             p.season,
             CASE WHEN p.helloasso_item_id IS NOT NULL THEN 'helloasso' ELSE c.payment_method END AS source,
             m.order_date AS ha_date,
@@ -1525,6 +1526,7 @@ pub async fn get_staff_payment_history(
         };
 
         entries.push(PaymentHistoryEntry {
+            payment_id: row.get("payment_id"),
             season: row.get("season"),
             source,
             date,
@@ -1539,6 +1541,88 @@ pub async fn get_staff_payment_history(
     }
 
     Ok(entries)
+}
+
+/// Get the season and source of a payment, verifying it belongs to the given staff member.
+/// Returns `(season, is_helloasso)`.
+pub async fn get_payment_season(
+    pool: &PgPool,
+    payment_id: uuid::Uuid,
+    staff_id: uuid::Uuid,
+) -> Result<Option<(i16, bool)>> {
+    let row: Option<(i16, bool)> = sqlx::query_as(
+        r"SELECT season, (helloasso_item_id IS NOT NULL) AS is_ha
+          FROM payments WHERE id = $1 AND staff = $2",
+    )
+    .bind(payment_id)
+    .bind(staff_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row)
+}
+
+/// Information about what would be affected by unimporting a payment.
+pub struct UnimportConsequences {
+    /// Number of presence slots the staff has in the season date range.
+    pub presences: i64,
+    /// Number of roles (atelier memberships) the staff has.
+    pub roles: i64,
+    /// Number of other payments this staff has (excluding the one being removed).
+    pub other_payments: i64,
+}
+
+/// Count the consequences of unimporting a payment for a given staff member and season.
+pub async fn get_unimport_consequences(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    payment_id: uuid::Uuid,
+    season: i16,
+) -> Result<UnimportConsequences> {
+    // Season runs from September of `season` to August of `season+1`
+    let season_start = chrono::NaiveDate::from_ymd_opt(i32::from(season), 9, 1).unwrap_or_default();
+    let season_end =
+        chrono::NaiveDate::from_ymd_opt(i32::from(season) + 1, 8, 31).unwrap_or_default();
+
+    let presence_count: i64 = sqlx::query_scalar(
+        r"SELECT COUNT(*) FROM presence pr
+          JOIN needs n ON pr.needs = n.id
+          WHERE pr.staff = $1 AND n.day >= $2 AND n.day <= $3",
+    )
+    .bind(staff_id)
+    .bind(season_start)
+    .bind(season_end)
+    .fetch_one(pool)
+    .await?;
+
+    let role_count: i64 = sqlx::query_scalar(r"SELECT COUNT(*) FROM roles WHERE staff = $1")
+        .bind(staff_id)
+        .fetch_one(pool)
+        .await?;
+
+    let other_payment_count: i64 =
+        sqlx::query_scalar(r"SELECT COUNT(*) FROM payments WHERE staff = $1 AND id != $2")
+            .bind(staff_id)
+            .bind(payment_id)
+            .fetch_one(pool)
+            .await?;
+
+    Ok(UnimportConsequences {
+        presences: presence_count,
+        roles: role_count,
+        other_payments: other_payment_count,
+    })
+}
+
+/// Delete a payment record by its ID. Returns the staff UUID it was linked to.
+pub async fn delete_payment(pool: &PgPool, payment_id: uuid::Uuid) -> Result<uuid::Uuid> {
+    let staff_id: uuid::Uuid =
+        sqlx::query_scalar(r"DELETE FROM payments WHERE id = $1 RETURNING staff")
+            .bind(payment_id)
+            .fetch_one(pool)
+            .await?;
+
+    Ok(staff_id)
 }
 
 // Cash payment functions
@@ -1610,20 +1694,14 @@ pub async fn get_all_cash_payments(pool: &PgPool) -> Result<Vec<Cash>> {
 }
 
 /// Check if a staff/payment exists for a given cash payment
-pub async fn has_staff_for_cash(pool: &PgPool, cash_id: uuid::Uuid) -> Result<bool> {
-    let row = sqlx::query(
-        r"
-        SELECT EXISTS(
-            SELECT 1 FROM payments WHERE cash_id = $1
-        ) as exists
-        ",
-    )
-    .bind(cash_id)
-    .fetch_one(pool)
-    .await?;
+pub async fn get_staff_for_cash(pool: &PgPool, cash_id: uuid::Uuid) -> Result<Option<uuid::Uuid>> {
+    let row: Option<(uuid::Uuid,)> =
+        sqlx::query_as(r"SELECT staff FROM payments WHERE cash_id = $1")
+            .bind(cash_id)
+            .fetch_optional(pool)
+            .await?;
 
-    let exists: bool = row.try_get("exists")?;
-    Ok(exists)
+    Ok(row.map(|(id,)| id))
 }
 
 /// Create a new staff member and link it with a cash payment

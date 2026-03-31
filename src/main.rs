@@ -474,6 +474,10 @@ async fn main() -> anyhow::Result<()> {
             "/api/person/{id}/contact",
             post(routes::staff::update_contact),
         )
+        .route(
+            "/api/person/{id}/unimport/{payment_id}",
+            get(routes::staff::unimport_consequences).post(routes::staff::do_unimport),
+        )
         .route("/import/{item_id}", get(routes::membership::import_staff))
         .route(
             "/import/{item_id}",

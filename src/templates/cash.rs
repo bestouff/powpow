@@ -6,12 +6,16 @@ use crate::models::{Cash, StaffWithSeason};
 use chrono::Datelike;
 use maud::{Markup, html};
 
-pub fn cash_list(cash_payments: Vec<(Cash, bool)>, current_season: i16, prefix: &str) -> Markup {
+pub fn cash_list(
+    cash_payments: Vec<(Cash, Option<uuid::Uuid>)>,
+    current_season: i16,
+    prefix: &str,
+) -> Markup {
     let p = prefix;
     let total_count = cash_payments.len();
     let imported_count = cash_payments
         .iter()
-        .filter(|(_, imported)| *imported)
+        .filter(|(_, staff_id)| staff_id.is_some())
         .count();
     let not_imported_count = total_count - imported_count;
 
@@ -56,7 +60,7 @@ pub fn cash_list(cash_payments: Vec<(Cash, bool)>, current_season: i16, prefix: 
                             }
                         }
                         tbody {
-                            @for (cash, has_staff) in &cash_payments {
+                            @for (cash, staff_id) in &cash_payments {
                                 @let full_name = format!("{} {}", capitalize_words(&cash.first_name), capitalize_words(&cash.last_name));
                                 @let email = cash.email.as_deref().unwrap_or("\u{2014}");
                                 @let phone = cash.phone.as_deref().map_or_else(|| "\u{2014}".to_string(), format_phone_international);
@@ -81,8 +85,8 @@ pub fn cash_list(cash_payments: Vec<(Cash, bool)>, current_season: i16, prefix: 
                                     td { (date) }
                                     td { span class={"tag " (season_tag_class)} { (season) } }
                                     td {
-                                        @if *has_staff {
-                                            span .tag.is-success { "Importé" }
+                                        @if let Some(sid) = staff_id {
+                                            a .tag.is-success href={(p) "/person/" (sid)} { "Importé" }
                                         } @else {
                                             a .tag.is-warning href={(p) "/cash-import/" (cash.id)} { "À importer" }
                                         }

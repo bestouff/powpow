@@ -32,14 +32,14 @@ pub async fn list_cash(
         Ok(cash_payments) => {
             let mut payments_with_status = Vec::new();
             for cash in cash_payments {
-                let has_staff = database::has_staff_for_cash(&state.db, cash.id)
+                let staff_id = database::get_staff_for_cash(&state.db, cash.id)
                     .await
-                    .unwrap_or(false);
-                payments_with_status.push((cash, has_staff));
+                    .unwrap_or(None);
+                payments_with_status.push((cash, staff_id));
             }
 
             // Sort: not-yet-imported first, then by date (most recent first)
-            payments_with_status.sort_by(|a, b| match a.1.cmp(&b.1) {
+            payments_with_status.sort_by(|a, b| match a.1.is_some().cmp(&b.1.is_some()) {
                 std::cmp::Ordering::Equal => b.0.date.cmp(&a.0.date),
                 other => other,
             });
@@ -193,9 +193,10 @@ pub async fn import_cash(
     };
 
     // Check if already imported
-    let already_imported = database::has_staff_for_cash(&state.db, cash_id)
+    let already_imported = database::get_staff_for_cash(&state.db, cash_id)
         .await
-        .unwrap_or(false);
+        .unwrap_or(None)
+        .is_some();
 
     if already_imported {
         return (
@@ -267,9 +268,10 @@ pub async fn do_import_cash(
     };
 
     // Check if already imported
-    let already_imported = database::has_staff_for_cash(&state.db, cash_id)
+    let already_imported = database::get_staff_for_cash(&state.db, cash_id)
         .await
-        .unwrap_or(false);
+        .unwrap_or(None)
+        .is_some();
 
     if already_imported {
         return (
