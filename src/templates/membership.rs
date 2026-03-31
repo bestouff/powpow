@@ -197,9 +197,13 @@ pub fn membership_list_with_filters(
                                             @if matches!(membership.item_type.as_deref(), Some("Registration" | "Donation")) {
                                                 span .tag.is-light { "Ignoré" }
                                             } @else if membership_with_status.is_double_subscription {
-                                                span .tag.is-danger { "Double adhésion" }
-                                            } @else if membership_with_status.has_staff {
-                                                span .tag.is-success { "Importé" }
+                                                @if let Some(sid) = membership_with_status.staff_id {
+                                                    a .tag.is-danger href={(p) "/person/" (sid)} { "Double adhésion" }
+                                                } @else {
+                                                    span .tag.is-danger { "Double adhésion" }
+                                                }
+                                            } @else if let Some(sid) = membership_with_status.staff_id {
+                                                a .tag.is-success href={(p) "/person/" (sid)} { "Importé" }
                                             } @else {
                                                 a .tag.is-warning
                                                   href={(p) "/import/" (membership.helloasso_item_id)} {

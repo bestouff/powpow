@@ -29,7 +29,7 @@ pub async fn list_users(
         database::get_all_memberships_filtered(&state.db, search.map(String::as_str)).await;
 
     match (memberships_result, imported_result) {
-        (Ok(memberships_with_users), Ok(imported_set)) => {
+        (Ok(memberships_with_users), Ok(imported_map)) => {
             // Transform memberships to include staff import status and count stats
             let mut memberships_with_status = Vec::new();
             let mut total_count = 0;
@@ -48,7 +48,9 @@ pub async fn list_users(
                 };
 
                 // Check if staff exists for this membership+season (batch lookup)
-                let has_staff = imported_set.contains(&(membership.helloasso_item_id, season));
+                let staff_id = imported_map
+                    .get(&(membership.helloasso_item_id, season))
+                    .copied();
 
                 let is_non_membership = matches!(
                     membership.item_type.as_deref(),
@@ -58,7 +60,7 @@ pub async fn list_users(
                 // Update stats (skip non-membership items: Forfait, Don)
                 if !is_non_membership {
                     total_count += 1;
-                    if has_staff {
+                    if staff_id.is_some() {
                         imported_count += 1;
                     } else {
                         not_imported_count += 1;
@@ -66,14 +68,14 @@ pub async fn list_users(
                 }
 
                 // Apply filter (hide imported and non-membership items in "À importer" view)
-                if only_not_imported && (has_staff || is_non_membership) {
+                if only_not_imported && (staff_id.is_some() || is_non_membership) {
                     continue;
                 }
 
                 let idx = memberships_with_status.len();
 
                 // Track imported memberships by name+season for double detection
-                if has_staff {
+                if staff_id.is_some() {
                     let normalized_name = format!(
                         "{} {}",
                         membership
@@ -100,7 +102,7 @@ pub async fn list_users(
                     models::MembershipWithStatus {
                         membership,
                         season,
-                        has_staff,
+                        staff_id,
                         is_double_subscription: false, // Will be updated below
                     },
                 ));
@@ -117,12 +119,12 @@ pub async fn list_users(
 
             // Sort: "À importer" first (not imported, not ignored), then rest, by date desc
             memberships_with_status.sort_by(|a, b| {
-                let a_actionable = !a.1.has_staff
+                let a_actionable = a.1.staff_id.is_none()
                     && !matches!(
                         a.1.membership.item_type.as_deref(),
                         Some("Registration" | "Donation")
                     );
-                let b_actionable = !b.1.has_staff
+                let b_actionable = b.1.staff_id.is_none()
                     && !matches!(
                         b.1.membership.item_type.as_deref(),
                         Some("Registration" | "Donation")

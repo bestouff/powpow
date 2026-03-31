@@ -142,7 +142,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Membership {
 pub struct MembershipWithStatus {
     pub membership: Membership,
     pub season: i16,
-    pub has_staff: bool,
+    pub staff_id: Option<uuid::Uuid>,
     pub is_double_subscription: bool,
 }
 

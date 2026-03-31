@@ -341,30 +341,31 @@ pub async fn has_staff_for_membership(
     Ok(exists)
 }
 
-/// Returns the set of all (`helloasso_item_id`, season) pairs from the payments table.
+/// Returns a map from (`helloasso_item_id`, season) to the staff UUID from the payments table.
 /// Used to batch-check which memberships have already been imported, avoiding N+1 queries.
 pub async fn get_all_imported_item_ids(
     pool: &PgPool,
-) -> Result<std::collections::HashSet<(i64, i16)>> {
+) -> Result<std::collections::HashMap<(i64, i16), uuid::Uuid>> {
     let rows = sqlx::query(
         r"
-        SELECT helloasso_item_id, season FROM payments
+        SELECT helloasso_item_id, season, staff FROM payments
         WHERE helloasso_item_id IS NOT NULL
         ",
     )
     .fetch_all(pool)
     .await?;
 
-    let set = rows
+    let map = rows
         .iter()
         .map(|row| {
             let item_id: i64 = row.get("helloasso_item_id");
             let season: i16 = row.get("season");
-            (item_id, season)
+            let staff_id: uuid::Uuid = row.get("staff");
+            ((item_id, season), staff_id)
         })
         .collect();
 
-    Ok(set)
+    Ok(map)
 }
 
 pub async fn get_membership_by_item_id(
