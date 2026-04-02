@@ -2,7 +2,7 @@ name: aghil
 
 services:
   postgres:
-    image: postgres:15
+    image: postgres:17
     environment:
       POSTGRES_DB: aghil
       POSTGRES_USER: postgres
