@@ -53,6 +53,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+networks:
+  default:
+    external: true
+    name: aghil_default
+
 volumes:
   postgres_data:
     name: aghil_postgres_data
