@@ -1,4 +1,5 @@
 use chrono::{TimeDelta, Timelike};
+use futures_util::FutureExt as _;
 use tracing::{error, info};
 
 use crate::{
@@ -54,50 +55,93 @@ pub async fn daily_preload_loop(state: AppState) {
     // ── Steady-state loop ───────────────────────────────────────
     // Sleep in 15-minute increments for news sync.
     // Regenerate dicton when we cross the 5 AM boundary.
+    // Each iteration is wrapped in catch_unwind so a panic in one
+    // cycle does not kill the whole background task.
     let mut last_dicton_date = chrono::Local::now().date_naive();
 
     loop {
         tokio::time::sleep(NEWS_SYNC_INTERVAL).await;
 
-        // News sync every 15 minutes
-        if has_feed {
-            news::sync_news(&state.db, &feed_url).await;
-        }
+        let result = std::panic::AssertUnwindSafe(preload_tick(
+            &state,
+            has_feed,
+            &feed_url,
+            last_dicton_date,
+        ))
+        .catch_unwind()
+        .await;
 
-        // Daily tasks: regenerate dicton and full HelloAsso re-sync at/after 5 AM
-        let now = chrono::Local::now();
-        let today = now.date_naive();
-        if today > last_dicton_date && now.hour() >= 5 {
-            let season = get_current_season();
-            let hf_token = state.config.huggingface_token.clone();
-            info!("preload: daily dicton regeneration");
-            let _ = dicton::get_or_generate(&state.db, season, &hf_token).await;
-
-            // Daily full HelloAsso re-sync as safety net
-            info!("preload: daily HelloAsso full re-sync");
-            match super::sync::sync_users_from_helloasso(&state).await {
-                Ok((u, m)) => {
-                    info!(
-                        "preload: daily HelloAsso sync complete — {} users, {} memberships",
-                        u, m
-                    );
-                    let _ = database::insert_audit(
-                        &state.db,
-                        None,
-                        "Système",
-                        "Synchronisation HelloAsso quotidienne",
-                        &format!("{} utilisateurs, {} adhésions", u, m),
-                    )
-                    .await;
-                }
-                Err(e) => {
-                    error!("preload: daily HelloAsso sync failed: {}", e);
-                }
+        match result {
+            Ok(new_date) => last_dicton_date = new_date,
+            Err(panic) => {
+                let msg = panic
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+                    .or_else(|| panic.downcast_ref::<&str>().copied())
+                    .unwrap_or("unknown panic");
+                error!("preload: background tick panicked: {msg}");
             }
-
-            last_dicton_date = today;
         }
     }
+}
+
+/// One tick of the background preload loop.
+///
+/// Returns the (possibly updated) `last_dicton_date`.
+async fn preload_tick(
+    state: &AppState,
+    has_feed: bool,
+    feed_url: &str,
+    last_dicton_date: chrono::NaiveDate,
+) -> chrono::NaiveDate {
+    // News sync every 15 minutes
+    if has_feed {
+        news::sync_news(&state.db, feed_url).await;
+    }
+
+    // Daily tasks: regenerate dicton and full HelloAsso re-sync at/after 5 AM
+    let now = chrono::Local::now();
+    let today = now.date_naive();
+    if today > last_dicton_date && now.hour() >= 5 {
+        let season = get_current_season();
+        let hf_token = state.config.huggingface_token.clone();
+        info!("preload: daily dicton regeneration");
+        let _ = dicton::get_or_generate(&state.db, season, &hf_token).await;
+
+        // Daily full HelloAsso re-sync as safety net
+        info!("preload: daily HelloAsso full re-sync");
+        match super::sync::sync_users_from_helloasso(state).await {
+            Ok((u, m)) => {
+                info!(
+                    "preload: daily HelloAsso sync complete — {} users, {} memberships",
+                    u, m
+                );
+                let _ = database::insert_audit(
+                    &state.db,
+                    None,
+                    "Système",
+                    "Synchronisation HelloAsso quotidienne",
+                    &format!("{} utilisateurs, {} adhésions", u, m),
+                )
+                .await;
+            }
+            Err(e) => {
+                error!("preload: daily HelloAsso sync failed: {}", e);
+                let _ = database::insert_audit(
+                    &state.db,
+                    None,
+                    "Système",
+                    "Synchronisation HelloAsso quotidienne (échec)",
+                    &e.to_string(),
+                )
+                .await;
+            }
+        }
+
+        return today;
+    }
+
+    last_dicton_date
 }
 
 pub fn next_monday_8am_local(

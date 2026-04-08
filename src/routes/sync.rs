@@ -250,6 +250,14 @@ pub async fn sync_users(
         }
         Err(e) => {
             error!("Error syncing users: {}", e);
+            let _ = database::insert_audit(
+                &state.db,
+                staff_id,
+                &caller_name,
+                "Synchronisation HelloAsso (échec)",
+                &e.to_string(),
+            )
+            .await;
         }
     }
     Redirect::to("/online").into_response()
@@ -372,6 +380,14 @@ pub async fn sync_webhook(
                 }
                 Err(e) => {
                     error!("Background sync failed: {}", e);
+                    let _ = database::insert_audit(
+                        &state.db,
+                        None,
+                        "Automation (HelloAsso webhook)",
+                        "Synchronisation HelloAsso (échec)",
+                        &e.to_string(),
+                    )
+                    .await;
                 }
             }
             state.sync_in_progress.store(false, Ordering::SeqCst);
@@ -427,6 +443,14 @@ pub async fn api_sync_users(
 
         Err(e) => {
             error!("Error syncing users: {}", e);
+            let _ = database::insert_audit(
+                &state.db,
+                staff_id,
+                &caller_name,
+                "Synchronisation HelloAsso API (échec)",
+                &e.to_string(),
+            )
+            .await;
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
@@ -451,34 +475,29 @@ pub async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usiz
 
     // Fetch orders/payments from HelloAsso (these contain user information)
     info!("Fetching orders from HelloAsso API...");
-    match state.helloasso_client.get_orders().await {
-        Ok(orders) => {
-            let orders_count = orders.len();
-            info!(
-                "Successfully fetched {} orders from HelloAsso",
-                orders_count
-            );
+    let orders = state.helloasso_client.get_orders().await.map_err(|e| {
+        error!("Failed to fetch orders from HelloAsso: {e}");
+        e
+    })?;
 
-            for order in &orders {
-                match process_order(order, state, &mut user_map).await {
-                    Ok((u, m)) => {
-                        user_count += u;
-                        membership_count += m;
-                    }
-                    Err(e) => {
-                        error!("Failed to process order {}: {}", order.id, e);
-                    }
-                }
+    let orders_count = orders.len();
+    info!(
+        "Successfully fetched {} orders from HelloAsso",
+        orders_count
+    );
+
+    for order in &orders {
+        match process_order(order, state, &mut user_map).await {
+            Ok((u, m)) => {
+                user_count += u;
+                membership_count += m;
             }
-            info!("Finished processing {} orders", orders_count);
-        }
-        Err(e) => {
-            error!("Failed to fetch orders from HelloAsso: {}", e);
-            if let Some(source) = e.source() {
-                error!("Underlying orders error: {}", source);
+            Err(e) => {
+                error!("Failed to process order {}: {}", order.id, e);
             }
         }
     }
+    info!("Finished processing {} orders", orders_count);
 
     info!(
         "Synchronized {} users and {} memberships from HelloAsso",
