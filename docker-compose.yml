@@ -47,6 +47,7 @@ services:
       RSS_NEWS_FEED: ${RSS_NEWS_FEED:-}
       ENTITY_NAME: ${ENTITY_NAME:-}
       ENTITY_EMAIL: ${ENTITY_EMAIL:-}
+      TZ: Europe/Paris
       RUST_LOG: debug
     depends_on:
       postgres:
