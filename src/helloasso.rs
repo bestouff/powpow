@@ -27,8 +27,14 @@ struct TokenCache {
 
 impl HelloAssoClient {
     pub fn new(client_id: String, client_secret: String, association_slug: String) -> Self {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .build()
+            .expect("failed to build HTTP client");
+
         Self {
-            client: Client::new(),
+            client,
             client_id,
             client_secret,
             association_slug,
