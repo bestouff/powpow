@@ -89,18 +89,19 @@ impl HelloAssoClient {
             }
         }
 
-        // Try to refresh token if we have a refresh token
-        {
+        // Try to refresh token if we have a refresh token.
+        // Clone the refresh token and drop the read lock BEFORE calling
+        // refresh_token(), which needs a write lock on the same RwLock.
+        let maybe_refresh = {
             let cache = self.token_cache.read().await;
-            if let Some(token_cache) = &*cache
-                && let Some(refresh_token) = &token_cache.refresh_token
-            {
-                match self.refresh_token(refresh_token).await {
-                    Ok(new_token) => return Ok(new_token),
-                    Err(e) => {
-                        warn!("Failed to refresh token, will try to get new token: {}", e);
-                        // Continue to get new token
-                    }
+            cache.as_ref().and_then(|tc| tc.refresh_token.clone())
+        };
+        if let Some(refresh_tok) = maybe_refresh {
+            match self.refresh_token(&refresh_tok).await {
+                Ok(new_token) => return Ok(new_token),
+                Err(e) => {
+                    warn!("Failed to refresh token, will try to get new token: {}", e);
+                    // Continue to get new token
                 }
             }
         }
