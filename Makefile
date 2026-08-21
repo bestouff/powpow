@@ -10,7 +10,7 @@ RUST_IMAGE := rust:1.93-trixie
 
 deb: $(DEB)
 
-$(DEB): target/release-trixie/powpow
+$(DEB): target/release-trixie/powpow $(shell find pkg -type f)
 	rm -rf _deb
 	mkdir -p _deb/DEBIAN _deb/usr/sbin _deb/etc _deb/lib/systemd/system
 	sed 's/@@PKG@@/$(PKG)/;s/@@VERSION@@/$(VERSION)/;s/@@ARCH@@/$(ARCH)/' pkg/control.in > _deb/DEBIAN/control
@@ -22,6 +22,7 @@ $(DEB): target/release-trixie/powpow
 	cp .env.example _deb/etc/powpow.conf
 	chmod 640 _deb/etc/powpow.conf
 	cp pkg/powpow.service _deb/lib/systemd/system/powpow.service
+	chmod 644 _deb/lib/systemd/system/powpow.service
 	dpkg-deb --build --root-owner-group _deb $(DEB)
 	rm -rf _deb
 	@echo "Built $(DEB)"

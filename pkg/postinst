@@ -1,5 +1,23 @@
 #!/bin/sh
 set -e
+
+# Dedicated unprivileged account for the service.
+if ! getent passwd powpow >/dev/null 2>&1; then
+    if command -v adduser >/dev/null 2>&1; then
+        adduser --system --group --home /nonexistent --no-create-home \
+            --shell /usr/sbin/nologin powpow
+    else
+        useradd --system --home /nonexistent --no-create-home \
+            --shell /usr/sbin/nologin --user-group powpow
+    fi
+fi
+
+# The service must be able to read its configuration (root-writable only).
+if [ -f /etc/powpow.conf ]; then
+    chown root:powpow /etc/powpow.conf
+    chmod 640 /etc/powpow.conf
+fi
+
 systemctl daemon-reload
 systemctl enable powpow.service
 systemctl restart powpow.service

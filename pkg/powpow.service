@@ -5,19 +5,34 @@ Wants=postgresql.service
 
 [Service]
 Type=simple
+User=powpow
+Group=powpow
 EnvironmentFile=/etc/powpow.conf
 ExecStart=/usr/sbin/powpow
 Restart=on-failure
 RestartSec=5
 WorkingDirectory=/
+UMask=0077
 
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
 
 [Install]
 WantedBy=multi-user.target
