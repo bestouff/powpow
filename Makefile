@@ -2,6 +2,7 @@ PKG     := powpow
 VERSION := $(shell grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
 ARCH    := amd64
 DEB     := $(PKG)_$(VERSION)_$(ARCH).deb
+PROD    := $(shell sed -n 's/^PROD_USER_SERVER=//p' .env | head -1)
 
 # Docker image used for the build — Rust on Debian 13 (trixie)
 RUST_IMAGE := rust:1.97-trixie
@@ -37,3 +38,7 @@ target/release-trixie/powpow: Cargo.toml Cargo.lock $(shell find src -type f) $(
 
 clean:
 	rm -rf _deb target/release-trixie $(PKG)_*.deb
+
+deploy: deb
+	scp $(DEB) $(PROD):
+	ssh $(PROD) sudo dpkg -i $(DEB)
