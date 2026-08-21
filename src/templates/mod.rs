@@ -119,7 +119,7 @@ fn static_version() -> &'static str {
         format!("{:x}", hasher.finish())
     })
 }
-use rlibphonenumber::{PHONE_NUMBER_UTIL, PhoneNumberFormat};
+use rlibphonenumber::{PHONE_NUMBER_UTIL, PhoneNumberFormat, Region};
 
 /// Simple HTML escaping for minimal security (kept for email template which returns String)
 pub fn escape_html_public(s: &str) -> String {
@@ -148,7 +148,7 @@ pub fn format_phone_international(phone: &str) -> String {
     }
 
     // Try to parse with France as default country
-    match PHONE_NUMBER_UTIL.parse_with_default_region(phone, "FR") {
+    match PHONE_NUMBER_UTIL.parse(phone, Some(Region::FR)) {
         Ok(number) => PHONE_NUMBER_UTIL
             .format(&number, PhoneNumberFormat::International)
             .into_owned(),

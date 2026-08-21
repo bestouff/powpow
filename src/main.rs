@@ -13,6 +13,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use axum_extra::extract::cookie::{Key, SignedCookieJar};
+use base64::Engine;
 use chrono::Datelike;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -234,10 +235,7 @@ pub(crate) async fn send_notification_email(
             };
             let encoded_subject = format!(
                 "=?UTF-8?B?{}?=",
-                base64::Engine::encode(
-                    &base64::engine::general_purpose::STANDARD,
-                    subject.as_bytes()
-                )
+                base64::engine::general_purpose::STANDARD.encode(subject.as_bytes())
             );
             let raw_message = format!(
                 "From: {}\r\nTo: {}\r\nSubject: {}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",

@@ -709,7 +709,7 @@ pub async fn find_staff_candidates(
         }
 
         // Sort by score descending (best matches first)
-        scored_matches.sort_by(|a, b| b.2.cmp(&a.2));
+        scored_matches.sort_by_key(|x| std::cmp::Reverse(x.2));
 
         for (staff, latest_season, _score) in scored_matches {
             candidates.push(StaffWithSeason {
@@ -2248,7 +2248,7 @@ pub async fn check_presence_conflict(
         LIMIT 1
         "
     );
-    let row = sqlx::query_scalar::<_, String>(&query)
+    let row = sqlx::query_scalar::<_, String>(sqlx::AssertSqlSafe(query))
         .bind(staff_id)
         .bind(day)
         .bind(exclude_need_id)
@@ -2872,7 +2872,9 @@ async fn restore_inner(
         }
 
         // TRUNCATE and other SQL statements — execute directly
-        sqlx::query(line).execute(&mut **conn).await?;
+        sqlx::query(sqlx::AssertSqlSafe(line))
+            .execute(&mut **conn)
+            .await?;
         i += 1;
     }
 

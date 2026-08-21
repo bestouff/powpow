@@ -27,7 +27,7 @@ fn next_5am_local(
 }
 
 /// Interval between news-feed sync runs (15 minutes).
-const NEWS_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+const NEWS_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_mins(15);
 
 /// Background loop that preloads the dicton du jour and news feed.
 ///
@@ -181,13 +181,13 @@ pub async fn weekly_morning_email_loop(state: AppState) {
 
         let Some(target) = next_monday_8am_local(now) else {
             // Fallback: sleep 1 hour and retry
-            tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+            tokio::time::sleep(tokio::time::Duration::from_hours(1)).await;
             continue;
         };
 
         let sleep_duration = (target - now)
             .to_std()
-            .unwrap_or(tokio::time::Duration::from_secs(3600));
+            .unwrap_or(tokio::time::Duration::from_hours(1));
         info!(
             "Daily email: next run in {} seconds",
             sleep_duration.as_secs()
@@ -210,7 +210,7 @@ pub async fn weekly_morning_email_loop(state: AppState) {
         if unimported.is_empty() && upcoming.is_empty() {
             info!("Weekly email: nothing to report, skipping");
             // Sleep 60s to avoid double-send on the same minute
-            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            tokio::time::sleep(tokio::time::Duration::from_mins(1)).await;
             continue;
         }
 
@@ -219,7 +219,7 @@ pub async fn weekly_morning_email_loop(state: AppState) {
             .unwrap_or_default();
         if admin_emails.is_empty() {
             info!("Weekly email: no admin emails configured, skipping");
-            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            tokio::time::sleep(tokio::time::Duration::from_mins(1)).await;
             continue;
         }
 
@@ -253,7 +253,7 @@ pub async fn weekly_morning_email_loop(state: AppState) {
         info!("Weekly email: sent to {} admins", admin_emails.len());
 
         // Sleep 60s to avoid double-send on the same minute
-        tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+        tokio::time::sleep(tokio::time::Duration::from_mins(1)).await;
     }
 }
 

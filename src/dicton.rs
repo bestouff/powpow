@@ -401,7 +401,7 @@ async fn call_llm(prompt: &str, hf_token: &str) -> anyhow::Result<String> {
         .post(HF_API_URL)
         .header("Authorization", format!("Bearer {hf_token}"))
         .json(&body)
-        .timeout(std::time::Duration::from_secs(120))
+        .timeout(std::time::Duration::from_mins(2))
         .send()
         .await?;
 

@@ -5,6 +5,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::cookie::SignedCookieJar;
+use base64::Engine;
 use tracing::{error, info, warn};
 
 use crate::{
@@ -298,17 +299,11 @@ async fn send_contact_email(
         };
         let encoded_subject = format!(
             "=?UTF-8?B?{}?=",
-            base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                subject.as_bytes(),
-            )
+            base64::engine::general_purpose::STANDARD.encode(subject.as_bytes())
         );
         let encoded_name = format!(
             "=?UTF-8?B?{}?=",
-            base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                sender_name.as_bytes(),
-            )
+            base64::engine::general_purpose::STANDARD.encode(sender_name.as_bytes())
         );
         let raw_message = format!(
             "From: {} <{}>\r\nReply-To: {}\r\nTo: {}\r\nSubject: {}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",
