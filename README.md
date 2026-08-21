@@ -105,7 +105,7 @@ All CSS and JS are embedded in the binary via `include_str!()` and served from m
 
 ### Prerequisites
 
-- Rust 1.93+ (edition 2024)
+- Rust 1.94+ (edition 2024)
 - PostgreSQL 15+
 - A HelloAsso API account
 

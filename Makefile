@@ -4,7 +4,7 @@ ARCH    := amd64
 DEB     := $(PKG)_$(VERSION)_$(ARCH).deb
 
 # Docker image used for the build — Rust on Debian 13 (trixie)
-RUST_IMAGE := rust:1.93-trixie
+RUST_IMAGE := rust:1.97-trixie
 
 .PHONY: deb clean
 
