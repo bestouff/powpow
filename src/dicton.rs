@@ -351,8 +351,8 @@ fn pick_saint_du_jour(
 
 // ── Hugging Face Inference API (chat completion) ─────────────────────
 
-const HF_MODEL: &str = "deepseek/deepseek-v3-turbo";
-const HF_API_URL: &str = "https://router.huggingface.co/novita/v3/openai/chat/completions";
+const HF_MODEL: &str = "deepseek-ai/DeepSeek-V3.2";
+const HF_API_URL: &str = "https://router.huggingface.co/v1/chat/completions";
 
 #[derive(Serialize)]
 struct ChatRequest {
