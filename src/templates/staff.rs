@@ -224,6 +224,7 @@ pub fn staff_list(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::fn_params_excessive_bools)]
 pub fn person_detail(
     staff: &Staff,
     ateliers: &[Atelier],
@@ -232,6 +233,7 @@ pub fn person_detail(
     prefix: &str,
     is_self: bool,
     is_admin: bool,
+    is_god: bool,
     show_contact: bool,
     todos: &[TodoItem],
     payment_history: &[crate::models::PaymentHistoryEntry],
@@ -398,6 +400,23 @@ pub fn person_detail(
                                         span .icon.has-text-danger { i .fa-solid.fa-hamsa {} }
                                         span { "God" }
                                     }
+                                }
+                            }
+                        }
+
+                        // Delete box (god only, never self)
+                        @if is_god && !is_self {
+                            div .box {
+                                h2 .title.is-4 {
+                                    span .icon.has-text-danger { i .fa-solid.fa-trash {} }
+                                    "\u{00a0}Suppression"
+                                }
+                                div .content {
+                                    p .has-text-grey { "Supprimer définitivement ce membre." }
+                                }
+                                button .button.is-danger.is-small #delete-staff-btn {
+                                    span .icon { i .fa-solid.fa-trash {} }
+                                    span { "Supprimer" }
                                 }
                             }
                         }
@@ -850,6 +869,43 @@ pub fn person_detail(
                         }
                     }
                 }
+
+                    // Delete confirmation modal (god only)
+                    @if is_god && !is_self {
+                        div .modal #delete-staff-modal {
+                            div .modal-background onclick="closeDeleteStaffModal()" {}
+                            div .modal-card {
+                                header .modal-card-head {
+                                    p .modal-card-title {
+                                        span .icon.has-text-danger { i .fa-solid.fa-trash {} }
+                                        " Supprimer ce membre"
+                                    }
+                                    button .delete onclick="closeDeleteStaffModal()" aria-label="close" {}
+                                }
+                                section .modal-card-body {
+                                    div .notification.is-warning.is-light {
+                                        p {
+                                            strong { "Attention" }
+                                            " — cette action est définitive et supprimera "
+                                            strong { (staff.first_name) " " (staff.last_name) }
+                                            " de la base de données."
+                                        }
+                                    }
+                                    div #delete-staff-error .notification.is-danger.is-hidden {}
+                                    div #delete-staff-loading .has-text-centered.is-hidden {
+                                        span .icon.is-large { i .fa-solid.fa-spinner.fa-spin {} }
+                                    }
+                                }
+                                footer .modal-card-foot {
+                                    button .button.is-danger #delete-staff-confirm {
+                                        span .icon { i .fa-solid.fa-trash {} }
+                                        span { "Supprimer définitivement" }
+                                    }
+                                button .button onclick="closeDeleteStaffModal()" { "Annuler" }
+                            }
+                        }
+                    }
+                }
             }
         }
     };
@@ -998,6 +1054,67 @@ pub fn person_detail(
         if (e.key === 'Escape') closeUnimportModal();
     }});
 }})();"#, p)))
+            }
+        }
+        @if is_god && !is_self {
+            script {
+                (maud::PreEscaped(format!(r#"(function() {{
+    const PREFIX = "{}";
+    const STAFF_ID = "{}";
+    const modal = document.getElementById('delete-staff-modal');
+    const errorDiv = document.getElementById('delete-staff-error');
+    const loading = document.getElementById('delete-staff-loading');
+    const confirmBtn = document.getElementById('delete-staff-confirm');
+
+    window.openDeleteStaffModal = function() {{
+        modal.classList.add('is-active');
+        errorDiv.classList.add('is-hidden');
+        loading.classList.add('is-hidden');
+        confirmBtn.disabled = false;
+    }};
+
+    window.closeDeleteStaffModal = function() {{
+        modal.classList.remove('is-active');
+    }};
+
+    confirmBtn.addEventListener('click', async () => {{
+        confirmBtn.disabled = true;
+        loading.classList.remove('is-hidden');
+        errorDiv.classList.add('is-hidden');
+        try {{
+            const res = await fetch(PREFIX + '/api/person/' + STAFF_ID + '/delete', {{
+                method: 'POST'
+            }});
+            const data = await res.json();
+            if (res.ok) {{
+                window.location.href = PREFIX + '/staff';
+                return;
+            }}
+            let msg;
+            if (res.status === 409 && Array.isArray(data.blockers)) {{
+                msg = 'Ce membre ne peut pas être supprimé car il/elle :<ul class="mt-2">' +
+                    data.blockers.map(function(b) {{ return '<li>' + b + '</li>'; }}).join('') +
+                    '</ul>';
+            }} else {{
+                msg = data.error || 'Erreur serveur';
+            }}
+            errorDiv.innerHTML = msg;
+            errorDiv.classList.remove('is-hidden');
+            confirmBtn.disabled = false;
+        }} catch (err) {{
+            errorDiv.textContent = err.message || 'Erreur serveur';
+            errorDiv.classList.remove('is-hidden');
+            confirmBtn.disabled = false;
+        }} finally {{
+            loading.classList.add('is-hidden');
+        }}
+    }});
+
+    const deleteBtn = document.getElementById('delete-staff-btn');
+    if (deleteBtn) {{
+        deleteBtn.addEventListener('click', openDeleteStaffModal);
+    }}
+}})();"#, p, staff.id)))
             }
         }
     };

@@ -3395,3 +3395,52 @@ pub async fn prune_old_news(pool: &PgPool, keep: i64) -> Result<u64> {
     .await?;
     Ok(result.rows_affected())
 }
+
+pub async fn staff_delete_blockers(pool: &PgPool, id: uuid::Uuid) -> Result<Vec<String>> {
+    let mut reasons = Vec::new();
+
+    let has_payments: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM payments WHERE staff = $1)")
+            .bind(id)
+            .fetch_one(pool)
+            .await?;
+    if has_payments {
+        reasons.push("a des adhésions actives (paiements)".into());
+    }
+
+    let has_roles: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM roles WHERE staff = $1)")
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
+    if has_roles {
+        reasons.push("est inscrit à un ou plusieurs ateliers".into());
+    }
+
+    let has_presence: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM presence WHERE staff = $1)")
+            .bind(id)
+            .fetch_one(pool)
+            .await?;
+    if has_presence {
+        reasons.push("a des inscriptions au planning".into());
+    }
+
+    let has_photos: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM photos WHERE photographer_id = $1)")
+            .bind(id)
+            .fetch_one(pool)
+            .await?;
+    if has_photos {
+        reasons.push("est photographe de photos".into());
+    }
+
+    Ok(reasons)
+}
+
+pub async fn delete_staff(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
+    let res = sqlx::query("DELETE FROM staff WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(res.rows_affected() > 0)
+}

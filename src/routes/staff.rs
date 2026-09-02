@@ -12,7 +12,7 @@ use tracing::{error, warn};
 
 use crate::{
     AppState,
-    auth::{RequireAdmin, RequireStaff},
+    auth::{RequireAdmin, RequireGod, RequireStaff},
     database, get_current_season, get_prefix, send_notification_email, templates,
 };
 
@@ -166,9 +166,10 @@ pub async fn view_person(
 
     // Determine viewer permissions
     let is_self = viewer_id == id;
-    let (is_viewer_admin, is_viewer_chief) = if is_self {
+    let (is_viewer_admin, is_viewer_god, is_viewer_chief) = if is_self {
         (
             staff.is_admin,
+            staff.is_god,
             database::is_chief(&state.db, viewer_id)
                 .await
                 .unwrap_or(false),
@@ -177,11 +178,12 @@ pub async fn view_person(
         match database::get_staff_by_id(&state.db, viewer_id).await {
             Ok(Some(v)) => (
                 v.is_admin || v.is_god,
+                v.is_god,
                 database::is_chief(&state.db, viewer_id)
                     .await
                     .unwrap_or(false),
             ),
-            _ => (false, false),
+            _ => (false, false, false),
         }
     };
     let show_contact = is_self || is_viewer_admin || is_viewer_chief;
@@ -336,6 +338,7 @@ pub async fn view_person(
         &prefix,
         is_self,
         is_viewer_admin,
+        is_viewer_god,
         show_contact,
         &todos,
         &payment_history,
@@ -1251,6 +1254,66 @@ pub async fn delete_training_proof(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": e.to_string()})),
             )
+        }
+    }
+}
+
+pub async fn delete_person(
+    RequireGod(me): RequireGod,
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+) -> Response {
+    if me.id == id {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"blockers": vec!["vous ne pouvez pas supprimer votre propre compte"]})),
+        )
+            .into_response();
+    }
+
+    match database::staff_delete_blockers(&state.db, id).await {
+        Ok(blockers) if !blockers.is_empty() => {
+            return (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({"blockers": blockers})),
+            )
+                .into_response();
+        }
+        Ok(_) => {}
+        Err(e) => {
+            error!("Error checking delete blockers: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    }
+
+    match database::delete_staff(&state.db, id).await {
+        Ok(true) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(me.id),
+                &format!("{} {}", me.first_name, me.last_name),
+                "Suppression d'un membre",
+                &format!("staff={id}"),
+            )
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"success": true}))).into_response()
+        }
+        Ok(false) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Membre introuvable"})),
+        )
+            .into_response(),
+        Err(e) => {
+            error!("Error deleting staff: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
         }
     }
 }
