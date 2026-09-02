@@ -301,6 +301,10 @@ pub async fn sync_webhook(
                         order.id,
                         order.items.len()
                     );
+                    let unimported_before =
+                        database::count_unimported_memberships(&state.db, get_current_season())
+                            .await
+                            .unwrap_or(0);
                     let mut user_map = HashMap::new();
                     match process_order(&order, &state, &mut user_map).await {
                         Ok((u, m)) => {
@@ -322,7 +326,7 @@ pub async fn sync_webhook(
 
                             // Notify admins if new unimported memberships appeared
                             if m > 0 {
-                                notify_new_memberships(&state).await;
+                                notify_new_memberships(&state, unimported_before).await;
                             }
                         }
                         Err(e) => {
@@ -470,6 +474,11 @@ pub async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usiz
     let mut user_count = 0;
     let mut membership_count = 0;
 
+    // Snapshot the pending queue before importing, so we only alert on a fresh batch.
+    let unimported_before = database::count_unimported_memberships(&state.db, get_current_season())
+        .await
+        .unwrap_or(0);
+
     // Track users we've already upserted (keyed by email) to avoid duplicates
     let mut user_map: HashMap<String, User> = HashMap::new();
 
@@ -505,18 +514,21 @@ pub async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usiz
     );
 
     // Check if new unimported memberships appeared and notify admins
-    notify_new_memberships(state).await;
+    notify_new_memberships(state, unimported_before).await;
 
     Ok((user_count, membership_count))
 }
 
 /// Check for unimported memberships and email admins when new ones appear.
-async fn notify_new_memberships(state: &AppState) {
+///
+/// Only notifies when the queue was empty before the current import, so a burst
+/// of memberships while a previous batch is still pending doesn't re-email admins.
+async fn notify_new_memberships(state: &AppState, unimported_before: i64) {
     let current_season = get_current_season();
     let unimported = database::count_unimported_memberships(&state.db, current_season)
         .await
         .unwrap_or(0);
-    if unimported > 0 {
+    if unimported_before == 0 && unimported > 0 {
         info!("{} unimported membership(s), notifying admins", unimported);
         let admin_emails = database::get_admin_emails(&state.db)
             .await
