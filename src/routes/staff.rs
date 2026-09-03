@@ -1317,3 +1317,53 @@ pub async fn delete_person(
         }
     }
 }
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct UpdateEmailPreferencesRequest {
+    no_import_emails: bool,
+    no_weekly_emails: bool,
+}
+
+pub async fn api_update_own_email_preferences(
+    RequireAdmin(me): RequireAdmin,
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateEmailPreferencesRequest>,
+) -> impl IntoResponse {
+    match database::update_staff_email_preferences(
+        &state.db,
+        me.id,
+        payload.no_import_emails,
+        payload.no_weekly_emails,
+    )
+    .await
+    {
+        Ok(staff) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(me.id),
+                &format!("{} {}", me.first_name, me.last_name),
+                "Modification préférences de mail",
+                &format!(
+                    "no_import_emails={} no_weekly_emails={}",
+                    staff.no_import_emails, staff.no_weekly_emails
+                ),
+            )
+            .await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "success": true,
+                    "no_import_emails": staff.no_import_emails,
+                    "no_weekly_emails": staff.no_weekly_emails,
+                })),
+            )
+        }
+        Err(e) => {
+            error!("Error updating email preferences: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
+}

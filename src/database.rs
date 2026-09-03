@@ -892,9 +892,19 @@ pub async fn is_chief(pool: &PgPool, staff_id: uuid::Uuid) -> Result<bool> {
 }
 
 /// Get email addresses of all admin staff members
-pub async fn get_admin_emails(pool: &PgPool) -> Result<Vec<String>> {
+pub async fn get_admin_emails_for_import(pool: &PgPool) -> Result<Vec<String>> {
     let emails = sqlx::query_scalar::<_, String>(
-        "SELECT email FROM staff WHERE is_admin = true AND email != ''",
+        "SELECT email FROM staff WHERE is_admin = true AND email != '' AND no_import_emails = false",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(emails)
+}
+
+/// Get email addresses of all admin staff members who want the Monday recap
+pub async fn get_admin_emails_for_weekly(pool: &PgPool) -> Result<Vec<String>> {
+    let emails = sqlx::query_scalar::<_, String>(
+        "SELECT email FROM staff WHERE is_admin = true AND email != '' AND no_weekly_emails = false",
     )
     .fetch_all(pool)
     .await?;
@@ -1062,6 +1072,8 @@ pub async fn get_all_staff_with_season(pool: &PgPool) -> Result<Vec<(Staff, Opti
             comment: row.try_get("comment")?,
             is_admin: row.try_get("is_admin")?,
             is_god: row.try_get("is_god")?,
+            no_import_emails: row.try_get("no_import_emails")?,
+            no_weekly_emails: row.try_get("no_weekly_emails")?,
             token: row.try_get("token")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
@@ -2339,6 +2351,28 @@ pub async fn update_staff_admin_flags(
     Ok(staff)
 }
 
+pub async fn update_staff_email_preferences(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    no_import_emails: bool,
+    no_weekly_emails: bool,
+) -> Result<Staff> {
+    let staff = sqlx::query_as::<_, Staff>(
+        r"
+        UPDATE staff SET no_import_emails = $2, no_weekly_emails = $3, updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+        ",
+    )
+    .bind(staff_id)
+    .bind(no_import_emails)
+    .bind(no_weekly_emails)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(staff)
+}
+
 /// Search staff by name (`first_name` + `last_name`) using unaccent for accent-insensitive matching
 pub async fn search_staff_by_name(pool: &PgPool, query: &str) -> Result<Vec<Staff>> {
     let pattern = format!("%{}%", query.trim().to_lowercase());
@@ -2417,6 +2451,8 @@ pub async fn get_all_staff_with_ateliers(pool: &PgPool) -> Result<Vec<(Staff, Ve
             comment: row.try_get("comment")?,
             is_admin: row.try_get("is_admin")?,
             is_god: row.try_get("is_god")?,
+            no_import_emails: row.try_get("no_import_emails")?,
+            no_weekly_emails: row.try_get("no_weekly_emails")?,
             token: row.try_get("token")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
@@ -2661,6 +2697,8 @@ pub async fn get_pending_validations(
             comment: row.try_get("comment")?,
             is_admin: row.try_get("is_admin")?,
             is_god: row.try_get("is_god")?,
+            no_import_emails: row.try_get("no_import_emails")?,
+            no_weekly_emails: row.try_get("no_weekly_emails")?,
             token: row.try_get("token")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,

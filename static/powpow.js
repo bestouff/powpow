@@ -573,6 +573,41 @@ function initPersonDetail(prefix) {
     });
   }
 
+  var optoutImportCb = document.getElementById("optout-import-cb");
+  var optoutWeeklyCb = document.getElementById("optout-weekly-cb");
+
+  var saveEmailPrefs = async function () {
+    try {
+      var response = await fetch(prefix + "/api/my/email-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          no_import_emails: optoutImportCb ? optoutImportCb.checked : false,
+          no_weekly_emails: optoutWeeklyCb ? optoutWeeklyCb.checked : false,
+        }),
+      });
+      var data = await response.json();
+      if (data.success) {
+        if (optoutImportCb) optoutImportCb.checked = data.no_import_emails;
+        if (optoutWeeklyCb) optoutWeeklyCb.checked = data.no_weekly_emails;
+        showNotification("Préférences de mail enregistrées", "success");
+      } else {
+        showNotification("Erreur: " + (data.error || "Inconnue"), "danger");
+        location.reload();
+      }
+    } catch (error) {
+      showNotification("Erreur réseau: " + error.message, "danger");
+      location.reload();
+    }
+  };
+
+  if (optoutImportCb) {
+    optoutImportCb.addEventListener("change", saveEmailPrefs);
+  }
+  if (optoutWeeklyCb) {
+    optoutWeeklyCb.addEventListener("change", saveEmailPrefs);
+  }
+
   var saveCommentBtn = document.getElementById("save-comment-btn");
   if (saveCommentBtn) {
     saveCommentBtn.addEventListener("click", async function () {

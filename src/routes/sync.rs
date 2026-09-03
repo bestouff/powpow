@@ -530,7 +530,7 @@ async fn notify_new_memberships(state: &AppState, unimported_before: i64) {
         .unwrap_or(0);
     if unimported_before == 0 && unimported > 0 {
         info!("{} unimported membership(s), notifying admins", unimported);
-        let admin_emails = database::get_admin_emails(&state.db)
+        let admin_emails = database::get_admin_emails_for_import(&state.db)
             .await
             .unwrap_or_default();
         if !admin_emails.is_empty() {

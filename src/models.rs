@@ -148,6 +148,7 @@ pub struct MembershipWithStatus {
 
 // Staff model
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Staff {
     pub id: uuid::Uuid,
     pub first_name: String,
@@ -157,6 +158,8 @@ pub struct Staff {
     pub comment: String,
     pub is_admin: bool,
     pub is_god: bool,
+    pub no_import_emails: bool,
+    pub no_weekly_emails: bool,
     pub token: Option<uuid::Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -173,6 +176,8 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Staff {
             comment: row.try_get("comment")?,
             is_admin: row.try_get("is_admin")?,
             is_god: row.try_get("is_god")?,
+            no_import_emails: row.try_get("no_import_emails")?,
+            no_weekly_emails: row.try_get("no_weekly_emails")?,
             token: row.try_get("token")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,

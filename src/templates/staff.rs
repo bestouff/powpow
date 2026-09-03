@@ -400,6 +400,28 @@ pub fn person_detail(
                                         span .icon.has-text-danger { i .fa-solid.fa-hamsa {} }
                                         span { "God" }
                                     }
+                            }
+                        }
+                    }
+
+                        // Notifications box (self, admin only)
+                        @if is_self && is_admin {
+                            div .box {
+                                h2 .title.is-4 {
+                                    span .icon { i .fa-solid.fa-envelope {} }
+                                    "\u{00a0}Notifications"
+                                }
+                                div .field.mb-3 {
+                                    label .checkbox {
+                                        input type="checkbox" #optout-import-cb checked[staff.no_import_emails];
+                                        span { "Je ne veux plus recevoir de mails à propos des inscriptions à valider" }
+                                    }
+                                }
+                                div .field {
+                                    label .checkbox {
+                                        input type="checkbox" #optout-weekly-cb checked[staff.no_weekly_emails];
+                                        span { "Je ne veux plus recevoir de mails récapitulatif du lundi matin" }
+                                    }
                                 }
                             }
                         }

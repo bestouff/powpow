@@ -584,6 +584,10 @@ async fn main() -> anyhow::Result<()> {
             delete(routes::staff::api_delete_own_staff_qualif),
         )
         .route(
+            "/api/my/email-preferences",
+            post(routes::staff::api_update_own_email_preferences),
+        )
+        .route(
             "/api/staff-qualif/{id}/proof",
             post(routes::staff::upload_training_proof).delete(routes::staff::delete_training_proof),
         )

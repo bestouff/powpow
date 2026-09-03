@@ -214,7 +214,7 @@ pub async fn weekly_morning_email_loop(state: AppState) {
             continue;
         }
 
-        let admin_emails = database::get_admin_emails(&state.db)
+        let admin_emails = database::get_admin_emails_for_weekly(&state.db)
             .await
             .unwrap_or_default();
         if admin_emails.is_empty() {

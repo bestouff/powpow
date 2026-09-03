@@ -89,6 +89,12 @@ pub async fn create_cash(
     let phone = form.phone.as_deref().filter(|p| !p.is_empty());
     let is_membership = form.is_membership.is_some();
 
+    // Track the unimported cash queue before inserting, so we only notify
+    // admins when a new payment appears while none were pending before.
+    let unimported_before = database::count_unimported_cash(&state.db)
+        .await
+        .unwrap_or(0);
+
     match database::create_cash_payment(
         &state.db,
         &form.first_name,
@@ -111,13 +117,17 @@ pub async fn create_cash(
                 &format!("{} {} — {}€", form.first_name, form.last_name, form.amount),
             )
             .await;
-            // Notify admins about new cash payment
+            // Notify admins about new cash payment (only when the queue was empty before)
             let state_clone = state.clone();
             let first_name = form.first_name.clone();
             let last_name = form.last_name.clone();
             let amount = form.amount;
             tokio::spawn(async move {
-                let admin_emails = database::get_admin_emails(&state_clone.db)
+                if unimported_before > 0 {
+                    // Already unimported cash pending: don't re-notify admins
+                    return;
+                }
+                let admin_emails = database::get_admin_emails_for_import(&state_clone.db)
                     .await
                     .unwrap_or_default();
                 if !admin_emails.is_empty() {
