@@ -317,6 +317,19 @@ pub(crate) async fn send_notification_email(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let version = env!("CARGO_PKG_VERSION");
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("powpow {version}");
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!(
+            "powpow {version}\n\nUSAGE:\n    powpow [OPTIONS]\n\nOPTIONS:\n    -h, --help     Print help information\n    -V, --version  Print version information"
+        );
+        return Ok(());
+    }
+
     // Initialize tracing with a default of `info` level when RUST_LOG is not set
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -335,7 +348,6 @@ async fn main() -> anyhow::Result<()> {
     let migrations_applied = database::run_migrations(&db).await?;
 
     // Audit: log application startup with version
-    let version = env!("CARGO_PKG_VERSION");
     let _ = database::insert_audit(
         &db,
         None,
