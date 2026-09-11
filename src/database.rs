@@ -1,13 +1,20 @@
 use crate::models::{
     self, Atelier, Cash, ContentBlock, ContentImage, Equipment, Membership, Need,
-    PaymentHistoryEntry, Photo, PhotoMeta, Qualification, Role, Staff, StaffMatchType, StaffQualif,
-    StaffWithSeason, User,
+    PaymentHistoryEntry, Photo, PhotoMeta, Qualification, Role, Session, Staff, StaffMatchType,
+    StaffQualif, StaffWithSeason, User,
 };
 use anyhow::Result;
 use futures_util::StreamExt;
 use sqlx::PgPool;
 use sqlx::Row;
 use tracing::info;
+
+/// Lifetime of a pending login link (magic link emailed to the staff member).
+const LOGIN_TOKEN_LIFETIME: std::time::Duration = std::time::Duration::from_hours(24);
+/// Lifetime of an authenticated session once established.
+const SESSION_LIFETIME: std::time::Duration = std::time::Duration::from_hours(2160);
+/// Maximum number of simultaneous sessions kept per staff member.
+const MAX_SESSIONS_PER_STAFF: i64 = 10;
 
 /// Remove common French accents from a string for comparison
 fn strip_accents(s: &str) -> String {
@@ -1074,7 +1081,6 @@ pub async fn get_all_staff_with_season(pool: &PgPool) -> Result<Vec<(Staff, Opti
             is_god: row.try_get("is_god")?,
             no_import_emails: row.try_get("no_import_emails")?,
             no_weekly_emails: row.try_get("no_weekly_emails")?,
-            token: row.try_get("token")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         };
@@ -2391,37 +2397,158 @@ pub async fn search_staff_by_name(pool: &PgPool, query: &str) -> Result<Vec<Staf
     Ok(staff)
 }
 
-/// Generate a UUID v4 token for a staff member and store it in the token column
-pub async fn set_staff_token(pool: &PgPool, staff_id: uuid::Uuid) -> Result<uuid::Uuid> {
+/// Generate a login link token for a staff member. Multiple pending tokens
+/// can coexist (one per client/device that needs to log in).
+pub async fn create_login_token(pool: &PgPool, staff_id: uuid::Uuid) -> Result<uuid::Uuid> {
     let token = uuid::Uuid::new_v4();
-    sqlx::query(r"UPDATE staff SET token = $2 WHERE id = $1")
-        .bind(staff_id)
-        .bind(token)
-        .execute(pool)
-        .await?;
+    let expires_at = chrono::Utc::now() + LOGIN_TOKEN_LIFETIME;
+    sqlx::query(
+        r"
+        INSERT INTO login_tokens (token, staff, expires_at)
+        VALUES ($1, $2, $3)
+        ",
+    )
+    .bind(token)
+    .bind(staff_id)
+    .bind(expires_at)
+    .execute(pool)
+    .await?;
 
     Ok(token)
 }
 
-/// Atomically verify a token matches and clear it. Returns the staff if valid, None if mismatch.
-pub async fn verify_and_clear_token(
+/// Atomically consume a login link token. Succeeds only if it matches the
+/// staff, is unused (row is deleted) and not expired. Returns `Some(staff_id)`
+/// on success, None if the token is unknown, already used or expired.
+pub async fn consume_login_token(
     pool: &PgPool,
     staff_id: uuid::Uuid,
     token: uuid::Uuid,
-) -> Result<Option<Staff>> {
-    let staff = sqlx::query_as::<_, Staff>(
+) -> Result<Option<uuid::Uuid>> {
+    let row = sqlx::query_scalar::<_, uuid::Uuid>(
         r"
-        UPDATE staff SET token = NULL
-        WHERE id = $1 AND token = $2
-        RETURNING *
+        DELETE FROM login_tokens
+        WHERE token = $1 AND staff = $2 AND expires_at > now()
+        RETURNING staff
         ",
     )
-    .bind(staff_id)
     .bind(token)
+    .bind(staff_id)
     .fetch_optional(pool)
     .await?;
 
-    Ok(staff)
+    Ok(row)
+}
+
+/// Create an authenticated session for a staff member, returning the session id.
+/// Enforces a soft cap: if the staff member already has `MAX_SESSIONS_PER_STAFF`
+/// sessions, the oldest (by `last_seen`) is evicted first.
+pub async fn create_session(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    user_agent: Option<&str>,
+    ip: Option<&str>,
+) -> Result<uuid::Uuid> {
+    // Evict the oldest sessions so that the cap is at most `MAX_SESSIONS_PER_STAFF`
+    // after the new one is inserted (keep the newest MAX_SESSIONS_PER_STAFF - 1).
+    sqlx::query(
+        r"
+        DELETE FROM sessions
+        WHERE staff = $1
+          AND id IN (
+            SELECT id FROM sessions WHERE staff = $1
+            ORDER BY last_seen ASC
+            OFFSET $2
+          )
+        ",
+    )
+    .bind(staff_id)
+    .bind(MAX_SESSIONS_PER_STAFF - 1)
+    .execute(pool)
+    .await?;
+
+    let session_id = uuid::Uuid::new_v4();
+    let expires_at = chrono::Utc::now() + SESSION_LIFETIME;
+    sqlx::query(
+        r"
+        INSERT INTO sessions (id, staff, expires_at, user_agent, ip)
+        VALUES ($1, $2, $3, $4, $5)
+        ",
+    )
+    .bind(session_id)
+    .bind(staff_id)
+    .bind(expires_at)
+    .bind(user_agent)
+    .bind(ip)
+    .execute(pool)
+    .await?;
+
+    Ok(session_id)
+}
+
+/// Resolve an authenticated session to its staff member. Returns None if the
+/// session is unknown or expired. Touches `last_seen` on use.
+pub async fn get_session_staff(pool: &PgPool, session_id: uuid::Uuid) -> Result<Option<Staff>> {
+    // Only touch last_seen for still-valid sessions, then read the staff row.
+    let ready = sqlx::query_as::<_, Staff>(
+        r"
+        WITH valid AS (
+            UPDATE sessions SET last_seen = now()
+            WHERE id = $1 AND expires_at > now()
+            RETURNING staff
+        )
+        SELECT s.* FROM staff s
+        JOIN valid v ON v.staff = s.id
+        ",
+    )
+    .bind(session_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(ready)
+}
+
+/// Delete a session (logout). Returns true if a session was actually deleted.
+pub async fn delete_session(pool: &PgPool, session_id: uuid::Uuid) -> Result<bool> {
+    let res = sqlx::query(r"DELETE FROM sessions WHERE id = $1")
+        .bind(session_id)
+        .execute(pool)
+        .await?;
+
+    Ok(res.rows_affected() > 0)
+}
+
+/// List the connected sessions for a staff member, most recently seen first.
+pub async fn list_sessions(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<Session>> {
+    let rows = sqlx::query_as::<_, Session>(
+        r"
+        SELECT id, staff, created_at, last_seen, expires_at, user_agent, ip
+        FROM sessions
+        WHERE staff = $1
+        ORDER BY last_seen DESC
+        ",
+    )
+    .bind(staff_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
+}
+
+/// Delete one of a staff member's sessions (scoped so callers can only remove
+/// sessions belonging to the targeted staff). Returns true if one was deleted.
+pub async fn delete_staff_session(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    session_id: uuid::Uuid,
+) -> Result<bool> {
+    let res = sqlx::query(r"DELETE FROM sessions WHERE id = $1 AND staff = $2")
+        .bind(session_id)
+        .bind(staff_id)
+        .execute(pool)
+        .await?;
+
+    Ok(res.rows_affected() > 0)
 }
 
 /// Get all staff with their atelier names (for Mailchimp export)
@@ -2453,7 +2580,6 @@ pub async fn get_all_staff_with_ateliers(pool: &PgPool) -> Result<Vec<(Staff, Ve
             is_god: row.try_get("is_god")?,
             no_import_emails: row.try_get("no_import_emails")?,
             no_weekly_emails: row.try_get("no_weekly_emails")?,
-            token: row.try_get("token")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         };
@@ -2699,7 +2825,6 @@ pub async fn get_pending_validations(
             is_god: row.try_get("is_god")?,
             no_import_emails: row.try_get("no_import_emails")?,
             no_weekly_emails: row.try_get("no_weekly_emails")?,
-            token: row.try_get("token")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         };

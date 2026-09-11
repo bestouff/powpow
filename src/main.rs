@@ -162,10 +162,12 @@ pub(crate) async fn resolve_staff_if_admin(
     jar: &SignedCookieJar,
     state: &AppState,
 ) -> Option<models::Staff> {
-    let id = jar
+    let session_id = jar
         .get("aghil_session")
         .and_then(|c| c.value().parse::<uuid::Uuid>().ok())?;
-    let staff = database::get_staff_by_id(&state.db, id).await.ok()??;
+    let staff = database::get_session_staff(&state.db, session_id)
+        .await
+        .ok()??;
     if staff.is_admin || staff.is_god {
         Some(staff)
     } else {
@@ -177,10 +179,12 @@ pub(crate) async fn resolve_staff_if_god(
     jar: &SignedCookieJar,
     state: &AppState,
 ) -> Option<models::Staff> {
-    let id = jar
+    let session_id = jar
         .get("aghil_session")
         .and_then(|c| c.value().parse::<uuid::Uuid>().ok())?;
-    let staff = database::get_staff_by_id(&state.db, id).await.ok()??;
+    let staff = database::get_session_staff(&state.db, session_id)
+        .await
+        .ok()??;
     if staff.is_god { Some(staff) } else { None }
 }
 
@@ -491,6 +495,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/person/{id}/delete",
             post(routes::staff::delete_person),
+        )
+        .route(
+            "/api/person/{id}/session/{session_id}",
+            delete(routes::staff::api_delete_session),
         )
         .route("/import/{item_id}", get(routes::membership::import_staff))
         .route(

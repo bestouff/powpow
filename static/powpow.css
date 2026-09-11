@@ -1583,3 +1583,41 @@ a.nightly-switch label.switch input[type="checkbox"]:disabled + .check {
   color: #fff;
   opacity: 0.8;
 }
+
+/* === Connected devices box (collapsible, person page) === */
+details.sessions-box {
+  padding: 0;
+  overflow: hidden;
+}
+.sessions-box summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.sessions-box summary::-webkit-details-marker {
+  display: none;
+}
+.sessions-box summary .title {
+  margin-bottom: 0;
+}
+.sessions-box .sessions-chevron {
+  transition: transform 0.2s ease;
+  color: var(--color-accent);
+}
+.sessions-box[open] .sessions-chevron {
+  transform: rotate(180deg);
+}
+.sessions-box-body {
+  padding: 0 1rem 1rem;
+}
+.session-current {
+  background: rgba(131, 168, 70, 0.12);
+  border-left: 3px solid var(--color-status-open);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+}

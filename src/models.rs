@@ -160,7 +160,6 @@ pub struct Staff {
     pub is_god: bool,
     pub no_import_emails: bool,
     pub no_weekly_emails: bool,
-    pub token: Option<uuid::Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -178,9 +177,34 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Staff {
             is_god: row.try_get("is_god")?,
             no_import_emails: row.try_get("no_import_emails")?,
             no_weekly_emails: row.try_get("no_weekly_emails")?,
-            token: row.try_get("token")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
+/// An authenticated web session (connected device) for a staff member.
+#[derive(Debug, Clone, Serialize)]
+pub struct Session {
+    pub id: uuid::Uuid,
+    pub staff: uuid::Uuid,
+    pub created_at: DateTime<Utc>,
+    pub last_seen: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    pub user_agent: Option<String>,
+    pub ip: Option<String>,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for Session {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(Session {
+            id: row.try_get("id")?,
+            staff: row.try_get("staff")?,
+            created_at: row.try_get("created_at")?,
+            last_seen: row.try_get("last_seen")?,
+            expires_at: row.try_get("expires_at")?,
+            user_agent: row.try_get("user_agent")?,
+            ip: row.try_get("ip")?,
         })
     }
 }

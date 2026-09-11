@@ -15,12 +15,12 @@ use crate::{
 
 /// Resolve the caller from the session cookie, if any.
 async fn resolve_caller(jar: &SignedCookieJar, state: &AppState) -> Option<crate::models::Staff> {
-    let id = jar
+    let session_id = jar
         .get("aghil_session")?
         .value()
         .parse::<uuid::Uuid>()
         .ok()?;
-    database::get_staff_by_id(&state.db, id)
+    database::get_session_staff(&state.db, session_id)
         .await
         .ok()
         .flatten()

@@ -95,7 +95,7 @@ async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<Staff, Auth
         .await
         .expect("SignedCookieJar extraction is infallible");
 
-    let staff_id = match jar.get("aghil_session") {
+    let session_id = match jar.get("aghil_session") {
         Some(cookie) => match cookie.value().parse::<uuid::Uuid>() {
             Ok(id) => id,
             Err(_) => {
@@ -115,7 +115,7 @@ async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<Staff, Auth
         }
     };
 
-    match database::get_staff_by_id(&state.db, staff_id).await {
+    match database::get_session_staff(&state.db, session_id).await {
         Ok(Some(staff)) => Ok(staff),
         Ok(None) => Err(AuthError {
             kind: AuthErrorKind::NotLoggedIn,
@@ -123,7 +123,7 @@ async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<Staff, Auth
             is_api,
         }),
         Err(e) => {
-            error!("Auth: DB error looking up staff {}: {}", staff_id, e);
+            error!("Auth: DB error looking up session {}: {}", session_id, e);
             Err(AuthError {
                 kind: AuthErrorKind::InternalError,
                 prefix,

@@ -1,5 +1,5 @@
 use super::{NavKind, TodoItem, capitalize_words, format_phone_international, page};
-use crate::models::{Atelier, Qualification, Role, Staff, StaffQualif};
+use crate::models::{Atelier, Qualification, Role, Session, Staff, StaffQualif};
 use chrono::Datelike;
 use maud::{Markup, PreEscaped, html};
 
@@ -12,6 +12,58 @@ fn is_qualification_expired(qual: &Qualification, obtained_date: chrono::NaiveDa
         expiry < chrono::Utc::now().date_naive()
     } else {
         false
+    }
+}
+
+/// Give a short human-readable description of a device from its User-Agent
+/// header (e.g. "Chrome sur Windows"), falling back to the raw User-Agent when
+/// nothing can be recognized.
+fn describe_user_agent(user_agent: Option<&str>) -> String {
+    let Some(ua) = user_agent else {
+        return "Navigateur inconnu".to_string();
+    };
+    let lower = ua.to_lowercase();
+
+    let browser = if lower.contains("edg/") || lower.contains("edgios") {
+        "Edge"
+    } else if lower.contains("opr/") || lower.contains("opera") {
+        "Opera"
+    } else if lower.contains("samsungbrowser") {
+        "Samsung Internet"
+    } else if lower.contains("chrome") {
+        "Chrome"
+    } else if lower.contains("crios") {
+        "Chrome iOS"
+    } else if lower.contains("fxios") {
+        "Firefox iOS"
+    } else if lower.contains("firefox") {
+        "Firefox"
+    } else if lower.contains("safari") {
+        "Safari"
+    } else if lower.contains("bot") {
+        "Bot"
+    } else {
+        ua.trim_end_matches(|c: char| c.is_whitespace())
+    };
+
+    let os = if lower.contains("windows") {
+        "Windows"
+    } else if lower.contains("android") {
+        "Android"
+    } else if lower.contains("iphone") || lower.contains("ipad") || lower.contains("iph os") {
+        "iOS"
+    } else if lower.contains("mac os") || lower.contains("macos") || lower.contains("macintosh") {
+        "macOS"
+    } else if lower.contains("linux") {
+        "Linux"
+    } else {
+        ""
+    };
+
+    if os.is_empty() {
+        browser.to_string()
+    } else {
+        format!("{browser} sur {os}")
     }
 }
 
@@ -240,6 +292,8 @@ pub fn person_detail(
     person_calendar: &[(crate::models::Need, String, String, String, bool, bool)],
     person_qualifications: &[(crate::models::StaffQualif, String, Option<i16>)],
     all_qualifications: &[crate::models::Qualification],
+    sessions: &[Session],
+    current_session_id: uuid::Uuid,
 ) -> Markup {
     let p = prefix;
     let can_edit_ateliers = is_self || is_admin;
@@ -421,6 +475,53 @@ pub fn person_detail(
                                     label .checkbox {
                                         input type="checkbox" #optout-weekly-cb checked[staff.no_weekly_emails];
                                         span { "Je ne veux plus recevoir de mails récapitulatif du lundi matin" }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Connected devices box (self or god)
+                        @if is_self || is_god {
+                            details .box.sessions-box {
+                                summary .sessions-box-summary {
+                                    div .is-flex.is-align-items-center {
+                                        span .icon { i .fa-solid.fa-laptop {} }
+                                        "\u{00a0}"
+                                        span .title.is-4 { "Appareils connectés" }
+                                        @if !sessions.is_empty() {
+                                            span .tag.is-light.ml-2 { (sessions.len()) }
+                                        }
+                                    }
+                                    span .icon.sessions-chevron { i .fa-solid.fa-chevron-down {} }
+                                }
+                                div .content.sessions-box-body {
+                                    @if sessions.is_empty() {
+                                        p .has-text-grey { "Aucun appareil connecté." }
+                                    }
+                                    @for session in sessions {
+                                        @let is_current = session.id == current_session_id;
+                                        div .is-flex.is-align-items-center.is-justify-content-space-between.mb-3.session-current[is_current] {
+                                            div {
+                                                p { strong { (describe_user_agent(session.user_agent.as_deref())) } }
+                                                p .has-text-grey.is-size-7 {
+                                                    @if let Some(ip) = &session.ip {
+                                                        (ip) " — "
+                                                    }
+                                                    "dernière activité le " (session.last_seen.format("%d/%m/%Y %H:%M"))
+                                                }
+                                                @if is_current {
+                                                    span .tag.is-success.mt-1 { "(cet appareil)" }
+                                                }
+                                            }
+                                            @if !is_current {
+                                                button .button.is-small.is-danger.is-outlined.session-delete-btn
+                                                    aria-label="Déconnecter cet appareil"
+                                                    title="Déconnecter"
+                                                    data-session-id=(session.id) {
+                                                    span .icon.is-small { i .fa-solid.fa-trash {} }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1136,6 +1237,30 @@ pub fn person_detail(
     if (deleteBtn) {{
         deleteBtn.addEventListener('click', openDeleteStaffModal);
     }}
+}})();"#, p, staff.id)))
+            }
+        }
+        @if is_self || is_god {
+            script {
+                (maud::PreEscaped(format!(r#"(function() {{
+    const PREFIX = "{}";
+    const STAFF_ID = "{}";
+
+    document.querySelectorAll('.session-delete-btn').forEach(btn => {{
+        btn.addEventListener('click', async () => {{
+            if (!confirm('Déconnecter cet appareil ?')) return;
+            btn.classList.add('is-loading');
+            const res = await fetch(PREFIX + '/api/person/' + STAFF_ID + '/session/' + btn.dataset.sessionId, {{
+                method: 'DELETE'
+            }});
+            if (res.ok) {{ location.reload(); }}
+            else {{
+                btn.classList.remove('is-loading');
+                const e = await res.json();
+                alert(e.error || 'Erreur');
+            }}
+        }});
+    }});
 }})();"#, p, staff.id)))
             }
         }

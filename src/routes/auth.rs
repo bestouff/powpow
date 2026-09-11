@@ -93,7 +93,7 @@ pub async fn api_send_login_email(
     }
 
     // Generate token
-    let token = match database::set_staff_token(&state.db, staff.id).await {
+    let token = match database::create_login_token(&state.db, staff.id).await {
         Ok(t) => t,
         Err(e) => {
             error!("Error setting token: {}", e);
@@ -312,7 +312,7 @@ async fn send_login_email_gmail(
 }
 
 pub async fn api_me(State(state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
-    let staff_id = match jar.get("aghil_session") {
+    let session_id = match jar.get("aghil_session") {
         Some(cookie) => match cookie.value().parse::<uuid::Uuid>() {
             Ok(id) => id,
             Err(_) => {
@@ -330,7 +330,7 @@ pub async fn api_me(State(state): State<AppState>, jar: SignedCookieJar) -> impl
         }
     };
 
-    match database::get_staff_by_id(&state.db, staff_id).await {
+    match database::get_session_staff(&state.db, session_id).await {
         Ok(Some(staff)) => {
             let is_chief = staff.is_admin
                 || staff.is_god
@@ -364,8 +364,21 @@ pub async fn api_me(State(state): State<AppState>, jar: SignedCookieJar) -> impl
     }
 }
 
-pub async fn logout(headers: HeaderMap, jar: SignedCookieJar) -> impl IntoResponse {
+pub async fn logout(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    jar: SignedCookieJar,
+) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
+
+    // Revoke the server-side session if we have one.
+    if let Some(cookie) = jar.get("aghil_session")
+        && let Ok(session_id) = cookie.value().parse::<uuid::Uuid>()
+        && let Err(e) = database::delete_session(&state.db, session_id).await
+    {
+        error!("Error deleting session {}: {}", session_id, e);
+    }
+
     let mut cookie = axum_extra::extract::cookie::Cookie::new("aghil_session", "");
     cookie.set_path("/");
     cookie.set_http_only(true);

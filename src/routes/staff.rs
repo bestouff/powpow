@@ -109,18 +109,34 @@ pub async fn view_person(
 ) -> Response {
     let prefix = get_prefix(&headers);
 
-    // If a login token is present, verify and set session cookie
+    // If a login token is present, verify it and start a new session
     if let Some(token) = query.token {
-        match database::verify_and_clear_token(&state.db, id, token).await {
-            Ok(Some(_staff)) => {
-                // Token valid: set session cookie and redirect to clean URL
-                let mut cookie =
-                    axum_extra::extract::cookie::Cookie::new("aghil_session", id.to_string());
+        match database::consume_login_token(&state.db, id, token).await {
+            Ok(Some(_staff_id)) => {
+                let user_agent = headers.get("User-Agent").and_then(|v| v.to_str().ok());
+                let ip = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok());
+                let session_id = match database::create_session(&state.db, id, user_agent, ip).await
+                {
+                    Ok(sid) => sid,
+                    Err(e) => {
+                        error!("Error creating session: {}", e);
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            html! { p { "Erreur lors de la création de la session" } },
+                        )
+                            .into_response();
+                    }
+                };
+                // Session valid: set session cookie and redirect to clean URL
+                let mut cookie = axum_extra::extract::cookie::Cookie::new(
+                    "aghil_session",
+                    session_id.to_string(),
+                );
                 cookie.set_path("/");
                 cookie.set_http_only(true);
                 cookie.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
                 cookie.set_secure(true);
-                cookie.set_max_age(time::Duration::days(30));
+                cookie.set_max_age(time::Duration::days(90));
                 let updated_jar = jar.add(cookie);
                 return (
                     updated_jar,
@@ -145,6 +161,9 @@ pub async fn view_person(
     else {
         return Redirect::to(&format!("{}/login", prefix)).into_response();
     };
+    let Ok(Some(viewer)) = database::get_session_staff(&state.db, viewer_id).await else {
+        return Redirect::to(&format!("{}/login", prefix)).into_response();
+    };
 
     let current_season = get_current_season();
 
@@ -165,26 +184,23 @@ pub async fn view_person(
     };
 
     // Determine viewer permissions
-    let is_self = viewer_id == id;
+    let is_self = viewer.id == id;
     let (is_viewer_admin, is_viewer_god, is_viewer_chief) = if is_self {
         (
             staff.is_admin,
             staff.is_god,
-            database::is_chief(&state.db, viewer_id)
+            database::is_chief(&state.db, viewer.id)
                 .await
                 .unwrap_or(false),
         )
     } else {
-        match database::get_staff_by_id(&state.db, viewer_id).await {
-            Ok(Some(v)) => (
-                v.is_admin || v.is_god,
-                v.is_god,
-                database::is_chief(&state.db, viewer_id)
-                    .await
-                    .unwrap_or(false),
-            ),
-            _ => (false, false, false),
-        }
+        (
+            viewer.is_admin || viewer.is_god,
+            viewer.is_god,
+            database::is_chief(&state.db, viewer.id)
+                .await
+                .unwrap_or(false),
+        )
     };
     let show_contact = is_self || is_viewer_admin || is_viewer_chief;
 
@@ -330,6 +346,15 @@ pub async fn view_person(
         Vec::new()
     };
 
+    // Fetch connected sessions (visible to self and gods)
+    let sessions = if is_self || is_viewer_god {
+        database::list_sessions(&state.db, id)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
     templates::person_detail(
         &staff,
         &ateliers,
@@ -345,6 +370,8 @@ pub async fn view_person(
         &person_calendar,
         &person_qualifications,
         &all_qualifications,
+        &sessions,
+        viewer_id,
     )
     .into_response()
 }
@@ -1322,6 +1349,63 @@ pub async fn delete_person(
 pub(crate) struct UpdateEmailPreferencesRequest {
     no_import_emails: bool,
     no_weekly_emails: bool,
+}
+
+pub async fn api_delete_session(
+    RequireStaff(me): RequireStaff,
+    State(state): State<AppState>,
+    jar: SignedCookieJar,
+    axum::extract::Path((staff_id, session_id)): axum::extract::Path<(uuid::Uuid, uuid::Uuid)>,
+) -> Response {
+    // Only the member themselves or a god can revoke sessions.
+    if me.id != staff_id && !me.is_god {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "Accès refusé"})),
+        )
+            .into_response();
+    }
+
+    // Prevent killing your own current session (that is what /logout is for).
+    if me.id == staff_id {
+        let current = jar
+            .get("aghil_session")
+            .and_then(|c| c.value().parse::<uuid::Uuid>().ok());
+        if current == Some(session_id) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "Impossible de déconnecter l'appareil actuel"})),
+            )
+                .into_response();
+        }
+    }
+
+    match database::delete_staff_session(&state.db, staff_id, session_id).await {
+        Ok(true) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(me.id),
+                &format!("{} {}", me.first_name, me.last_name),
+                "Déconnexion d'un appareil",
+                &format!("session={session_id} staff={staff_id}"),
+            )
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"success": true}))).into_response()
+        }
+        Ok(false) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Session introuvable"})),
+        )
+            .into_response(),
+        Err(e) => {
+            error!("Error deleting session: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
 }
 
 pub async fn api_update_own_email_preferences(

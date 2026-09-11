@@ -450,11 +450,9 @@ pub async fn calendar_landing(
     let staff = if let Some(id) = jar
         .get("aghil_session")
         .and_then(|c| c.value().parse::<uuid::Uuid>().ok())
+        && let Ok(Some(s)) = database::get_session_staff(&state.db, id).await
     {
-        database::get_staff_by_id(&state.db, id)
-            .await
-            .ok()
-            .flatten()
+        Some(s)
     } else {
         None
     };
