@@ -396,6 +396,14 @@ function initPersonDetail(prefix) {
       var atelierId = this.dataset.atelierId;
       var checked = this.checked;
 
+      // Confirm unsubscription from an atelier
+      if (!checked) {
+        if (!confirm("Se désinscrire de cet atelier ?")) {
+          this.checked = true;
+          return;
+        }
+      }
+
       try {
         var response = await fetch(
           prefix + "/api/person/" + staffId + "/role",
@@ -471,6 +479,14 @@ function initPersonDetail(prefix) {
         var validatedCheckbox = document.querySelector(
           '.role-validated-checkbox[data-atelier-id="' + atelierId + '"]',
         );
+
+        // Confirm removal of the chief status
+        if (!checked) {
+          if (!confirm("Retirer le statut de chef de cet atelier ?")) {
+            this.checked = true;
+            return;
+          }
+        }
 
         try {
           var response = await fetch(
