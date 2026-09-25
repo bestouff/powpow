@@ -6,6 +6,7 @@ pub mod cash;
 pub mod content;
 pub mod home;
 pub mod legal;
+pub mod mailchimp;
 pub mod membership;
 pub mod photos;
 pub mod settings;

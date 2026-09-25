@@ -1081,6 +1081,7 @@ pub async fn get_all_staff_with_season(pool: &PgPool) -> Result<Vec<(Staff, Opti
             is_god: row.try_get("is_god")?,
             no_import_emails: row.try_get("no_import_emails")?,
             no_weekly_emails: row.try_get("no_weekly_emails")?,
+            newsletter_status: row.try_get("newsletter_status")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         };
@@ -2551,43 +2552,71 @@ pub async fn delete_staff_session(
     Ok(res.rows_affected() > 0)
 }
 
-/// Get all staff with their atelier names (for Mailchimp export)
-pub async fn get_all_staff_with_ateliers(pool: &PgPool) -> Result<Vec<(Staff, Vec<String>)>> {
-    let rows = sqlx::query(
+/// Store the Mailchimp status of every staff member (from the pulled member list).
+///
+/// `statuses` is a list of `(email, status)` where `status` is one of Mailchimp's
+/// member statuses (`subscribed`, `unsubscribed`, `non-subscribed`, `cleaned`,
+/// `pending`). Only staff whose email appears in the list are updated.
+///
+/// When `progress` is provided, the `stored` counter is increased after each
+/// row so the newsletter page can show a running tally.
+pub async fn set_mailchimp_statuses(
+    pool: &PgPool,
+    statuses: &[(String, String)],
+    progress: Option<&crate::mailchimp::SyncProgressHandle>,
+) -> Result<usize> {
+    let mut updated = 0usize;
+    let mut tx = pool.begin().await?;
+    for (email, status) in statuses {
+        let result = sqlx::query(
+            r"
+            UPDATE staff SET newsletter_status = $2
+            WHERE LOWER(TRIM(email)) = $1
+            ",
+        )
+        .bind(email.trim().to_lowercase())
+        .bind(status)
+        .execute(&mut *tx)
+        .await?;
+        updated += result.rows_affected() as usize;
+        if let Some(progress) = progress {
+            let mut p = progress.lock().await;
+            p.stored = updated as u32;
+        }
+    }
+    tx.commit().await?;
+    Ok(updated)
+}
+
+/// Get staff members who are subscribed to the newsletter.
+/// Used to push recipients to Mailchimp.
+pub async fn get_newsletter_recipients(pool: &PgPool) -> Result<Vec<Staff>> {
+    let staff = sqlx::query_as::<_, Staff>(
         r"
-        SELECT s.*,
-               COALESCE(array_agg(a.name ORDER BY a.name) FILTER (WHERE a.name IS NOT NULL), '{}') as atelier_names
-        FROM staff s
-        LEFT JOIN roles r ON r.staff = s.id
-        LEFT JOIN ateliers a ON a.id = r.atelier
-        GROUP BY s.id
-        ORDER BY s.last_name, s.first_name
+        SELECT * FROM staff
+        WHERE newsletter_status = 'subscribed' AND TRIM(email) <> ''
+        ORDER BY last_name, first_name
         ",
     )
     .fetch_all(pool)
     .await?;
 
-    let mut result = Vec::new();
-    for row in rows {
-        let staff = Staff {
-            id: row.try_get("id")?,
-            first_name: row.try_get("first_name")?,
-            last_name: row.try_get("last_name")?,
-            phone: row.try_get("phone")?,
-            email: row.try_get("email")?,
-            comment: row.try_get("comment")?,
-            is_admin: row.try_get("is_admin")?,
-            is_god: row.try_get("is_god")?,
-            no_import_emails: row.try_get("no_import_emails")?,
-            no_weekly_emails: row.try_get("no_weekly_emails")?,
-            created_at: row.try_get("created_at")?,
-            updated_at: row.try_get("updated_at")?,
-        };
-        let atelier_names: Vec<String> = row.try_get("atelier_names")?;
-        result.push((staff, atelier_names));
-    }
+    Ok(staff)
+}
 
-    Ok(result)
+/// Get all staff ordered by last name, first name.
+/// Used to display the newsletter subscriptions page.
+pub async fn get_all_staff_ordered(pool: &PgPool) -> Result<Vec<Staff>> {
+    let staff = sqlx::query_as::<_, Staff>(
+        r"
+        SELECT * FROM staff
+        ORDER BY last_name, first_name
+        ",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(staff)
 }
 
 /// List names of unimported memberships + cash payments (for daily summary email).
@@ -2825,6 +2854,7 @@ pub async fn get_pending_validations(
             is_god: row.try_get("is_god")?,
             no_import_emails: row.try_get("no_import_emails")?,
             no_weekly_emails: row.try_get("no_weekly_emails")?,
+            newsletter_status: row.try_get("newsletter_status")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         };

@@ -475,58 +475,6 @@ pub async fn restore_database(
     }
 }
 
-// Mailchimp-compatible CSV export of all staff
-pub async fn export_mailchimp(
-    RequireAdmin(_staff): RequireAdmin,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    match database::get_all_staff_with_ateliers(&state.db).await {
-        Ok(staff_list) => {
-            let mut csv =
-                String::from("Email Address,First Name,Last Name,Address,Phone,Tags,Birthday\n");
-            for (staff, atelier_names) in &staff_list {
-                let phone = staff.phone.as_deref().unwrap_or("");
-                let tags = atelier_names.join(", ");
-                // CSV-escape fields that might contain commas or quotes
-                csv.push_str(&format!(
-                    "{},{},{},{},{},\"{}\",\n",
-                    csv_escape(&staff.email),
-                    csv_escape(&staff.first_name),
-                    csv_escape(&staff.last_name),
-                    "", // Address - not stored
-                    csv_escape(phone),
-                    tags.replace('"', "\"\""),
-                ));
-            }
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
-                .header(
-                    header::CONTENT_DISPOSITION,
-                    "attachment; filename=\"staff-mailchimp-export.csv\"",
-                )
-                .body(Body::from(csv))
-                .unwrap()
-        }
-        Err(e) => {
-            error!("Failed to export staff for Mailchimp: {}", e);
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .header(header::CONTENT_TYPE, "text/plain")
-                .body(Body::from(format!("Export error: {}", e)))
-                .unwrap()
-        }
-    }
-}
-
-fn csv_escape(field: &str) -> String {
-    if field.contains(',') || field.contains('"') || field.contains('\n') {
-        format!("\"{}\"", field.replace('"', "\"\""))
-    } else {
-        field.to_string()
-    }
-}
-
 // ── Equipment API ────────────────────────────────────────────────────
 
 pub async fn api_cycle_equipment(

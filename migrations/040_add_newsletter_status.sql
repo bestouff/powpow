@@ -1,0 +1,1 @@
+ALTER TABLE staff ADD COLUMN newsletter_status TEXT NOT NULL DEFAULT 'subscribed';

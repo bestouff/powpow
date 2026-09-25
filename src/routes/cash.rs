@@ -345,6 +345,8 @@ pub async fn do_import_cash(
                 ),
             )
             .await;
+            // Trigger a newsletter sync with Mailchimp after a membership change
+            super::mailchimp::spawn_newsletter_sync(&state);
             (
                 StatusCode::SEE_OTHER,
                 html! {

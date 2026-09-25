@@ -160,6 +160,7 @@ pub struct Staff {
     pub is_god: bool,
     pub no_import_emails: bool,
     pub no_weekly_emails: bool,
+    pub newsletter_status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -177,6 +178,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Staff {
             is_god: row.try_get("is_god")?,
             no_import_emails: row.try_get("no_import_emails")?,
             no_weekly_emails: row.try_get("no_weekly_emails")?,
+            newsletter_status: row.try_get("newsletter_status")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })

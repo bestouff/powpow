@@ -6,6 +6,7 @@ mod content;
 mod content_admin;
 mod home;
 mod legal;
+mod mailchimp;
 mod membership;
 mod photos;
 mod settings;
@@ -21,6 +22,7 @@ pub use content::render_content_block;
 pub use content_admin::{content_edit_page, content_list_page};
 pub use home::index;
 pub use legal::legal_page;
+pub use mailchimp::{mailchimp_page, mailchimp_sync_result};
 pub use membership::{
     already_imported_page, import_result, import_staff_form, membership_list_with_filters,
     user_detail,

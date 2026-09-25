@@ -348,6 +348,8 @@ pub async fn do_import_staff(
                 ),
             )
             .await;
+            // Trigger a newsletter sync with Mailchimp after a membership change
+            super::mailchimp::spawn_newsletter_sync(&state);
             // Redirect back to users page with filter to show remaining not-imported memberships
             (
                 StatusCode::SEE_OTHER,

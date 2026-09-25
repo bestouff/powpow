@@ -293,9 +293,9 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                                 span .nav-badge.d-none data-badge="validations" {}
                             }
                             @if is_admin {
-                                a .button.is-light href={(p) "/export/mailchimp"} {
-                                    span .icon { i .fa-solid.fa-file-csv {} }
-                                    span { "Export Mailchimp" }
+                                a .button.is-light href={(p) "/mailchimp"} {
+                                    span .icon { i .fa-solid.fa-envelope-open-text {} }
+                                    span { "Newsletter (Mailchimp)" }
                                 }
                                 a .button.is-light href={(p) "/audit"} {
                                     span .icon { i .fa-solid.fa-clipboard-list {} }

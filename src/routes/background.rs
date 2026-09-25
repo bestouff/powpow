@@ -138,6 +138,43 @@ async fn preload_tick(
             }
         }
 
+        // Daily Mailchimp newsletter sync (pull statuses + push recipients)
+        if state.mailchimp_client.is_configured() {
+            info!("preload: daily Mailchimp newsletter sync");
+            match super::mailchimp::sync_newsletter(state).await {
+                Ok((pulled, stored, recpt, ok, err)) => {
+                    info!(
+                        "preload: daily Mailchimp sync complete — {} pulled, {} stored, {} recipients ({} ok, {} errors)",
+                        pulled, stored, recpt, ok, err
+                    );
+                    let _ = database::insert_audit(
+                        &state.db,
+                        None,
+                        "Système",
+                        "Synchronisation newsletter (Mailchimp) quotidienne",
+                        &format!(
+                            "{} statuts enregistrés, {} destinataires ({} ok, {} erreurs)",
+                            stored, recpt, ok, err
+                        ),
+                    )
+                    .await;
+                }
+                Err(e) => {
+                    error!("preload: daily Mailchimp sync failed: {}", e);
+                    let _ = database::insert_audit(
+                        &state.db,
+                        None,
+                        "Système",
+                        "Synchronisation newsletter (Mailchimp) quotidienne (échec)",
+                        &e.to_string(),
+                    )
+                    .await;
+                }
+            }
+        } else {
+            info!("preload: Mailchimp not configured, skipping newsletter sync");
+        }
+
         return today;
     }
 

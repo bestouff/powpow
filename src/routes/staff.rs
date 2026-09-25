@@ -1327,6 +1327,8 @@ pub async fn delete_person(
                 &format!("staff={id}"),
             )
             .await;
+            // Trigger a newsletter sync with Mailchimp after a membership change
+            super::mailchimp::spawn_newsletter_sync(&state);
             (StatusCode::OK, Json(serde_json::json!({"success": true}))).into_response()
         }
         Ok(false) => (

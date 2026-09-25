@@ -2,7 +2,31 @@ use crate::models::Staff;
 use anyhow::{Result, anyhow};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tracing::{info, warn};
+
+/// Shared progress of a Mailchimp sync, polled by the newsletter page to show
+/// a live counter while the sync runs.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct MailchimpSyncProgress {
+    /// One of `"pulling"`, `"storing"`, `"pushing"` or `"done"`.
+    pub phase: String,
+    /// Number of members pulled from Mailchimp / expected.
+    pub pulled: u32,
+    pub pulled_total: u32,
+    /// Number of staff rows whose status was stored in the DB.
+    pub stored: u32,
+    /// Number of subscribers pushed to Mailchimp / expected.
+    pub pushed: u32,
+    pub pushed_total: u32,
+    pub push_ok: u32,
+    pub push_errors: u32,
+    /// Set to the error message when the sync failed, `None` otherwise.
+    pub error: Option<String>,
+}
+
+pub type SyncProgressHandle = Arc<Mutex<MailchimpSyncProgress>>;
 
 #[derive(Debug, Clone)]
 pub struct MailchimpClient {
@@ -80,6 +104,18 @@ struct CampaignResponse {
 struct ErrorResponse {
     title: Option<String>,
     detail: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MembersListResponse {
+    members: Vec<MemberItem>,
+    total_items: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct MemberItem {
+    email_address: String,
+    status: String,
 }
 
 impl MailchimpClient {
@@ -163,9 +199,21 @@ impl MailchimpClient {
 
     /// Sync all staff members to the Mailchimp audience.
     /// Returns (`success_count`, `error_count`).
-    pub async fn sync_staff(&self, staff: &[Staff]) -> Result<(usize, usize)> {
+    ///
+    /// When `progress` is provided, updates the `pushed` / `push_ok` /
+    /// `push_errors` counters as the sync goes.
+    pub async fn sync_staff(
+        &self,
+        staff: &[Staff],
+        progress: Option<&SyncProgressHandle>,
+    ) -> Result<(usize, usize)> {
         let mut ok = 0usize;
         let mut err_count = 0usize;
+
+        if let Some(progress) = progress {
+            let mut p = progress.lock().await;
+            p.pushed_total = staff.len() as u32;
+        }
 
         for s in staff {
             match self
@@ -178,10 +226,81 @@ impl MailchimpClient {
                     err_count += 1;
                 }
             }
+            if let Some(progress) = progress {
+                let mut p = progress.lock().await;
+                p.push_ok = ok as u32;
+                p.push_errors = err_count as u32;
+                p.pushed = (ok + err_count) as u32;
+            }
         }
 
         info!("Mailchimp sync done: {} ok, {} errors", ok, err_count);
         Ok((ok, err_count))
+    }
+
+    /// Fetch the email address and current status of every member of the
+    /// audience. Statuses are Mailchimp member statuses: `subscribed`,
+    /// `unsubscribed`, `non-subscribed`, `cleaned` or `pending`.
+    /// Paginates through the Mailchimp API (1000 per page).
+    pub async fn list_member_statuses(
+        &self,
+        progress: Option<&SyncProgressHandle>,
+    ) -> Result<Vec<(String, String)>> {
+        const COUNT: u32 = 100;
+        let mut members: Vec<(String, String)> = Vec::new();
+        let mut offset = 0u32;
+
+        loop {
+            let url = format!(
+                "{}/lists/{}/members?count={}&offset={}",
+                self.base_url(),
+                self.list_id,
+                COUNT,
+                offset
+            );
+
+            let response = self
+                .client
+                .get(&url)
+                .basic_auth("aghil", Some(&self.api_key))
+                .send()
+                .await?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let err: ErrorResponse = response.json().await.unwrap_or(ErrorResponse {
+                    title: Some("Unknown error".into()),
+                    detail: None,
+                });
+                return Err(anyhow!(
+                    "Mailchimp list members failed ({}): {} – {}",
+                    status,
+                    err.title.unwrap_or_default(),
+                    err.detail.unwrap_or_default()
+                ));
+            }
+
+            let page: MembersListResponse = response.json().await?;
+            members.extend(
+                page.members
+                    .into_iter()
+                    .map(|m| (m.email_address, m.status)),
+            );
+
+            if let Some(progress) = progress {
+                let mut p = progress.lock().await;
+                p.pulled_total = page.total_items;
+                p.pulled = members.len() as u32;
+            }
+
+            let fetched = (offset + COUNT).min(page.total_items);
+            if fetched >= page.total_items {
+                break;
+            }
+            offset = fetched;
+        }
+
+        Ok(members)
     }
 
     /// Send a campaign email to every member of the audience.

@@ -102,6 +102,8 @@ pub struct AppState {
     pub cookie_key: Key,
     pub gmail_client: Option<std::sync::Arc<gmail::GmailClient>>,
     pub sync_in_progress: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub mailchimp_sync_in_progress: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub mailchimp_sync_progress: mailchimp::SyncProgressHandle,
 }
 
 impl axum::extract::FromRef<AppState> for Key {
@@ -442,6 +444,10 @@ async fn main() -> anyhow::Result<()> {
         cookie_key,
         gmail_client,
         sync_in_progress: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        mailchimp_sync_in_progress: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        mailchimp_sync_progress: std::sync::Arc::new(tokio::sync::Mutex::new(
+            mailchimp::MailchimpSyncProgress::default(),
+        )),
     };
 
     // Clone state for background tasks before it moves into the router
@@ -517,7 +523,14 @@ async fn main() -> anyhow::Result<()> {
             "/sync",
             get(routes::sync::sync_users).post(routes::sync::sync_webhook),
         )
-        .route("/export/mailchimp", get(routes::admin::export_mailchimp))
+        .route(
+            "/mailchimp",
+            get(routes::mailchimp::mailchimp_page).post(routes::mailchimp::mailchimp_sync_now),
+        )
+        .route(
+            "/mailchimp/progress",
+            get(routes::mailchimp::mailchimp_progress),
+        )
         .route("/backup", get(routes::admin::backup_database))
         .route("/restore", get(routes::admin::restore_page))
         .route(
