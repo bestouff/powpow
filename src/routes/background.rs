@@ -141,6 +141,8 @@ async fn preload_tick(
         // Daily Mailchimp newsletter sync (pull statuses + push recipients)
         if state.mailchimp_client.is_configured() {
             info!("preload: daily Mailchimp newsletter sync");
+            // Supersede any debounced sync scheduled by a membership change.
+            super::mailchimp::cancel_pending_sync(state).await;
             match super::mailchimp::sync_newsletter(state).await {
                 Ok((pulled, stored, recpt, ok, err)) => {
                     info!(

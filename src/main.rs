@@ -104,6 +104,11 @@ pub struct AppState {
     pub sync_in_progress: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub mailchimp_sync_in_progress: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub mailchimp_sync_progress: mailchimp::SyncProgressHandle,
+    /// Pending (debounced) sync: its task handle and the trigger used to cancel
+    /// the delay when another sync is armed or run.
+    pub mailchimp_sync_pending: std::sync::Arc<
+        tokio::sync::Mutex<Option<(tokio::task::JoinHandle<()>, tokio::sync::watch::Sender<()>)>>,
+    >,
 }
 
 impl axum::extract::FromRef<AppState> for Key {
@@ -448,6 +453,7 @@ async fn main() -> anyhow::Result<()> {
         mailchimp_sync_progress: std::sync::Arc::new(tokio::sync::Mutex::new(
             mailchimp::MailchimpSyncProgress::default(),
         )),
+        mailchimp_sync_pending: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
     };
 
     // Clone state for background tasks before it moves into the router
