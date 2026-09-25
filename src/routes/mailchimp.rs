@@ -9,7 +9,7 @@ use axum::{
 };
 use maud::html;
 use serde_json::json;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::{AppState, auth::RequireAdmin, database, get_prefix, templates};
 
@@ -31,6 +31,11 @@ pub async fn sync_newsletter(state: &AppState) -> Result<(usize, usize, usize, u
 }
 
 async fn sync_newsletter_inner(state: &AppState) -> Result<(usize, usize, usize, usize, usize)> {
+    if !state.mailchimp_client.is_configured() {
+        anyhow::bail!(
+            "Mailchimp n'est pas configuré (variables d'environnement MAILCHIMP_* absentes)"
+        );
+    }
     let mut progress = state.mailchimp_sync_progress.lock().await;
     *progress = crate::mailchimp::MailchimpSyncProgress {
         phase: "pulling".into(),
@@ -93,6 +98,10 @@ const SYNC_DEBOUNCE_DELAY: std::time::Duration = std::time::Duration::from_secs(
 /// the sync back by `SYNC_DEBOUNCE_DELAY`; an already waiting task is cancelled
 /// so a bulk import doesn't trigger a sync storm.
 pub fn spawn_newsletter_sync(state: &AppState) {
+    if !state.mailchimp_client.is_configured() {
+        debug!("Mailchimp n'est pas configuré, sync newsletter ignorée");
+        return;
+    }
     let state = state.clone();
     tokio::spawn(async move {
         let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(());
@@ -155,6 +164,7 @@ pub async fn mailchimp_page(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
+    let configured = state.mailchimp_client.is_configured();
     let staff = match database::get_all_staff_ordered(&state.db).await {
         Ok(s) => s,
         Err(e) => {
@@ -166,7 +176,7 @@ pub async fn mailchimp_page(
                 .into_response();
         }
     };
-    templates::mailchimp_page(&staff, &prefix).into_response()
+    templates::mailchimp_page(&staff, &prefix, configured).into_response()
 }
 
 /// Run a full Mailchimp newsletter sync from the confirm button.
@@ -176,6 +186,16 @@ pub async fn mailchimp_sync_now(
     State(state): State<AppState>,
 ) -> Response {
     let prefix = get_prefix(&headers);
+    if !state.mailchimp_client.is_configured() {
+        return templates::mailchimp_sync_result(
+            &prefix,
+            false,
+            "Mailchimp n'est pas configuré : synchronisation impossible. Vérifiez les \
+             variables d'environnement MAILCHIMP_API_KEY, MAILCHIMP_SERVER_PREFIX, \
+             MAILCHIMP_LIST_ID et MAILCHIMP_FROM_EMAIL.",
+        )
+        .into_response();
+    }
     // A manual sync supersedes any pending debounced sync.
     cancel_pending_sync(&state).await;
     let flag = state.mailchimp_sync_in_progress.clone();

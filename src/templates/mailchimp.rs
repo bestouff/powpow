@@ -13,8 +13,9 @@ const STATUS_META: &[(&str, &str, &str)] = &[
 ];
 
 /// Page showing each staff member's newsletter status, with a button to run a
-/// full Mailchimp sync.
-pub fn mailchimp_page(staff: &[Staff], prefix: &str) -> Markup {
+/// full Mailchimp sync. When `configured` is false, a warning banner is shown
+/// and the sync button is disabled since it cannot work.
+pub fn mailchimp_page(staff: &[Staff], prefix: &str, configured: bool) -> Markup {
     let p = prefix;
 
     let count_subscribed = staff
@@ -42,10 +43,22 @@ pub fn mailchimp_page(staff: &[Staff], prefix: &str) -> Markup {
                     }
                     div .level-right {
                         form #mailchimp-sync-form method="POST" action={(p) "/mailchimp"} {
-                            button #mailchimp-sync-btn .button.is-primary type="submit" {
+                            button #mailchimp-sync-btn .button.is-primary type="submit" disabled=(!configured) {
                                 span .icon { i .fa-solid.fa-arrows-rotate {} }
-                                span { "Synchroniser maintenant" }
+                                span { @if configured { "Synchroniser maintenant" } @else { "Synchronisation indisponible" } }
                             }
+                        }
+                    }
+                }
+
+                @if !configured {
+                    div .notification.is-warning {
+                        p {
+                            strong { "Mailchimp n'est pas configuré." }
+                            " La synchronisation de la newsletter est désactivée. Renseignez les variables "
+                            code .has-text-danger { "MAILCHIMP_API_KEY" } ", " code .has-text-danger { "MAILCHIMP_SERVER_PREFIX" } ", "
+                            code .has-text-danger { "MAILCHIMP_LIST_ID" } " et " code .has-text-danger { "MAILCHIMP_FROM_EMAIL" }
+                            " puis redémarrez le serveur. Les statuts affichés ci-dessous datent de la dernière synchronisation."
                         }
                     }
                 }

@@ -143,6 +143,18 @@ impl MailchimpClient {
             && !self.from_email.is_empty()
     }
 
+    /// Fail with an explicit error when Mailchimp is not configured.
+    fn require_configured(&self) -> Result<()> {
+        if self.is_configured() {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "Mailchimp not configured (set MAILCHIMP_API_KEY, MAILCHIMP_SERVER_PREFIX, \
+                 MAILCHIMP_LIST_ID and MAILCHIMP_FROM_EMAIL)"
+            ))
+        }
+    }
+
     fn base_url(&self) -> String {
         format!("https://{}.api.mailchimp.com/3.0", self.server_prefix)
     }
@@ -155,6 +167,7 @@ impl MailchimpClient {
         first_name: &str,
         last_name: &str,
     ) -> Result<()> {
+        self.require_configured()?;
         let hash = md5_hex(email.trim().to_lowercase().as_bytes());
         let url = format!(
             "{}/lists/{}/members/{}",
@@ -207,6 +220,7 @@ impl MailchimpClient {
         staff: &[Staff],
         progress: Option<&SyncProgressHandle>,
     ) -> Result<(usize, usize)> {
+        self.require_configured()?;
         let mut ok = 0usize;
         let mut err_count = 0usize;
 
@@ -247,6 +261,7 @@ impl MailchimpClient {
         progress: Option<&SyncProgressHandle>,
     ) -> Result<Vec<(String, String)>> {
         const COUNT: u32 = 100;
+        self.require_configured()?;
         let mut members: Vec<(String, String)> = Vec::new();
         let mut offset = 0u32;
 
@@ -330,6 +345,7 @@ impl MailchimpClient {
         html: &str,
         segment_opts: Option<SegmentOpts>,
     ) -> Result<String> {
+        self.require_configured()?;
         // 1. Create campaign
         let create_url = format!("{}/campaigns", self.base_url());
 
