@@ -1268,6 +1268,7 @@ function initCalendarEditor(prefix) {
       displayMode: "inline",
       type: "date",
       lang: "fr",
+      weekStart: 1,
       dateFormat: "YYYY-MM-DD",
       showHeader: false,
       showFooter: false,
