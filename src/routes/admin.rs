@@ -23,14 +23,29 @@ pub async fn admin_page_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-    let equipments = if staff.is_admin || staff.is_god {
+    let membership_only = match database::has_current_membership(&state.db, staff.id).await {
+        Ok(has_membership) => !has_membership,
+        Err(e) => {
+            error!("Error checking administration membership: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    let equipments = if !membership_only && (staff.is_admin || staff.is_god) {
         database::get_all_equipments(&state.db)
             .await
             .unwrap_or_default()
     } else {
         Vec::new()
     };
-    templates::admin_page(&prefix, staff.is_admin, staff.is_god, &equipments)
+    templates::admin_page(
+        &prefix,
+        staff.is_admin,
+        staff.is_god,
+        &equipments,
+        membership_only,
+        &state.config.helloasso_association_slug,
+    )
+    .into_response()
 }
 
 #[derive(Debug, Deserialize)]

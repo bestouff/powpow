@@ -1132,6 +1132,16 @@ pub async fn get_staff_roles(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<
     Ok(roles)
 }
 
+pub async fn has_current_membership(pool: &PgPool, staff_id: uuid::Uuid) -> Result<bool> {
+    Ok(sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM payments WHERE staff = $1 AND season >= $2)",
+    )
+    .bind(staff_id)
+    .bind(crate::get_current_season())
+    .fetch_one(pool)
+    .await?)
+}
+
 /// Add a role for a staff member
 pub async fn add_role(
     pool: &PgPool,
@@ -3713,6 +3723,40 @@ mod chief_permissions_tests {
         assert!(!chief_manages_staff(&pool, chief, outsider, None).await?);
         assert!(!chief_manages_staff(&pool, member, chief, None).await?);
         assert!(!chief_manages_staff(&pool, chief, uuid::Uuid::new_v4(), None).await?);
+        pool.close().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires DATABASE_URL pointing to a PostgreSQL database"]
+    async fn current_membership_requires_current_or_future_payment() -> anyhow::Result<()> {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&std::env::var("DATABASE_URL")?)
+            .await?;
+        sqlx::query("CREATE TEMP TABLE payments (staff uuid, season smallint)")
+            .execute(&pool)
+            .await?;
+        let staff = uuid::Uuid::new_v4();
+        let season = crate::get_current_season();
+        assert!(!super::has_current_membership(&pool, staff).await?);
+        sqlx::query("INSERT INTO payments VALUES ($1, $2)")
+            .bind(staff)
+            .bind(season - 1)
+            .execute(&pool)
+            .await?;
+        assert!(!super::has_current_membership(&pool, staff).await?);
+        sqlx::query("INSERT INTO payments VALUES ($1, $2)")
+            .bind(staff)
+            .bind(season)
+            .execute(&pool)
+            .await?;
+        assert!(super::has_current_membership(&pool, staff).await?);
+        sqlx::query("UPDATE payments SET season = $1")
+            .bind(season + 1)
+            .execute(&pool)
+            .await?;
+        assert!(super::has_current_membership(&pool, staff).await?);
         pool.close().await;
         Ok(())
     }

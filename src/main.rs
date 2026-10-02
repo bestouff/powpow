@@ -677,6 +677,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/static/powpow.css", get(routes::legal::serve_css))
         .route("/static/powpow.js", get(routes::legal::serve_js))
         .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024))
+        .layer(axum::middleware::from_fn_with_state(
+            app_state.clone(),
+            auth::membership_gate,
+        ))
         .layer(axum::middleware::from_fn(security_headers))
         .with_state(app_state);
 

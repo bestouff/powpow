@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::State,
+    extract::{Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
@@ -26,16 +26,32 @@ async fn resolve_caller(jar: &SignedCookieJar, state: &AppState) -> Option<crate
         .flatten()
 }
 
+#[derive(Default, serde::Deserialize)]
+pub struct HomeQuery {
+    #[serde(default)]
+    membership_required: bool,
+}
+
 pub async fn index(
     headers: HeaderMap,
     jar: SignedCookieJar,
     State(state): State<AppState>,
+    Query(query): Query<HomeQuery>,
 ) -> impl IntoResponse {
     const HOW_MANY_NEWS: i64 = 6;
 
     let prefix = get_prefix(&headers);
     let current_season = get_current_season();
-    let logged_in = resolve_caller(&jar, &state).await.is_some();
+    let logged_in = match resolve_caller(&jar, &state).await {
+        Some(staff) => {
+            staff.is_admin
+                || staff.is_god
+                || database::has_current_membership(&state.db, staff.id)
+                    .await
+                    .unwrap_or(false)
+        }
+        None => false,
+    };
 
     // Public frontpage data
     let equipments = database::get_all_equipments(&state.db)
@@ -76,6 +92,8 @@ pub async fn index(
         dicton.as_deref(),
         &news_items,
         logged_in,
+        query.membership_required,
+        &state.config.helloasso_association_slug,
     )
 }
 

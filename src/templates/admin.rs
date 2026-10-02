@@ -221,7 +221,39 @@ pub fn audit_page(
     )
 }
 
-pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equipment]) -> Markup {
+pub fn admin_page(
+    prefix: &str,
+    is_admin: bool,
+    is_god: bool,
+    equipments: &[Equipment],
+    membership_only: bool,
+    association_slug: &str,
+) -> Markup {
+    if membership_only {
+        return page(
+            "Administration - PowPow",
+            prefix,
+            &NavKind::Standard,
+            "admin",
+            html! {},
+            html! {
+                section .section {
+                    div .container.is-fluid {
+                        h1 .title.is-3 { "Administration" }
+                        (super::membership_notice(association_slug, true))
+                        div .box {
+                            h3 .title.is-5 { "Gestion des adhésions" }
+                            div .buttons {
+                                a .button.is-primary href={(prefix) "/online"} { "Adhésions HelloAsso" }
+                                a .button.is-primary.is-light href={(prefix) "/cash"} { "Espèces / Chèques" }
+                            }
+                        }
+                    }
+                }
+            },
+            html! {},
+        );
+    }
     let p = prefix;
     let slopes: Vec<&Equipment> = equipments
         .iter()
@@ -424,8 +456,8 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
         html! {},
         content,
         html! {
-                                            script {
-                                                (maud::PreEscaped(r"
+                                                            script {
+                                                                (maud::PreEscaped(r"
 async function clearExpiredStaffRoles(button) {
     if (!confirm('Effacer les rôles des bénévoles sans adhésion à jour pour la saison actuelle ? Seuls les rôles dans lesquels ils sont chefs seront conservés. Cette action est irréversible.')) return;
     button.disabled = true;
@@ -443,8 +475,8 @@ async function clearExpiredStaffRoles(button) {
     }
 }
 "))
-                                            }
-                                        },
+                                                            }
+                                                        },
     )
 }
 

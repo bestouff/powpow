@@ -34,6 +34,23 @@ pub use staff::{person_detail, staff_list};
 use crate::models::{ContentBlock, ContentMap, StaffMatchType, StaffWithSeason};
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 
+pub fn membership_notice(association_slug: &str, is_admin: bool) -> Markup {
+    let mut url = reqwest::Url::parse("https://www.helloasso.com/associations")
+        .expect("HelloAsso base URL is valid");
+    url.path_segments_mut()
+        .expect("HelloAsso URL supports path segments")
+        .push(association_slug);
+    html! {
+        div .notification.is-warning role="alert" {
+            p { "Votre adhésion n'est pas à jour pour la saison actuelle. Veuillez régler votre adhésion sur HelloAsso pour accéder à votre espace bénévole." }
+            @if is_admin {
+                p .mt-2 { "En attendant, votre accès administrateur est limité à la gestion des adhésions." }
+            }
+            a .button.is-link.mt-3 href=(url.as_str()) target="_blank" rel="noopener noreferrer" { "Payer mon adhésion sur HelloAsso" }
+        }
+    }
+}
+
 /// Cached navbar content block, shared across all pages.
 static NAVBAR_BLOCK: std::sync::RwLock<Option<ContentBlock>> = std::sync::RwLock::new(None);
 

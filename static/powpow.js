@@ -326,7 +326,7 @@ function initLoginCheck(prefix) {
           d.first_name +
           " " +
           d.last_name;
-        b.href = prefix + "/person/" + d.id;
+        b.href = d.membership_only ? prefix + "/admin" : prefix + "/person/" + d.id;
         var lo = document.createElement("a");
         lo.className = "navbar-item";
         lo.href = prefix + "/logout";

@@ -332,6 +332,17 @@ pub async fn api_me(State(state): State<AppState>, jar: SignedCookieJar) -> impl
 
     match database::get_session_staff(&state.db, session_id).await {
         Ok(Some(staff)) => {
+            let membership_only = match database::has_current_membership(&state.db, staff.id).await
+            {
+                Ok(current) => !current,
+                Err(e) => {
+                    error!("Error checking current membership for me: {e}");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": "Impossible de vérifier l'adhésion"})),
+                    );
+                }
+            };
             let is_chief = staff.is_admin
                 || staff.is_god
                 || database::is_chief(&state.db, staff.id)
@@ -347,6 +358,7 @@ pub async fn api_me(State(state): State<AppState>, jar: SignedCookieJar) -> impl
                     "is_admin": staff.is_admin,
                     "is_god": staff.is_god,
                     "is_chief": is_chief,
+                    "membership_only": membership_only,
                 })),
             )
         }

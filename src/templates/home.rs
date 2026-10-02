@@ -14,6 +14,8 @@ pub fn index(
     dicton: Option<&str>,
     news_items: &[NewsRow],
     logged_in: bool,
+    membership_required: bool,
+    association_slug: &str,
 ) -> Markup {
     let p = prefix;
 
@@ -58,6 +60,11 @@ pub fn index(
     let extra_head = html! {};
 
     let content = html! {
+        @if membership_required {
+            section .section.py-4 {
+                div .container { (super::membership_notice(association_slug, false)) }
+            }
+        }
         // ── Hero section ─────────────────────────────────────────────
         section #hero .hero-station {
             div .hero-slides data-prefix=(p) data-photos=(photo_ids_json) {}

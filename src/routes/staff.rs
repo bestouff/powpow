@@ -113,6 +113,37 @@ pub async fn view_person(
     if let Some(token) = query.token {
         match database::consume_login_token(&state.db, id, token).await {
             Ok(Some(_staff_id)) => {
+                let (staff, has_membership) = match database::get_staff_by_id(&state.db, id).await {
+                    Ok(Some(staff)) => {
+                        match database::has_current_membership(&state.db, id).await {
+                            Ok(has_membership) => (staff, has_membership),
+                            Err(e) => {
+                                error!("Error checking login membership: {e}");
+                                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                            }
+                        }
+                    }
+                    Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+                    Err(e) => {
+                        error!("Error fetching login staff: {e}");
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                };
+                let is_admin = staff.is_admin || staff.is_god;
+                if !has_membership && !is_admin {
+                    if let Some(cookie) = jar.get("aghil_session")
+                        && let Ok(session_id) = cookie.value().parse::<uuid::Uuid>()
+                    {
+                        let _ = database::delete_session(&state.db, session_id).await;
+                    }
+                    let mut cookie = axum_extra::extract::cookie::Cookie::new("aghil_session", "");
+                    cookie.set_path("/");
+                    return (
+                        jar.remove(cookie),
+                        Redirect::to(&crate::auth::membership_redirect(&prefix, false)),
+                    )
+                        .into_response();
+                }
                 let user_agent = headers.get("User-Agent").and_then(|v| v.to_str().ok());
                 let ip = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok());
                 let session_id = match database::create_session(&state.db, id, user_agent, ip).await
@@ -138,11 +169,12 @@ pub async fn view_person(
                 cookie.set_secure(true);
                 cookie.set_max_age(time::Duration::days(90));
                 let updated_jar = jar.add(cookie);
-                return (
-                    updated_jar,
-                    Redirect::to(&format!("{}/person/{}", prefix, id)),
-                )
-                    .into_response();
+                let destination = if has_membership {
+                    format!("{prefix}/person/{id}")
+                } else {
+                    crate::auth::membership_redirect(&prefix, true)
+                };
+                return (updated_jar, Redirect::to(&destination)).into_response();
             }
             Ok(None) => {
                 // Token invalid: fall through to normal page render
@@ -164,6 +196,20 @@ pub async fn view_person(
     let Ok(Some(viewer)) = database::get_session_staff(&state.db, viewer_id).await else {
         return Redirect::to(&format!("{}/login", prefix)).into_response();
     };
+    match database::has_current_membership(&state.db, viewer.id).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return Redirect::to(&crate::auth::membership_redirect(
+                &prefix,
+                viewer.is_admin || viewer.is_god,
+            ))
+            .into_response();
+        }
+        Err(e) => {
+            error!("Error checking profile membership: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
 
     let current_season = get_current_season();
 
