@@ -456,8 +456,8 @@ pub fn admin_page(
         html! {},
         content,
         html! {
-                                                                                                    script {
-                                                                                                        (maud::PreEscaped(r"
+                                                                                                            script {
+                                                                                                                (maud::PreEscaped(r"
 async function clearExpiredStaffRoles(button) {
     if (!confirm('Effacer les rôles des bénévoles sans adhésion à jour pour la saison actuelle ? Seuls les rôles dans lesquels ils sont chefs seront conservés. Cette action est irréversible.')) return;
     button.disabled = true;
@@ -475,8 +475,8 @@ async function clearExpiredStaffRoles(button) {
     }
 }
 "))
-                                                                                                    }
-                                                                                                },
+                                                                                                            }
+                                                                                                        },
     )
 }
 
