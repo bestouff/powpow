@@ -448,16 +448,7 @@ pub fn admin_page(
         }
     };
 
-    page(
-        "Administration - PowPow",
-        prefix,
-        &NavKind::Standard,
-        "admin",
-        html! {},
-        content,
-        html! {
-                                                                                                            script {
-                                                                                                                (maud::PreEscaped(r"
+    let clear_roles_script = r"
 async function clearExpiredStaffRoles(button) {
     if (!confirm('Effacer les rôles des bénévoles sans adhésion à jour pour la saison actuelle ? Seuls les rôles dans lesquels ils sont chefs seront conservés. Cette action est irréversible.')) return;
     button.disabled = true;
@@ -474,9 +465,19 @@ async function clearExpiredStaffRoles(button) {
         button.classList.remove('is-loading');
     }
 }
-"))
-                                                                                                            }
-                                                                                                        },
+";
+    let extra_scripts = html! {
+        script { (maud::PreEscaped(clear_roles_script)) }
+    };
+
+    page(
+        "Administration - PowPow",
+        prefix,
+        &NavKind::Standard,
+        "admin",
+        html! {},
+        content,
+        extra_scripts,
     )
 }
 
