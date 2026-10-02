@@ -2179,23 +2179,46 @@ pub async fn get_opening_days_for_dates(
     Ok(rows)
 }
 
-/// Create a new opening day with 'reserved' status.
-pub async fn create_opening_day(
-    pool: &PgPool,
-    day: chrono::NaiveDate,
-) -> Result<models::OpeningDay> {
-    let row = sqlx::query_as::<_, models::OpeningDay>(
+/// Create an opening day and its default needs atomically, returning the need count.
+pub async fn create_opening_day(pool: &PgPool, day: chrono::NaiveDate) -> Result<u64> {
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query_scalar::<_, chrono::NaiveDate>(
         r"
         INSERT INTO opening_days (day, status) VALUES ($1, 'reserved')
         ON CONFLICT (day) DO NOTHING
-        RETURNING day, status
+        RETURNING day
         ",
     )
     .bind(day)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
 
-    row.ok_or_else(|| anyhow::anyhow!("Opening day {day} already exists"))
+    if row.is_none() {
+        anyhow::bail!("Le jour d'ouverture {day} existe déjà");
+    }
+    let result = sqlx::query(
+        r"INSERT INTO needs (day, atelier, quantity, nightly)
+          SELECT $1, id, opening_day_typical_needed, default_nightly FROM ateliers
+          WHERE opening_day_typical_needed > 0
+          ON CONFLICT (day, atelier) DO UPDATE SET
+              quantity = EXCLUDED.quantity, nightly = EXCLUDED.nightly",
+    )
+    .bind(day)
+    .execute(&mut *tx)
+    .await?;
+    let created = result.rows_affected();
+    if created == 0
+        && !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM needs WHERE day = $1)")
+            .bind(day)
+            .fetch_one(&mut *tx)
+            .await?
+    {
+        anyhow::bail!(
+            "Aucun atelier n'a de besoin par défaut pour un jour d'ouverture. Configurez les ateliers avant de créer ce jour."
+        );
+    }
+    tx.commit().await?;
+    Ok(created)
 }
 
 /// Update the status of an opening day.
@@ -3759,5 +3782,63 @@ mod chief_permissions_tests {
         assert!(super::has_current_membership(&pool, staff).await?);
         pool.close().await;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod opening_day_tests {
+    #[tokio::test]
+    #[ignore = "requires DATABASE_URL pointing to a PostgreSQL database"]
+    async fn empty_opening_days_are_removed_and_rejected_by_schema() -> anyhow::Result<()> {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&std::env::var("DATABASE_URL")?)
+            .await?;
+        let schema = format!("opening_day_test_{}", uuid::Uuid::new_v4().simple());
+        // The identifier contains only a fixed prefix and generated hexadecimal digits.
+        sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+            "CREATE SCHEMA {schema}; SET search_path TO {schema};"
+        )))
+        .execute(&pool)
+        .await?;
+        let result = async {
+            sqlx::raw_sql(
+                "CREATE TABLE opening_days (day date PRIMARY KEY, status text DEFAULT 'reserved');
+                 CREATE TABLE ateliers (id uuid PRIMARY KEY, opening_day_typical_needed smallint, default_nightly bool);
+                 CREATE TABLE needs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), day date NOT NULL,
+                    atelier uuid NOT NULL, quantity smallint, nightly bool, UNIQUE(day, atelier));
+                 INSERT INTO opening_days VALUES ('2030-01-01', 'reserved');",
+            ).execute(&pool).await?;
+            sqlx::raw_sql(include_str!("../migrations/042_remove_empty_opening_days.sql"))
+                .execute(&pool).await?;
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
+            assert!(sqlx::query("INSERT INTO opening_days VALUES ('2030-01-01', 'reserved')").execute(&pool).await.is_err());
+            let day = chrono::NaiveDate::from_ymd_opt(2030, 1, 1).unwrap();
+            assert!(super::create_opening_day(&pool, day).await.is_err());
+            let first = uuid::Uuid::new_v4();
+            let second = uuid::Uuid::new_v4();
+            sqlx::query("INSERT INTO ateliers VALUES ($1, 2, false), ($2, 1, true)")
+                .bind(first).bind(second).execute(&pool).await?;
+            assert_eq!(super::create_opening_day(&pool, day).await?, 2);
+            assert!(super::create_opening_day(&pool, day).await.is_err());
+            super::delete_need(&pool, first, day).await?;
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 1);
+            // Direct SQL deletion must enforce the invariant too.
+            sqlx::query("DELETE FROM needs WHERE day = $1").bind(day).execute(&pool).await?;
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
+            assert_eq!(super::create_opening_day(&pool, day).await?, 2);
+            // Moving the last needs to another date removes the old metadata.
+            sqlx::query("UPDATE needs SET day = day + 1").execute(&pool).await?;
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
+            assert_eq!(super::create_opening_day(&pool, day).await?, 2);
+            sqlx::query("TRUNCATE needs").execute(&pool).await?;
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
+            Ok::<_, anyhow::Error>(())
+        }.await;
+        sqlx::raw_sql(sqlx::AssertSqlSafe(format!("DROP SCHEMA {schema} CASCADE")))
+            .execute(&pool)
+            .await?;
+        pool.close().await;
+        result
     }
 }

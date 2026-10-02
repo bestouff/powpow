@@ -337,51 +337,16 @@ pub async fn api_create_opening_day(
         );
     };
 
-    // Create the opening day record
-    match database::create_opening_day(&state.db, day).await {
-        Ok(_) => {}
+    // The day and all default needs are created in one transaction.
+    let created_count = match database::create_opening_day(&state.db, day).await {
+        Ok(count) => count,
         Err(e) => {
             return (
                 StatusCode::CONFLICT,
                 Json(serde_json::json!({"error": e.to_string()})),
             );
         }
-    }
-
-    // Create needs for all ateliers with opening_day_typical_needed > 0
-    let ateliers = match database::get_all_ateliers(&state.db).await {
-        Ok(a) => a,
-        Err(e) => {
-            error!("Error fetching ateliers for opening day: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": e.to_string()})),
-            );
-        }
     };
-
-    let mut created_count = 0_u32;
-    for atelier in &ateliers {
-        if atelier.opening_day_typical_needed > 0 {
-            match database::upsert_need(
-                &state.db,
-                atelier.id,
-                day,
-                atelier.opening_day_typical_needed,
-                atelier.default_nightly,
-            )
-            .await
-            {
-                Ok(_) => created_count += 1,
-                Err(e) => {
-                    error!(
-                        "Error creating need for atelier {} on {}: {}",
-                        atelier.name, day, e
-                    );
-                }
-            }
-        }
-    }
 
     let _ = database::insert_audit(
         &state.db,
