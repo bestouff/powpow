@@ -580,13 +580,15 @@ pub fn person_detail(
                                         @if let Some(r) = role {
                                             @if is_admin || chief_atelier_ids.contains(&atelier.id) {
                                                 div .ml-5.mt-1 {
-                                                    label .checkbox.mr-4 {
-                                                        input .role-validated-checkbox type="checkbox"
-                                                            data-atelier-id=(atelier.id)
-                                                            checked[r.validated || r.chief]
-                                                            disabled[r.chief];
-                                                        span .icon.has-text-info { i .fa-solid.fa-check {} }
-                                                        span { "Validé" }
+                                                    @if atelier.needs_validation {
+                                                        label .checkbox.mr-4 {
+                                                            input .role-validated-checkbox type="checkbox"
+                                                                data-atelier-id=(atelier.id)
+                                                                checked[r.validated || r.chief]
+                                                                disabled[r.chief];
+                                                            span .icon.has-text-info { i .fa-solid.fa-check {} }
+                                                            span { "Validé" }
+                                                        }
                                                     }
                                                     @if is_admin {
                                                         label .checkbox {
