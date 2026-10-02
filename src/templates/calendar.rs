@@ -26,7 +26,7 @@ pub fn calendar(
     all_ateliers: &[Atelier],
     prefix: &str,
     viewer_id: Option<uuid::Uuid>,
-    _is_admin: bool,
+    can_manage_presence: bool,
     opening_days: &[crate::models::OpeningDay],
     show_past: bool,
     today: chrono::NaiveDate,
@@ -166,7 +166,8 @@ pub fn calendar(
                         }
                         tbody {
                             @for staff in staff_list {
-                                @let can_toggle = viewer_id.is_some_and(|vid| staff.id == vid);
+                                @let is_self = viewer_id.is_some_and(|vid| staff.id == vid);
+                                @let can_toggle = is_self || can_manage_presence;
                                 @let name = format!("{} {}", capitalize_words(&staff.first_name), capitalize_words(&staff.last_name));
                                 tr .cal-me[can_toggle] {
                                     td .cal-name-col {
@@ -182,6 +183,7 @@ pub fn calendar(
                                         td .cal-cell.has-text-centered.cal-active[is_active].cal-sunday[is_sunday].cal-complete[is_complete].cal-danger[!is_complete].cal-past[is_past] {
                                             label .cal-check title=(if need.nightly { "Soirée" } else { "Matin" }) {
                                                 input .presence-cb type="checkbox"
+                                                    data-confirm-changes=(!is_self)
                                                     data-need=(need.id)
                                                     data-staff=(staff.id)
                                                     data-half="first"
@@ -191,6 +193,7 @@ pub fn calendar(
                                             }
                                             label .cal-check title=(if need.nightly { "Nuit" } else { "Après-midi" }) {
                                                 input .presence-cb type="checkbox"
+                                                    data-confirm-changes=(!is_self)
                                                     data-need=(need.id)
                                                     data-staff=(staff.id)
                                                     data-half="second"

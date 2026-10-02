@@ -286,6 +286,7 @@ pub fn person_detail(
     is_self: bool,
     is_admin: bool,
     is_god: bool,
+    chief_atelier_ids: &[uuid::Uuid],
     show_contact: bool,
     todos: &[TodoItem],
     payment_history: &[crate::models::PaymentHistoryEntry],
@@ -298,7 +299,10 @@ pub fn person_detail(
     let p = prefix;
     let can_edit_ateliers = is_self || is_admin;
     let can_edit_contact = is_self || is_admin;
-    let can_manage_qualifs = is_self || is_admin;
+    let manages_person = roles
+        .iter()
+        .any(|role| chief_atelier_ids.contains(&role.atelier));
+    let can_manage_qualifs = is_self || is_admin || manages_person;
 
     let comment_display = if staff.comment.is_empty() {
         "\u{2014}"
@@ -336,7 +340,7 @@ pub fn person_detail(
 
     let content = html! {
         div #notification-container {}
-        div .d-none #person-data data-staff-id=(staff.id) {}
+        div .d-none #person-data data-staff-id=(staff.id) data-confirm-changes=(!is_self) {}
 
         section .section {
             div .container.is-fluid {
@@ -574,7 +578,7 @@ pub fn person_detail(
                                         }
                                         // Role options
                                         @if let Some(r) = role {
-                                            @if is_admin {
+                                            @if is_admin || chief_atelier_ids.contains(&atelier.id) {
                                                 div .ml-5.mt-1 {
                                                     label .checkbox.mr-4 {
                                                         input .role-validated-checkbox type="checkbox"
@@ -584,12 +588,14 @@ pub fn person_detail(
                                                         span .icon.has-text-info { i .fa-solid.fa-check {} }
                                                         span { "Validé" }
                                                     }
-                                                    label .checkbox {
-                                                        input .role-chief-checkbox type="checkbox"
-                                                            data-atelier-id=(atelier.id)
-                                                            checked[r.chief];
-                                                        span .icon.has-text-warning { i .fa-solid.fa-crown {} }
-                                                        span { "Chef" }
+                                                    @if is_admin {
+                                                        label .checkbox {
+                                                            input .role-chief-checkbox type="checkbox"
+                                                                data-atelier-id=(atelier.id)
+                                                                checked[r.chief];
+                                                            span .icon.has-text-warning { i .fa-solid.fa-crown {} }
+                                                            span { "Chef" }
+                                                        }
                                                     }
                                                 }
                                             } @else if r.chief {
@@ -826,7 +832,7 @@ pub fn person_detail(
                                                             @let first_title = if need.nightly { "Soirée" } else { "Matin" };
                                                             @let second_title = if need.nightly { "Nuit" } else { "Après-midi" };
                                                             td .pcal-cell.has-text-centered.pcal-active[is_active].pcal-sunday[is_sunday] {
-                                                                @if is_self {
+                                                                @if is_self || is_admin || chief_atelier_ids.contains(atelier_id) {
                                                                     label .pcal-check title=(first_title) {
                                                                         input .pcal-presence-cb type="checkbox"
                                                                             data-need=(need.id)
@@ -1039,12 +1045,13 @@ pub fn person_detail(
                 (maud::PreEscaped(format!(r#"(function() {{
     const PREFIX = "{}";
     const STAFF_ID = "{}";
-    const IS_ADMIN = {};
+    const CAN_MANAGE_STAFF = {};
+    const CONFIRM_CHANGES = {};
 
-    // Use admin API if admin, self-service API if self
-    const addUrl = IS_ADMIN ? PREFIX + '/api/staff-qualif' : PREFIX + '/api/my/staff-qualif';
+    // Staff managers use the scoped management API; others use self-service.
+    const addUrl = CAN_MANAGE_STAFF ? PREFIX + '/api/staff-qualif' : PREFIX + '/api/my/staff-qualif';
     const deleteUrl = function(id) {{
-        return IS_ADMIN ? PREFIX + '/api/staff-qualif/' + id : PREFIX + '/api/my/staff-qualif/' + id;
+        return CAN_MANAGE_STAFF ? PREFIX + '/api/staff-qualif/' + id : PREFIX + '/api/my/staff-qualif/' + id;
     }};
 
     const addBtn = document.getElementById('add-pq-btn');
@@ -1053,6 +1060,7 @@ pub fn person_detail(
             const qual = document.getElementById('pq-qual').value;
             const date = document.getElementById('pq-date').value;
             if (!qual || !date) {{ alert('Tous les champs sont requis'); return; }}
+            if (CONFIRM_CHANGES && !confirm('Ajouter cette qualification à ce bénévole ?')) return;
             const res = await fetch(addUrl, {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
@@ -1076,6 +1084,7 @@ pub fn person_detail(
         inp.addEventListener('change', async () => {{
             const file = inp.files[0];
             if (!file) return;
+            if (CONFIRM_CHANGES && !confirm('Modifier le justificatif de ce bénévole ?')) {{ inp.value = ''; return; }}
             const fd = new FormData();
             fd.append('proof', file);
             const res = await fetch(PREFIX + '/api/staff-qualif/' + inp.dataset.id + '/proof', {{
@@ -1094,7 +1103,7 @@ pub fn person_detail(
             else {{ const e = await res.json(); alert(e.error || 'Erreur'); }}
         }});
     }});
-}})();"#, p, staff.id, is_admin)))
+}})();"#, p, staff.id, is_admin || manages_person, !is_self)))
             }
         }
         @if is_admin && !payment_history.is_empty() {

@@ -120,6 +120,17 @@ pub async fn calendar_view(
         .await
         .unwrap_or_default();
 
+    let can_manage_presence = if let Some(viewer) = &me {
+        viewer.is_admin
+            || viewer.is_god
+            || database::get_chief_ateliers(&state.db, viewer.id)
+                .await
+                .unwrap_or_default()
+                .iter()
+                .any(|managed| managed.id == atelier.id)
+    } else {
+        false
+    };
     templates::calendar(
         &atelier,
         &needs,
@@ -128,7 +139,7 @@ pub async fn calendar_view(
         &all_ateliers,
         &prefix,
         me.as_ref().map(|s| s.id),
-        me.as_ref().is_some_and(|s| s.is_admin),
+        can_manage_presence,
         &opening_days,
         query.show_past,
         today,
@@ -149,14 +160,34 @@ pub async fn toggle_presence_api(
     State(state): State<AppState>,
     Json(payload): Json<TogglePresenceRequest>,
 ) -> impl IntoResponse {
-    // Authorization: only the staff member themselves can toggle their own availability
+    // Chiefs may manage presence only in their own ateliers, for their staff.
     if payload.staff_id != me.id {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(
-                serde_json::json!({"error": "Vous ne pouvez modifier que votre propre disponibilité"}),
-            ),
-        );
+        let need = match database::get_need_by_id(&state.db, payload.needs_id).await {
+            Ok(Some(need)) => need,
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error": "Besoin introuvable"})),
+                );
+            }
+            Err(e) => {
+                error!("Error fetching need for permissions: {e}");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": "Impossible de lire le besoin"})),
+                );
+            }
+        };
+        if let Err(response) = crate::auth::authorize_staff_management(
+            &state,
+            &me,
+            payload.staff_id,
+            Some(need.atelier),
+        )
+        .await
+        {
+            return response;
+        }
     }
 
     // Fetch current presence

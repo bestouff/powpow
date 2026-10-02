@@ -633,10 +633,15 @@ pub struct AddStaffQualifRequest {
 }
 
 pub async fn api_add_staff_qualif(
-    RequireAdmin(admin): RequireAdmin,
+    RequireChief(admin): RequireChief,
     State(state): State<AppState>,
     Json(payload): Json<AddStaffQualifRequest>,
 ) -> impl IntoResponse {
+    if let Err(response) =
+        crate::auth::authorize_staff_management(&state, &admin, payload.staff_id, None).await
+    {
+        return response;
+    }
     match database::add_staff_qualif(
         &state.db,
         payload.staff_id,
@@ -673,10 +678,31 @@ pub async fn api_add_staff_qualif(
 }
 
 pub async fn api_delete_staff_qualif(
-    RequireAdmin(admin): RequireAdmin,
+    RequireChief(admin): RequireChief,
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<i32>,
 ) -> impl IntoResponse {
+    let owner = match database::get_staff_qualif_owner(&state.db, id).await {
+        Ok(Some(owner)) => owner,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Qualification introuvable"})),
+            );
+        }
+        Err(e) => {
+            error!("Error fetching qualification owner: {e}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Impossible de lire la qualification"})),
+            );
+        }
+    };
+    if let Err(response) =
+        crate::auth::authorize_staff_management(&state, &admin, owner, None).await
+    {
+        return response;
+    }
     match database::delete_staff_qualif(&state.db, id).await {
         Ok(()) => {
             let _ = database::insert_audit(

@@ -323,8 +323,18 @@ pub async fn view_person(
             }
         };
 
-    // Fetch all qualification types (for self-service add form)
-    let all_qualifications = if is_self || is_viewer_admin {
+    let chief_atelier_ids: Vec<uuid::Uuid> = database::get_chief_ateliers(&state.db, viewer.id)
+        .await
+        .unwrap_or_default()
+        .iter()
+        .map(|atelier| atelier.id)
+        .collect();
+    let manages_person = roles
+        .iter()
+        .any(|role| chief_atelier_ids.contains(&role.atelier));
+
+    // Fetch qualification types for everyone allowed to manage this person.
+    let all_qualifications = if is_self || is_viewer_admin || manages_person {
         database::get_all_qualifications(&state.db)
             .await
             .unwrap_or_default()
@@ -364,6 +374,7 @@ pub async fn view_person(
         is_self,
         is_viewer_admin,
         is_viewer_god,
+        &chief_atelier_ids,
         show_contact,
         &todos,
         &payment_history,
@@ -1078,14 +1089,14 @@ pub async fn api_delete_own_staff_qualif(
 // --- Training proof image management ---
 
 /// Upload a training proof image for a staff qualification.
-/// Allowed for the owner of the qualification or admins.
+/// Allowed for the owner, admins, or a chief of the owner's atelier.
 pub async fn upload_training_proof(
     RequireStaff(me): RequireStaff,
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<i32>,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
-    // Check ownership or admin
+    // Check ownership or staff management rights.
     let owner = match database::get_staff_qualif_owner(&state.db, id).await {
         Ok(Some(o)) => o,
         Ok(None) => {
@@ -1105,12 +1116,11 @@ pub async fn upload_training_proof(
         }
     };
 
-    if owner != me.id && !me.is_admin && !me.is_god {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(serde_json::json!({"error": "Accès refusé"})),
-        )
-            .into_response();
+    if owner != me.id
+        && let Err(response) =
+            crate::auth::authorize_staff_management(&state, &me, owner, None).await
+    {
+        return response.into_response();
     }
 
     // Parse multipart
@@ -1233,7 +1243,7 @@ pub async fn serve_training_proof(
 }
 
 /// Delete the training proof image for a staff qualification.
-/// Allowed for the owner or admins.
+/// Allowed for the owner, admins, or a chief of the owner's atelier.
 pub async fn delete_training_proof(
     RequireStaff(me): RequireStaff,
     State(state): State<AppState>,
@@ -1241,12 +1251,13 @@ pub async fn delete_training_proof(
 ) -> impl IntoResponse {
     // Check ownership or admin
     match database::get_staff_qualif_owner(&state.db, id).await {
-        Ok(Some(owner)) if owner == me.id || me.is_admin || me.is_god => {}
-        Ok(Some(_)) => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(serde_json::json!({"error": "Accès refusé"})),
-            );
+        Ok(Some(owner)) => {
+            if owner != me.id
+                && let Err(response) =
+                    crate::auth::authorize_staff_management(&state, &me, owner, None).await
+            {
+                return response;
+            }
         }
         Ok(None) => {
             return (

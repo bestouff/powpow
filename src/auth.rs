@@ -142,6 +142,33 @@ pub struct RequireChief(pub Staff);
 pub struct RequireAdmin(pub Staff);
 pub struct RequireGod(pub Staff);
 
+pub async fn authorize_staff_management(
+    state: &AppState,
+    viewer: &Staff,
+    staff_id: uuid::Uuid,
+    atelier_id: Option<uuid::Uuid>,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+    if viewer.is_admin || viewer.is_god {
+        return Ok(());
+    }
+    match database::chief_manages_staff(&state.db, viewer.id, staff_id, atelier_id).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err((
+            StatusCode::FORBIDDEN,
+            Json(
+                serde_json::json!({"error": "Vous ne pouvez modifier que le staff de vos ateliers."}),
+            ),
+        )),
+        Err(e) => {
+            error!("Error checking chief staff permissions: {e}");
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Impossible de vérifier les droits."})),
+            ))
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // FromRequestParts impls
 // ---------------------------------------------------------------------------

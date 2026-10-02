@@ -1101,6 +1101,27 @@ pub async fn get_all_ateliers(pool: &PgPool) -> Result<Vec<Atelier>> {
     Ok(ateliers)
 }
 
+/// Check whether a chief and a staff member share an atelier, optionally a specific one.
+pub async fn chief_manages_staff(
+    pool: &PgPool,
+    chief: uuid::Uuid,
+    staff: uuid::Uuid,
+    atelier: Option<uuid::Uuid>,
+) -> Result<bool> {
+    Ok(sqlx::query_scalar(
+        r"SELECT EXISTS (
+            SELECT 1 FROM roles c JOIN roles r ON r.atelier = c.atelier
+            WHERE c.staff = $1 AND c.chief AND r.staff = $2
+              AND ($3::uuid IS NULL OR c.atelier = $3)
+        )",
+    )
+    .bind(chief)
+    .bind(staff)
+    .bind(atelier)
+    .fetch_one(pool)
+    .await?)
+}
+
 /// Get roles for a staff member
 pub async fn get_staff_roles(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<Role>> {
     let roles = sqlx::query_as::<_, Role>(r"SELECT * FROM roles WHERE staff = $1")
@@ -3653,4 +3674,46 @@ pub async fn delete_staff(pool: &PgPool, id: uuid::Uuid) -> Result<bool> {
         .execute(pool)
         .await?;
     Ok(res.rows_affected() > 0)
+}
+
+#[cfg(test)]
+mod chief_permissions_tests {
+    use super::chief_manages_staff;
+
+    #[tokio::test]
+    #[ignore = "requires DATABASE_URL pointing to a PostgreSQL database"]
+    async fn chief_permissions_are_scoped_to_shared_ateliers() -> anyhow::Result<()> {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&std::env::var("DATABASE_URL")?)
+            .await?;
+        // A temporary table shadows the real roles table on this single connection.
+        sqlx::query("CREATE TEMP TABLE roles (staff uuid, atelier uuid, chief bool)")
+            .execute(&pool)
+            .await?;
+        let chief = uuid::Uuid::new_v4();
+        let member = uuid::Uuid::new_v4();
+        let outsider = uuid::Uuid::new_v4();
+        let managed = uuid::Uuid::new_v4();
+        let other = uuid::Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO roles VALUES ($1, $4, true), ($1, $5, false),
+             ($2, $4, false), ($2, $5, false), ($3, $5, false)",
+        )
+        .bind(chief)
+        .bind(member)
+        .bind(outsider)
+        .bind(managed)
+        .bind(other)
+        .execute(&pool)
+        .await?;
+        assert!(chief_manages_staff(&pool, chief, member, None).await?);
+        assert!(chief_manages_staff(&pool, chief, member, Some(managed)).await?);
+        assert!(!chief_manages_staff(&pool, chief, member, Some(other)).await?);
+        assert!(!chief_manages_staff(&pool, chief, outsider, None).await?);
+        assert!(!chief_manages_staff(&pool, member, chief, None).await?);
+        assert!(!chief_manages_staff(&pool, chief, uuid::Uuid::new_v4(), None).await?);
+        pool.close().await;
+        Ok(())
+    }
 }

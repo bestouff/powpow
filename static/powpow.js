@@ -443,6 +443,11 @@ function initPersonDetail(prefix) {
       var atelierId = this.dataset.atelierId;
       var checked = this.checked;
 
+      if (!confirm(checked ? "Valider ce bénévole pour cet atelier ?" : "Retirer la validation de ce bénévole pour cet atelier ?")) {
+        this.checked = !checked;
+        return;
+      }
+
       try {
         var response = await fetch(
           prefix + "/api/person/" + staffId + "/role",
@@ -699,6 +704,12 @@ function initPersonDetail(prefix) {
       var half = this.dataset.half;
       var value = this.checked;
 
+      if (document.getElementById('person-data').dataset.confirmChanges === 'true' &&
+          !confirm(value ? 'Ajouter cette présence au planning de ce bénévole ?' : 'Retirer cette présence du planning de ce bénévole ?')) {
+        this.checked = !value;
+        return;
+      }
+
       try {
         var response = await fetch(prefix + "/api/calendar/toggle", {
           method: "POST",
@@ -746,6 +757,12 @@ function initCalendarView(prefix) {
       var half = this.dataset.half;
       var value = this.checked;
 
+      if (this.dataset.confirmChanges === 'true' &&
+          !confirm(value ? 'Ajouter cette présence au planning de ce bénévole ?' : 'Retirer cette présence du planning de ce bénévole ?')) {
+        this.checked = !value;
+        return;
+      }
+
       try {
         var response = await fetch(prefix + "/api/calendar/toggle", {
           method: "POST",
@@ -761,7 +778,7 @@ function initCalendarView(prefix) {
         if (!response.ok) {
           if (response.status === 403) {
             throw new Error(
-              "Vous ne pouvez modifier que votre propre disponibilité",
+              "Vous ne pouvez modifier que votre disponibilité ou celle du staff de vos ateliers",
             );
           }
           var body = await response.json().catch(function () {
@@ -1911,5 +1928,3 @@ function scrollCalendarToToday() {
     scroll.scrollLeft = Math.max(0, targetLeft - nameWidth - 16);
   }, 50);
 }
-
-
