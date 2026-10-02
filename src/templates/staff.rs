@@ -237,7 +237,7 @@ pub fn staff_list(
                                         // Formations column
                                         @if !qualifications.is_empty() {
                                             td {
-                                                div .tags {
+                                                div .tags.is-flex-wrap-nowrap {
                                                     @for qual in qualifications {
                                                         // Find the most recent record for this staff + qualification
                                                         @let latest = staff_qualifs.iter()
