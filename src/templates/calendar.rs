@@ -169,7 +169,7 @@ pub fn calendar(
                                 @let is_self = viewer_id.is_some_and(|vid| staff.id == vid);
                                 @let can_toggle = is_self || can_manage_presence;
                                 @let name = format!("{} {}", capitalize_words(&staff.first_name), capitalize_words(&staff.last_name));
-                                tr .cal-me[can_toggle] {
+                                tr .cal-me[is_self] {
                                     td .cal-name-col {
                                         a href={(p) "/person/" (staff.id)} { (name) }
                                     }
