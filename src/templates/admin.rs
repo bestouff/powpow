@@ -301,6 +301,12 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
                                     span .icon { i .fa-solid.fa-clipboard-list {} }
                                     span { "Journal d'audit" }
                                 }
+                                button .button.is-warning type="button"
+                                    data-url={(p) "/api/admin/clear-expired-roles"}
+                                    onclick="clearExpiredStaffRoles(this)" {
+                                    span .icon { i .fa-solid.fa-trash {} }
+                                    span { "Effacer les roles" }
+                                }
                             }
                         }
                     }
@@ -417,7 +423,28 @@ pub fn admin_page(prefix: &str, is_admin: bool, is_god: bool, equipments: &[Equi
         "admin",
         html! {},
         content,
-        html! {},
+        html! {
+                            script {
+                                (maud::PreEscaped(r"
+async function clearExpiredStaffRoles(button) {
+    if (!confirm('Effacer les rôles des bénévoles sans adhésion à jour pour la saison actuelle ? Seuls les rôles dans lesquels ils sont chefs seront conservés. Cette action est irréversible.')) return;
+    button.disabled = true;
+    button.classList.add('is-loading');
+    try {
+        const response = await fetch(button.dataset.url, { method: 'POST' });
+        if (!response.ok || response.redirected) throw new Error('Impossible d\'effacer les rôles. Vérifiez votre connexion et vos droits administrateur.');
+        const result = await response.json();
+        alert(result.deleted + ' rôle(s) effacé(s).');
+    } catch (error) {
+        alert(error.message);
+    } finally {
+        button.disabled = false;
+        button.classList.remove('is-loading');
+    }
+}
+"))
+                            }
+                        },
     )
 }
 

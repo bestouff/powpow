@@ -40,6 +40,36 @@ pub struct UpdateAdminFlagsRequest {
     is_god: bool,
 }
 
+pub async fn api_clear_expired_staff_roles(
+    RequireAdmin(admin): RequireAdmin,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let season = crate::get_current_season();
+    match database::clear_expired_staff_roles(&state.db, season).await {
+        Ok(deleted) => {
+            let _ = database::insert_audit(
+                &state.db,
+                Some(admin.id),
+                &format!("{} {}", admin.first_name, admin.last_name),
+                "Effacement des rôles sans adhésion à jour",
+                &format!("season={season} deleted_roles={deleted}; rôles de chef préservés"),
+            )
+            .await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"success": true, "deleted": deleted})),
+            )
+        }
+        Err(e) => {
+            error!("Error clearing expired staff roles: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Impossible d'effacer les rôles."})),
+            )
+        }
+    }
+}
+
 pub async fn api_update_admin_flags(
     RequireGod(god): RequireGod,
     State(state): State<AppState>,

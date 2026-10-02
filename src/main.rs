@@ -587,6 +587,10 @@ async fn main() -> anyhow::Result<()> {
             post(routes::admin::api_update_admin_flags),
         )
         .route("/audit", get(routes::admin::audit_page_handler))
+        .route(
+            "/api/admin/clear-expired-roles",
+            post(routes::admin::api_clear_expired_staff_roles),
+        )
         .route("/validation", get(routes::admin::validation_page_handler))
         .route(
             "/qualifications",

@@ -1149,6 +1149,23 @@ pub async fn remove_role(
     Ok(())
 }
 
+/// Remove non-chief roles from staff without a current or future membership.
+pub async fn clear_expired_staff_roles(pool: &PgPool, season: i16) -> Result<u64> {
+    let result = sqlx::query(
+        r"
+        DELETE FROM roles r
+        WHERE NOT r.chief AND NOT EXISTS (
+            SELECT 1 FROM payments p WHERE p.staff = r.staff AND p.season >= $1
+        )
+        ",
+    )
+    .bind(season)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
 /// Update role properties (validated and/or chief)
 /// Note: if chief is set to true, validated is automatically set to true as well
 pub async fn update_role(
