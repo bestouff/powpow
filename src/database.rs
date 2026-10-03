@@ -9,6 +9,8 @@ use sqlx::PgPool;
 use sqlx::Row;
 use tracing::info;
 
+pub mod auto_import;
+
 /// Lifetime of a pending login link (magic link emailed to the staff member).
 const LOGIN_TOKEN_LIFETIME: std::time::Duration = std::time::Duration::from_hours(24);
 /// Lifetime of an authenticated session once established.
@@ -260,7 +262,28 @@ pub async fn get_users_with_memberships(
 }
 
 // Membership functions
-pub async fn upsert_membership(pool: &PgPool, membership: &Membership) -> Result<Membership> {
+pub async fn upsert_memberships(
+    pool: &PgPool,
+    memberships: &[(Membership, String)],
+) -> Result<usize> {
+    let mut tx = pool.begin().await?;
+    auto_import::lock_import(&mut tx).await?;
+    for (membership, state) in memberships {
+        upsert_membership(&mut tx, membership).await?;
+        sqlx::query("UPDATE memberships SET source_state = $1 WHERE helloasso_item_id = $2")
+            .bind(state)
+            .bind(membership.helloasso_item_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(memberships.len())
+}
+
+async fn upsert_membership(
+    connection: &mut sqlx::PgConnection,
+    membership: &Membership,
+) -> Result<Membership> {
     let result = sqlx::query_as::<_, Membership>(
         r"
         INSERT INTO memberships (
@@ -288,7 +311,7 @@ pub async fn upsert_membership(pool: &PgPool, membership: &Membership) -> Result
         ",
     )
     .bind(membership)
-    .fetch_one(pool)
+    .fetch_one(connection)
     .await?;
 
     Ok(result)
@@ -760,6 +783,7 @@ pub async fn create_staff_with_payment(
     season: i16,
 ) -> Result<Staff> {
     let mut tx = pool.begin().await?;
+    auto_import::lock_import(&mut tx).await?;
 
     // Check if already imported (within transaction for consistency)
     let already_imported: bool =
@@ -821,6 +845,7 @@ pub async fn update_staff_with_payment(
     season: i16,
 ) -> Result<Staff> {
     let mut tx = pool.begin().await?;
+    auto_import::lock_import(&mut tx).await?;
 
     // Check if already imported (within transaction for consistency)
     let already_imported: bool =
@@ -1683,12 +1708,26 @@ pub async fn get_unimport_consequences(
 
 /// Delete a payment record by its ID. Returns the staff UUID it was linked to.
 pub async fn delete_payment(pool: &PgPool, payment_id: uuid::Uuid) -> Result<uuid::Uuid> {
-    let staff_id: uuid::Uuid =
-        sqlx::query_scalar(r"DELETE FROM payments WHERE id = $1 RETURNING staff")
-            .bind(payment_id)
-            .fetch_one(pool)
-            .await?;
-
+    let mut tx = pool.begin().await?;
+    auto_import::lock_import(&mut tx).await?;
+    let row = sqlx::query(
+        "DELETE FROM payments WHERE id = $1 RETURNING staff, helloasso_item_id, cash_id",
+    )
+    .bind(payment_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    let staff_id = row.get("staff");
+    let source = row.get::<Option<i64>, _>("helloasso_item_id").map_or_else(
+        || crate::auto_import::Source::Cash(row.get("cash_id")),
+        crate::auto_import::Source::HelloAsso,
+    );
+    auto_import::mark_review(
+        &mut tx,
+        source,
+        "Désimporté manuellement : décision administrateur requise",
+    )
+    .await?;
+    tx.commit().await?;
     Ok(staff_id)
 }
 
@@ -1784,6 +1823,7 @@ pub async fn create_staff_with_cash_payment(
     season: i16,
 ) -> Result<Staff> {
     let mut tx = pool.begin().await?;
+    auto_import::lock_import(&mut tx).await?;
 
     // Check if already imported
     let already_imported: bool =
@@ -1841,6 +1881,7 @@ pub async fn update_staff_with_cash_payment(
     season: i16,
 ) -> Result<Staff> {
     let mut tx = pool.begin().await?;
+    auto_import::lock_import(&mut tx).await?;
 
     // Check if already imported
     let already_imported: bool =

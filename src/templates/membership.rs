@@ -325,6 +325,7 @@ pub fn import_staff_form(
     candidates: Vec<StaffWithSeason>,
     payer_email: Option<&str>,
     name_already_exists: bool,
+    review_reason: Option<String>,
     prefix: &str,
 ) -> Markup {
     let beneficiary_first =
@@ -386,6 +387,7 @@ pub fn import_staff_form(
         default_email,
         phone,
         default_comment: comment,
+        review_reason,
         is_donation,
         allow_create: !name_already_exists,
         name_choice_value: "membership",

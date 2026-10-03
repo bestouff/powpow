@@ -8,10 +8,7 @@ use maud::html;
 use serde::Deserialize;
 use tracing::error;
 
-use crate::{
-    AppState, auth::RequireAdmin, database, get_current_season, get_prefix,
-    send_notification_email, templates,
-};
+use crate::{AppState, auth::RequireAdmin, database, get_current_season, get_prefix, templates};
 
 pub async fn list_cash(
     RequireAdmin(_staff): RequireAdmin,
@@ -89,12 +86,6 @@ pub async fn create_cash(
     let phone = form.phone.as_deref().filter(|p| !p.is_empty());
     let is_membership = form.is_membership.is_some();
 
-    // Track the unimported cash queue before inserting, so we only notify
-    // admins when a new payment appears while none were pending before.
-    let unimported_before = database::count_unimported_cash(&state.db)
-        .await
-        .unwrap_or(0);
-
     match database::create_cash_payment(
         &state.db,
         &form.first_name,
@@ -117,39 +108,9 @@ pub async fn create_cash(
                 &format!("{} {} — {}€", form.first_name, form.last_name, form.amount),
             )
             .await;
-            // Notify admins about new cash payment (only when the queue was empty before)
-            let state_clone = state.clone();
-            let first_name = form.first_name.clone();
-            let last_name = form.last_name.clone();
-            let amount = form.amount;
-            tokio::spawn(async move {
-                if unimported_before > 0 {
-                    // Already unimported cash pending: don't re-notify admins
-                    return;
-                }
-                let admin_emails = database::get_admin_emails_for_import(&state_clone.db)
-                    .await
-                    .unwrap_or_default();
-                if !admin_emails.is_empty() {
-                    let subject = format!(
-                        "{} — Nouveau paiement espèces à importer",
-                        state_clone.config.entity_name
-                    );
-                    let html_body = format!(
-                        r"<p>Bonjour,</p>
-<p>Un nouveau paiement espèces/chèque a été enregistré :</p>
-<p><strong>{} {}</strong> — {}€</p>
-<p>Connectez-vous à PowPow pour l'importer.</p>
-{}",
-                        first_name,
-                        last_name,
-                        amount,
-                        crate::email_signature(&state_clone.config.entity_name),
-                    );
-                    send_notification_email(&state_clone, &admin_emails, &subject, &html_body)
-                        .await;
-                }
-            });
+            if is_membership && let Err(e) = super::auto_import::import_pending(&state).await {
+                error!("Cash membership auto-import failed: {e}");
+            }
 
             (
                 StatusCode::SEE_OTHER,
@@ -228,7 +189,18 @@ pub async fn import_cash(
 
     (
         StatusCode::OK,
-        templates::cash_import_form(&cash, season, candidates, &prefix),
+        templates::cash_import_form(
+            &cash,
+            season,
+            candidates,
+            database::auto_import::review_reason(
+                &state.db,
+                crate::auto_import::Source::Cash(cash_id),
+            )
+            .await
+            .unwrap_or_default(),
+            &prefix,
+        ),
     )
 }
 

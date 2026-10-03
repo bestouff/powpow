@@ -11,10 +11,7 @@ use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use tracing::{debug, error, info, warn};
 
-use crate::{
-    AppState, check_automation_token, database, get_current_season, models, resolve_staff_if_admin,
-    send_notification_email,
-};
+use crate::{AppState, check_automation_token, database, models, resolve_staff_if_admin};
 use models::User;
 
 /// Helper function to extract custom field value by name
@@ -43,7 +40,7 @@ async fn process_order(
     user_map: &mut HashMap<String, User>,
 ) -> anyhow::Result<(usize, usize)> {
     let mut user_count: usize = 0;
-    let mut membership_count: usize = 0;
+    let mut memberships = Vec::new();
 
     let payer = &order.payer;
 
@@ -178,7 +175,9 @@ async fn process_order(
             item_name: item.name.clone(),
             item_type: Some(item.type_.clone()),
             tier_name,
-            amount: Some(item.amount as i32),
+            amount: Some(i32::try_from(item.amount).map_err(|_| {
+                anyhow::anyhow!("HelloAsso item {} has an out-of-range amount", item.id)
+            })?),
             order_date: Some(order.date),
             comment: item_comment,
 
@@ -186,20 +185,10 @@ async fn process_order(
             updated_at: chrono::Utc::now(),
         };
 
-        match database::upsert_membership(&state.db, &membership).await {
-            Ok(_) => {
-                debug!("Created membership for order {} item {}", order.id, item.id);
-                membership_count += 1;
-            }
-            Err(e) => {
-                error!(
-                    "Failed to upsert membership for order {} item {}: {}",
-                    order.id, item.id, e
-                );
-            }
-        }
+        memberships.push((membership, item.state.clone()));
     }
 
+    let membership_count = database::upsert_memberships(&state.db, &memberships).await?;
     Ok((user_count, membership_count))
 }
 
@@ -301,10 +290,6 @@ pub async fn sync_webhook(
                         order.id,
                         order.items.len()
                     );
-                    let unimported_before =
-                        database::count_unimported_memberships(&state.db, get_current_season())
-                            .await
-                            .unwrap_or(0);
                     let mut user_map = HashMap::new();
                     match process_order(&order, &state, &mut user_map).await {
                         Ok((u, m)) => {
@@ -324,9 +309,11 @@ pub async fn sync_webhook(
                             )
                             .await;
 
-                            // Notify admins if new unimported memberships appeared
-                            if m > 0 {
-                                notify_new_memberships(&state, unimported_before).await;
+                            // Match staff only after all items in this order are stored.
+                            if m > 0
+                                && let Err(e) = super::auto_import::import_pending(&state).await
+                            {
+                                error!("Webhook auto-import failed: {e}");
                             }
                         }
                         Err(e) => {
@@ -474,11 +461,6 @@ pub async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usiz
     let mut user_count = 0;
     let mut membership_count = 0;
 
-    // Snapshot the pending queue before importing, so we only alert on a fresh batch.
-    let unimported_before = database::count_unimported_memberships(&state.db, get_current_season())
-        .await
-        .unwrap_or(0);
-
     // Track users we've already upserted (keyed by email) to avoid duplicates
     let mut user_map: HashMap<String, User> = HashMap::new();
 
@@ -513,40 +495,7 @@ pub async fn sync_users_from_helloasso(state: &AppState) -> anyhow::Result<(usiz
         user_count, membership_count
     );
 
-    // Check if new unimported memberships appeared and notify admins
-    notify_new_memberships(state, unimported_before).await;
+    super::auto_import::import_pending(state).await?;
 
     Ok((user_count, membership_count))
-}
-
-/// Check for unimported memberships and email admins when new ones appear.
-///
-/// Only notifies when the queue was empty before the current import, so a burst
-/// of memberships while a previous batch is still pending doesn't re-email admins.
-async fn notify_new_memberships(state: &AppState, unimported_before: i64) {
-    let current_season = get_current_season();
-    let unimported = database::count_unimported_memberships(&state.db, current_season)
-        .await
-        .unwrap_or(0);
-    if unimported_before == 0 && unimported > 0 {
-        info!("{} unimported membership(s), notifying admins", unimported);
-        let admin_emails = database::get_admin_emails_for_import(&state.db)
-            .await
-            .unwrap_or_default();
-        if !admin_emails.is_empty() {
-            let subject = format!(
-                "{} — {} adhésion(s) à importer",
-                state.config.entity_name, unimported
-            );
-            let html_body = format!(
-                r"<p>Bonjour,</p>
-<p><strong>{count}</strong> adhésion(s) HelloAsso sont en attente d'import.</p>
-<p>Connectez-vous à PowPow pour les traiter.</p>
-{sig}",
-                count = unimported,
-                sig = crate::email_signature(&state.config.entity_name),
-            );
-            send_notification_email(state, &admin_emails, &subject, &html_body).await;
-        }
-    }
 }

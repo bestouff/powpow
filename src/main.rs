@@ -20,6 +20,8 @@ use std::collections::HashMap;
 use tracing::{error, info, warn};
 
 mod auth;
+mod auto_import;
+mod auto_import_replay;
 mod config;
 mod database;
 mod dicton;
@@ -336,9 +338,12 @@ async fn main() -> anyhow::Result<()> {
     }
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
-            "powpow {version}\n\nUSAGE:\n    powpow [OPTIONS]\n\nOPTIONS:\n    -h, --help     Print help information\n    -V, --version  Print version information"
+            "powpow {version}\n\nUSAGE:\n    powpow [OPTIONS]\n\nOPTIONS:\n    -h, --help     Print help information\n    -V, --version  Print version information\n    --replay-auto-imports  Read-only replay of historical imports (no migrations, emails or imports)\n    --replay-auto-imports-stdin  Replay a JSON snapshot from stdin without accessing the database"
         );
         return Ok(());
+    }
+    if args.iter().any(|arg| arg == "--replay-auto-imports-stdin") {
+        return auto_import_replay::run_from_stdin();
     }
 
     // Initialize tracing with a default of `info` level when RUST_LOG is not set
@@ -356,6 +361,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Setup database
     let db = database::setup_database(&config.database_url).await?;
+    if args.iter().any(|arg| arg == "--replay-auto-imports") {
+        return auto_import_replay::run(&db).await;
+    }
     let migrations_applied = database::run_migrations(&db).await?;
 
     // Audit: log application startup with version

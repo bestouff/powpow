@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod auth;
+pub mod auto_import;
 pub mod background;
 pub mod calendar;
 pub mod cash;

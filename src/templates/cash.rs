@@ -236,6 +236,7 @@ pub fn cash_import_form(
     cash: &Cash,
     season: i16,
     candidates: Vec<StaffWithSeason>,
+    review_reason: Option<String>,
     prefix: &str,
 ) -> Markup {
     let beneficiary_first = capitalize_words(&cash.first_name);
@@ -292,6 +293,7 @@ pub fn cash_import_form(
         default_email,
         phone,
         default_comment: String::new(),
+        review_reason,
         is_donation: false,
         allow_create: true,
         name_choice_value: "cash",

@@ -467,6 +467,7 @@ struct ImportContext {
     phone: String,
     /// Default comment pre-filled in the comment textarea.
     default_comment: String,
+    review_reason: Option<String>,
     /// Whether this is a donation (affects double-subscription label).
     is_donation: bool,
     /// Whether creating a new staff is disallowed (name already exists).
@@ -503,7 +504,9 @@ fn render_import_form(ctx: &ImportContext, candidates: &[StaffWithSeason], prefi
         .iter()
         .any(|c| c.match_type == StaffMatchType::DoubleSubscription);
 
-    let recommend_double_subscription = ctx.is_donation && has_double_subscription;
+    let recommend_double_subscription = has_double_subscription
+        && (ctx.is_donation
+            || ctx.review_reason.as_deref() == Some(crate::auto_import::DUPLICATE_REASON));
     let recommend_create = !has_exact_match && !recommend_double_subscription && ctx.allow_create;
     let allow_create = ctx.allow_create;
 
@@ -803,6 +806,12 @@ fn render_import_form(ctx: &ImportContext, candidates: &[StaffWithSeason], prefi
                 div .level.mb-5 {
                     div .level-left {
                         h1 .title.is-3 { (ctx.page_heading) }
+                        @if let Some(reason) = &ctx.review_reason {
+                            div .notification.is-warning.is-light {
+                                strong { "Vérification nécessaire : " }
+                                (reason)
+                            }
+                        }
                     }
                     div .level-right {
                         a .button.is-light href=(format!("{prefix}{}", ctx.back_suffix)) {

@@ -223,6 +223,12 @@ pub async fn import_staff(
             .unwrap_or_default();
 
             // Always allow creating a new staff (two people can have the same name)
+            let review_reason = database::auto_import::review_reason(
+                &state.db,
+                crate::auto_import::Source::HelloAsso(item_id),
+            )
+            .await
+            .unwrap_or_default();
             (
                 StatusCode::OK,
                 templates::import_staff_form(
@@ -231,6 +237,7 @@ pub async fn import_staff(
                     candidates,
                     payer_email.as_deref(),
                     false,
+                    review_reason,
                     &prefix,
                 ),
             )
