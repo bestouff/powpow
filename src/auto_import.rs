@@ -105,7 +105,7 @@ pub fn normalize_name(value: &str) -> String {
     normalized
 }
 
-fn normalize_phone(value: &str) -> String {
+pub fn normalize_phone(value: &str) -> String {
     let digits: String = value.chars().filter(char::is_ascii_digit).collect();
     let digits = digits.strip_prefix("00").unwrap_or(&digits);
     if digits.len() == 10 && digits.starts_with('0') {

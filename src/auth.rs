@@ -32,6 +32,7 @@ fn membership_management_path(path: &str) -> bool {
     ) || path.starts_with("/online/")
         || path.starts_with("/import/")
         || path.starts_with("/cash-import/")
+        || path.starts_with("/api/import/")
 }
 
 fn public_path(path: &str, method: &axum::http::Method) -> bool {

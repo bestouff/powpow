@@ -18,15 +18,6 @@ function showNotification(message, type) {
   }, 3000);
 }
 
-function updateNameFields(form, firstName, lastName) {
-  form.querySelector('input[name="first_name"]').value = firstName;
-  form.querySelector('input[name="last_name"]').value = lastName;
-}
-
-function updateEmailField(form, email) {
-  form.querySelector('input[name="email"]').value = email;
-}
-
 function updateFileName(input) {
   var fileName = input.files[0]
     ? input.files[0].name
@@ -54,7 +45,177 @@ document.addEventListener("DOMContentLoaded", function () {
   initQualificationsPage(prefix);
   initValidationPage(prefix);
   initPhotoPage(prefix);
+  initManualImport();
 });
+
+function initManualImport() {
+  const data = document.getElementById("manual-import-data");
+  if (!data) return;
+  const config = JSON.parse(data.dataset.config);
+  const search = document.getElementById("manual-import-search");
+  const clearSearch = document.getElementById("manual-import-clear");
+  const results = document.getElementById("manual-import-results");
+  const modal = document.getElementById("manual-import-modal");
+  const form = document.getElementById("manual-import-form");
+  const confirm = document.getElementById("manual-import-confirm");
+  const error = document.getElementById("manual-import-error");
+  const duplicate = document.getElementById("manual-import-duplicate");
+  const allowDuplicate = document.getElementById("manual-import-allow-duplicate");
+  let selected = null;
+  let requestNumber = 0;
+  let timer;
+
+  function text(tag, value, className) {
+    const element = document.createElement(tag);
+    element.textContent = value;
+    if (className) element.className = className;
+    return element;
+  }
+  function showError(element, message) {
+    element.textContent = message;
+    element.classList.toggle("is-hidden", !message);
+  }
+  function currentFields() {
+    return Object.fromEntries(new FormData(form).entries());
+  }
+  function historyLabel(entry) {
+    const date = entry.date ? new Date(entry.date).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : "Date inconnue";
+    return date + " — saison " + entry.season + " — " + entry.method;
+  }
+  function historyList(entries, clickable) {
+    const list = text("ul", "", "is-size-7");
+    if (!entries.length) list.append(text("li", "Aucune adhésion précédente.", "has-text-grey"));
+    for (const entry of entries) {
+      const item = text("li", "", "mb-2");
+      item.append(text("span", historyLabel(entry) + " : "));
+      const name = (entry.identity.first_name + " " + entry.identity.last_name).trim();
+      function value(label, action, field) {
+        if (!clickable || !label) return text("span", label || "—");
+        const button = text("button", label, "button is-small is-text p-0");
+        button.type = "button";
+        button.dataset.copyField = field;
+        button.title = "Reprendre cette valeur dans le formulaire";
+        button.addEventListener("click", () => { action(); identityWarning(); });
+        return button;
+      }
+      item.append(value(name, () => {
+        form.elements.namedItem("first_name").value = entry.identity.first_name;
+        form.elements.namedItem("last_name").value = entry.identity.last_name;
+      }, "name"));
+      item.append(text("span", " · "));
+      item.append(value(entry.identity.email, () => { form.elements.namedItem("email").value = entry.identity.email; }, "email"));
+      item.append(text("span", " · "));
+      item.append(value(entry.identity.phone, () => { form.elements.namedItem("phone").value = entry.identity.phone; }, "phone"));
+      list.append(item);
+    }
+    return list;
+  }
+  function identityWarning() {
+    const warning = document.getElementById("manual-import-identity-warning");
+    const values = currentFields();
+    const normalize = value => (value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+    const differs = selected && (normalize(values.first_name) !== normalize(config.defaults.first_name) || normalize(values.last_name) !== normalize(config.defaults.last_name));
+    warning.textContent = differs ? "Le nom du staff choisi diffère du bénéficiaire indiqué. Vérifiez qu'il s'agit bien de la bonne personne avant de confirmer." : "";
+    warning.classList.toggle("is-hidden", !differs);
+  }
+  function open(staff) {
+    selected = staff;
+    const fields = staff ? staff.fields : config.defaults;
+    for (const name of ["first_name", "last_name", "email", "phone", "comment"]) {
+      form.elements.namedItem(name).value = fields[name] || "";
+    }
+    document.getElementById("manual-import-modal-title").textContent = staff ? "Ajouter l'adhésion à ce staff" : "Créer un nouvel adhérent";
+    document.getElementById("manual-import-selection").textContent = staff ? "Staff sélectionné : " + staff.fields.first_name + " " + staff.fields.last_name + " (" + staff.id + ")" : "Création d'une nouvelle fiche staff";
+    showError(error, "");
+    allowDuplicate.checked = false;
+    duplicate.classList.toggle("is-hidden", !(staff && staff.paid_for_season));
+    allowDuplicate.required = !!(staff && staff.paid_for_season);
+    document.getElementById("manual-import-history-section").classList.toggle("is-hidden", !staff);
+    document.getElementById("manual-import-history").replaceChildren(historyList(staff ? staff.history : [], true));
+    identityWarning();
+    modal.classList.add("is-active");
+    form.elements.namedItem("first_name").focus();
+  }
+  async function loadResults() {
+    const number = ++requestNumber;
+    const searchError = document.getElementById("manual-import-search-error");
+    showError(searchError, "");
+    const params = new URLSearchParams({ source: config.source, id: config.id, q: search.value });
+    try {
+      const response = await fetch(config.search_url + "?" + params);
+      const body = await response.json().catch(() => ({}));
+      if (number !== requestNumber) return;
+      if (!response.ok || response.redirected || !Array.isArray(body)) throw new Error(body.error || "Impossible de charger les résultats.");
+      results.replaceChildren();
+      if (!body.length) results.append(text("p", "Aucun résultat. Essayez un autre nom, email ou numéro de téléphone.", "has-text-grey"));
+      for (const staff of body) {
+        const card = text("div", "", "box");
+        const heading = text("a", staff.fields.first_name + " " + staff.fields.last_name, "has-text-weight-bold");
+        heading.href = config.profile_prefix + staff.id;
+        heading.target = "_blank";
+        heading.rel = "noopener noreferrer";
+        card.append(heading);
+        card.append(text("p", "Email : " + (staff.fields.email || "—")));
+        card.append(text("p", "Téléphone : " + (staff.fields.phone || "—")));
+        const date = staff.last_membership_date ? new Date(staff.last_membership_date).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : "Aucune";
+        card.append(text("p", "Dernière adhésion : " + date + (staff.latest_season ? " — saison " + staff.latest_season : "")));
+        if (staff.historical_name) card.append(text("p", "Ancienne adhésion : " + staff.historical_name, "help"));
+        card.append(text("p", "Adhésions précédentes :", "has-text-weight-semibold mt-2 is-size-7"));
+        card.append(historyList(staff.history, false));
+        if (staff.paid_for_season) card.append(text("p", "Déjà adhérent pour la saison " + config.season, "has-text-warning-dark"));
+        const button = text("button", "C'est bien lui/elle", "button is-link mt-3");
+        button.type = "button";
+        button.addEventListener("click", () => open(staff));
+        card.append(button);
+        results.append(card);
+      }
+    } catch (failure) {
+      if (number === requestNumber) {
+        results.replaceChildren();
+        showError(searchError, failure.message);
+      }
+    }
+  }
+  search.addEventListener("input", () => {
+    clearSearch.disabled = !search.value;
+    ++requestNumber;
+    clearTimeout(timer);
+    timer = setTimeout(loadResults, 250);
+  });
+  clearSearch.addEventListener("click", () => {
+    clearTimeout(timer);
+    search.value = "";
+    clearSearch.disabled = true;
+    search.focus();
+    loadResults();
+  });
+  document.getElementById("manual-import-new").addEventListener("click", () => open(null));
+  modal.querySelectorAll("[data-close-import]").forEach(button => button.addEventListener("click", () => { if (!confirm.disabled) modal.classList.remove("is-active"); }));
+  document.addEventListener("keydown", event => { if (event.key === "Escape" && !confirm.disabled) modal.classList.remove("is-active"); });
+  form.addEventListener("input", identityWarning);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    confirm.disabled = true;
+    confirm.classList.add("is-loading");
+    showError(error, "");
+    try {
+      const response = await fetch(config.submit_url, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: selected ? "update" : "create", staff_id: selected ? selected.id : null, expected_updated_at: selected ? selected.updated_at : null, fields: currentFields(), allow_duplicate: allowDuplicate.checked }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || response.redirected || !body.success) {
+        if (body.code === "duplicate_membership") { duplicate.classList.remove("is-hidden"); allowDuplicate.required = true; }
+        if (body.code === "stale_staff") loadResults();
+        throw new Error(body.error || "Impossible d'importer cette adhésion. Vérifiez vos droits et les champs saisis.");
+      }
+      window.location.assign(config.back_url);
+    } catch (failure) { showError(error, failure.message); }
+    finally { confirm.disabled = false; confirm.classList.remove("is-loading"); }
+  });
+  loadResults();
+}
 
 // --- Block 1: Navbar burger toggle ---
 function initNavbar() {

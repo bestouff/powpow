@@ -211,25 +211,6 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Session {
     }
 }
 
-// Staff with latest paid season
-#[derive(Debug, Clone, Serialize)]
-pub struct StaffWithSeason {
-    pub staff: Staff,
-    pub latest_season: Option<i16>,
-    pub match_type: StaffMatchType,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq)]
-pub enum StaffMatchType {
-    ExactBoth,          // Both email and name match exactly (highest priority)
-    DoubleSubscription, // Exact name match but already paid for this season (likely double subscription)
-    ExactName,          // Name matches exactly (different email, no payment yet)
-    ExactEmail,         // Beneficiary email matches exactly but name differs
-    PayerEmailMatch,    // Payer email matches (but beneficiary email differs) - lower priority
-    SimilarEmail,       // Fuzzy email match
-    SimilarName,        // Fuzzy name match (lowest priority)
-}
-
 // Atelier model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Atelier {

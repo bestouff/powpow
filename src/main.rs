@@ -27,6 +27,7 @@ mod database;
 mod dicton;
 mod helloasso;
 mod mailchimp;
+mod manual_import;
 mod models;
 mod news;
 mod routes;
@@ -520,18 +521,20 @@ async fn main() -> anyhow::Result<()> {
             "/api/person/{id}/session/{session_id}",
             delete(routes::staff::api_delete_session),
         )
-        .route("/import/{item_id}", get(routes::membership::import_staff))
-        .route(
-            "/import/{item_id}",
-            post(routes::membership::do_import_staff),
-        )
+        .route("/import/{item_id}", get(routes::manual_import::online_page))
         .route(
             "/cash",
             get(routes::cash::list_cash).post(routes::cash::create_cash),
         )
+        .route("/cash-import/{id}", get(routes::manual_import::cash_page))
+        .route("/api/import/staff", get(routes::manual_import::search))
         .route(
-            "/cash-import/{id}",
-            get(routes::cash::import_cash).post(routes::cash::do_import_cash),
+            "/api/import/online/{item_id}",
+            post(routes::manual_import::online_submit),
+        )
+        .route(
+            "/api/import/cash/{id}",
+            post(routes::manual_import::cash_submit),
         )
         .route(
             "/sync",

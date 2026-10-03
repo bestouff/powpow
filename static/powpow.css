@@ -1368,12 +1368,6 @@ a.nightly-switch label.switch input[type="checkbox"]:disabled + .check {
   margin: 0 auto;
 }
 
-/* === Candidate card with CSS custom properties === */
-.candidate-card {
-  border: 2px solid var(--card-border, var(--bulma-border));
-  background-color: var(--card-bg, transparent);
-}
-
 /* === Toggle switch for equipment status === */
 .switch {
   position: relative;

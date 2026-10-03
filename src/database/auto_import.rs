@@ -188,17 +188,6 @@ fn source_ids(source: Source) -> (Option<i64>, Option<Uuid>) {
     }
 }
 
-pub async fn review_reason(pool: &PgPool, source: Source) -> Result<Option<String>> {
-    let (online, cash) = source_ids(source);
-    Ok(sqlx::query_scalar(
-        "SELECT reason FROM auto_import_reviews WHERE helloasso_item_id = $1 OR cash_id = $2",
-    )
-    .bind(online)
-    .bind(cash)
-    .fetch_optional(pool)
-    .await?)
-}
-
 #[derive(Default)]
 pub struct ImportSummary {
     pub imported: usize,

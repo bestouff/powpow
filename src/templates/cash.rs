@@ -1,8 +1,5 @@
-use super::{
-    ImportContext, NavKind, capitalize_words, escape_html, format_phone_international, page,
-    render_import_form,
-};
-use crate::models::{Cash, StaffWithSeason};
+use super::{NavKind, capitalize_words, format_phone_international, page};
+use crate::models::Cash;
 use chrono::Datelike;
 use maud::{Markup, html};
 
@@ -230,81 +227,4 @@ pub fn cash_form(prefix: &str) -> Markup {
         content,
         html! {},
     )
-}
-
-pub fn cash_import_form(
-    cash: &Cash,
-    season: i16,
-    candidates: Vec<StaffWithSeason>,
-    review_reason: Option<String>,
-    prefix: &str,
-) -> Markup {
-    let beneficiary_first = capitalize_words(&cash.first_name);
-    let beneficiary_last = capitalize_words(&cash.last_name);
-    let cash_email = cash.email.as_deref().unwrap_or("").to_lowercase();
-    let default_email = cash_email.clone();
-    let phone = cash
-        .phone
-        .as_deref()
-        .map(format_phone_international)
-        .unwrap_or_default();
-    let amount = format!("{}\u{20ac}", cash.amount);
-    let date = cash.date.format("%d/%m/%Y").to_string();
-    let type_label = if cash.is_membership {
-        "Adhésion"
-    } else {
-        "Autre"
-    };
-    let method_label = if cash.payment_method == "check" {
-        "Chèque"
-    } else {
-        "Espèces"
-    };
-
-    let email_display = if cash_email.is_empty() {
-        "N/A".to_string()
-    } else {
-        cash_email.clone()
-    };
-    let beneficiary_name = format!("{beneficiary_first} {beneficiary_last}");
-
-    let detail_rows = vec![
-        (
-            "Nom",
-            format!("<strong>{}</strong>", escape_html(&beneficiary_name)),
-        ),
-        ("Email", escape_html(&email_display)),
-        ("Téléphone", escape_html(&phone)),
-        ("Moyen", escape_html(method_label)),
-        ("Type", escape_html(type_label)),
-        ("Montant", escape_html(&amount)),
-        ("Date", escape_html(&date)),
-        (
-            "Saison",
-            format!("<span class=\"tag is-info is-medium\">{season}</span>"),
-        ),
-    ];
-
-    let ctx = ImportContext {
-        first_name: beneficiary_first,
-        last_name: beneficiary_last,
-        primary_email: cash_email,
-        payer_email: String::new(),
-        default_email,
-        phone,
-        default_comment: String::new(),
-        review_reason,
-        is_donation: false,
-        allow_create: true,
-        name_choice_value: "cash",
-        name_choice_label: "Du paiement:",
-        page_title: "Importer paiement - PowPow",
-        page_heading: "Importer un paiement",
-        detail_title: "Détails du paiement",
-        back_suffix: "/cash",
-        nav_active: "admin",
-        detail_rows,
-    };
-
-    render_import_form(&ctx, &candidates, prefix)
 }

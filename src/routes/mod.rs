@@ -8,6 +8,7 @@ pub mod content;
 pub mod home;
 pub mod legal;
 pub mod mailchimp;
+pub mod manual_import;
 pub mod membership;
 pub mod photos;
 pub mod settings;
