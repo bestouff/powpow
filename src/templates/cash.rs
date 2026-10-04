@@ -42,50 +42,52 @@ pub fn cash_list(
                 }
 
                 div .box {
-                    table .table.is-fullwidth.is-striped.is-hoverable {
-                        thead {
-                            tr {
-                                th { "Nom" }
-                                th { "Email" }
-                                th { "Téléphone" }
-                                th { "Moyen" }
-                                th { "Type" }
-                                th .has-text-right { "Montant" }
-                                th { "Date" }
-                                th { "Saison" }
-                                th { "Statut" }
-                            }
-                        }
-                        tbody {
-                            @for (cash, staff_id) in &cash_payments {
-                                @let full_name = format!("{} {}", capitalize_words(&cash.first_name), capitalize_words(&cash.last_name));
-                                @let email = cash.email.as_deref().unwrap_or("\u{2014}");
-                                @let phone = cash.phone.as_deref().map_or_else(|| "\u{2014}".to_string(), format_phone_international);
-                                @let date = cash.date.format("%d/%m/%Y").to_string();
-                                @let season: i16 = if cash.date.month() >= 6 { cash.date.year() as i16 + 1 } else { cash.date.year() as i16 };
-                                @let amount = format!("{}€", cash.amount);
-                                @let (type_label, type_class) = if cash.is_membership { ("Adhésion", "is-primary") } else { ("Autre", "is-info") };
-                                @let (method_label, method_icon) = if cash.payment_method == "check" { ("Chèque", "fa-money-check") } else { ("Espèces", "fa-coins") };
-                                @let season_tag_class = if season == current_season { "is-primary" } else { "is-light" };
+                    div .table-container tabindex="0" role="region" aria-label="Paiements espèces et chèques" {
+                        table .table.is-fullwidth.is-striped.is-hoverable {
+                            thead {
                                 tr {
-                                    td { strong { (full_name) } }
-                                    td { (email) }
-                                    td { (phone) }
-                                    td {
-                                        span .icon-text {
-                                            span .icon { i class={"fa-solid " (method_icon)} {} }
-                                            span { (method_label) }
+                                    th { "Nom" }
+                                    th { "Email" }
+                                    th { "Téléphone" }
+                                    th { "Moyen" }
+                                    th { "Type" }
+                                    th .has-text-right { "Montant" }
+                                    th { "Date" }
+                                    th { "Saison" }
+                                    th { "Statut" }
+                                }
+                            }
+                            tbody {
+                                @for (cash, staff_id) in &cash_payments {
+                                    @let full_name = format!("{} {}", capitalize_words(&cash.first_name), capitalize_words(&cash.last_name));
+                                    @let email = cash.email.as_deref().unwrap_or("\u{2014}");
+                                    @let phone = cash.phone.as_deref().map_or_else(|| "\u{2014}".to_string(), format_phone_international);
+                                    @let date = cash.date.format("%d/%m/%Y").to_string();
+                                    @let season: i16 = if cash.date.month() >= 6 { cash.date.year() as i16 + 1 } else { cash.date.year() as i16 };
+                                    @let amount = format!("{}€", cash.amount);
+                                    @let (type_label, type_class) = if cash.is_membership { ("Adhésion", "is-primary") } else { ("Autre", "is-info") };
+                                    @let (method_label, method_icon) = if cash.payment_method == "check" { ("Chèque", "fa-money-check") } else { ("Espèces", "fa-coins") };
+                                    @let season_tag_class = if season == current_season { "is-primary" } else { "is-light" };
+                                    tr {
+                                        td { strong { (full_name) } }
+                                        td { (email) }
+                                        td { (phone) }
+                                        td {
+                                            span .icon-text {
+                                                span .icon { i class={"fa-solid " (method_icon)} {} }
+                                                span { (method_label) }
+                                            }
                                         }
-                                    }
-                                    td { span class={"tag " (type_class)} { (type_label) } }
-                                    td .has-text-right { strong .has-text-success { (amount) } }
-                                    td { (date) }
-                                    td { span class={"tag " (season_tag_class)} { (season) } }
-                                    td {
-                                        @if let Some(sid) = staff_id {
-                                            a .tag.is-success href={(p) "/person/" (sid)} { "Importé" }
-                                        } @else {
-                                            a .tag.is-warning href={(p) "/cash-import/" (cash.id)} { "À importer" }
+                                        td { span class={"tag " (type_class)} { (type_label) } }
+                                        td .has-text-right { strong .has-text-success { (amount) } }
+                                        td { (date) }
+                                        td { span class={"tag " (season_tag_class)} { (season) } }
+                                        td {
+                                            @if let Some(sid) = staff_id {
+                                                a .tag.is-success href={(p) "/person/" (sid)} { "Importé" }
+                                            } @else {
+                                                a .tag.is-warning href={(p) "/cash-import/" (cash.id)} { "À importer" }
+                                            }
                                         }
                                     }
                                 }

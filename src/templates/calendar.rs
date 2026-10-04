@@ -99,7 +99,7 @@ pub fn calendar(
                     }
                 }
 
-                div .cal-scroll {
+                div .cal-scroll tabindex="0" role="region" aria-label="Planning" {
                     table .cal-table.table.is-bordered.is-narrow.is-hoverable {
                         thead {
                             // Header row with day columns
@@ -472,7 +472,7 @@ pub fn calendar_editor(
                 }
 
                 // Main table
-                div .cal-scroll {
+                div .cal-scroll tabindex="0" role="region" aria-label="Planning" {
                     table .cal-table.table.is-bordered.is-narrow.is-hoverable {
                         thead {
                             // Header row 1: Atelier + date columns

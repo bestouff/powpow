@@ -826,60 +826,369 @@
 }
 
 /* === Staff list table (from staff_list()) === */
+.app-page .staff-table-box {
+  padding: 0.25rem;
+}
 .staff-table {
   overflow: auto;
-  max-height: calc(100vh - 300px);
+  max-height: 70vh;
+  max-height: 70dvh;
+  isolation: isolate;
+}
+.staff-table .table {
+  margin-bottom: 0;
 }
 .atelier-col {
   border-left: 1px solid var(--bulma-border) !important;
   border-right: 1px solid var(--bulma-border) !important;
 }
 .staff-table thead th {
-  vertical-align: bottom !important;
+  vertical-align: middle;
   position: sticky;
   top: 0;
   background: var(--bulma-scheme-main) !important;
   z-index: 10;
 }
-@media (min-width: 1024px) {
-  .staff-table .sticky-col {
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    background: var(--bulma-scheme-main);
-    border-right: 2px solid var(--bulma-border) !important;
-  }
-  .staff-table thead th.sticky-col {
-    z-index: 12;
-  }
-  .staff-table tbody tr:nth-child(even) .sticky-col {
-    background: var(
-      --bulma-table-striped-row-even-background-color,
-      var(--bulma-scheme-main-bis)
-    );
-  }
-  .staff-table tbody tr.inactive-staff .sticky-col {
-    background: var(--bulma-scheme-main);
-  }
+.staff-table .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--bulma-scheme-main);
+  border-right: 2px solid var(--bulma-border);
+  min-width: 9rem;
+  max-width: none;
+  width: clamp(9rem, 30vw, 16rem);
+  overflow-wrap: normal;
 }
-th.atelier-col {
+.staff-table thead th.sticky-col {
+  z-index: 12;
+}
+.staff-table tbody tr:nth-child(even) .sticky-col {
+  background: var(--bulma-scheme-main-bis);
+}
+.staff-table .sticky-col a {
+  display: flex;
+  align-items: center;
+  min-height: 1.5rem;
+}
+.staff-table th.atelier-col {
   background: var(--bulma-scheme-main) !important;
-  padding: 8px 4px !important;
-  min-width: 30px;
-  max-width: 30px;
+  padding: 0.125rem;
+  width: 3rem;
 }
-th.atelier-col .vertical-text {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  font-size: 0.85em;
-  line-height: 1.2;
+.staff-column-label summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  list-style: none;
 }
-tr.inactive-staff {
-  opacity: 0.4;
+.staff-column-label summary::-webkit-details-marker {
+  display: none;
+}
+.staff-column-label .icon {
+  flex-shrink: 0;
+}
+.staff-column-text {
+  display: none;
+  padding-left: 0.35rem;
+  max-width: 18rem;
+  font-size: 0.875rem;
+  text-align: left;
+}
+.staff-column-label[open] .staff-column-text,
+.staff-column-label summary:focus-visible .staff-column-text {
+  display: inline;
+}
+@media (hover: hover) {
+  .staff-column-label:hover .staff-column-text {
+    display: inline;
+  }
+}
+.staff-table .table td {
+  vertical-align: middle;
+  padding: 0.25rem 0.5rem;
 }
 .staff-table .table td,
 .staff-table .table th {
   white-space: nowrap;
+  overflow-wrap: normal;
+}
+.staff-table .staff-contact,
+.staff-table .staff-comment,
+.staff-table .staff-qualifications {
+  min-width: 12rem;
+  max-width: 22rem;
+  overflow-wrap: anywhere;
+}
+.app-page .staff-table .staff-contact {
+  max-width: none;
+  white-space: nowrap;
+}
+.staff-table .staff-phone {
+  min-width: 9rem;
+}
+.app-page .staff-table .staff-comment {
+  max-width: none;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.staff-contact a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.app-page .staff-season .tag,
+.app-page .staff-qualifications .tag {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  flex-shrink: 0;
+}
+.staff-table .tags {
+  margin-bottom: 0;
+}
+.staff-table .tags .tag {
+  margin-bottom: 0;
+}
+.staff-legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.staff-legend-items .icon-text {
+  flex-wrap: nowrap;
+}
+.staff-legend-items .icon {
+  flex-shrink: 0;
+}
+
+/* === Application pages only: the homepage does not have .app-page === */
+.app-page > .section {
+  padding: clamp(1rem, 2.5vw, 2rem);
+}
+.app-page > .section > .container.is-fluid {
+  padding-inline: 0;
+}
+.app-page .section .section {
+  padding-inline: 0;
+}
+.app-page :is(.column, .control, .field-body, .level-left, .level-right, .media-content) {
+  min-width: 0;
+}
+.app-page :is(.level, .level-left, .level-right, .field.is-grouped) {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.app-page :is(.level-left, .level-right) {
+  max-width: 100%;
+}
+.app-page :is(.title, .subtitle, .breadcrumb, .notification, .card-content, .box p) {
+  overflow-wrap: anywhere;
+}
+.app-page :is(.box, .content) a {
+  overflow-wrap: anywhere;
+}
+.app-page .breadcrumb li {
+  min-width: 0;
+  max-width: 100%;
+}
+.app-page .breadcrumb a {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app-page .tag {
+  max-width: 100%;
+  height: auto;
+  min-height: 2em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.app-page :is(.table-container, .cal-scroll, .pcal-scroll) {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+.app-page :is(.table-container, .cal-scroll, .pcal-scroll, summary):focus-visible {
+  outline: 2px solid var(--bulma-link);
+  outline-offset: -2px;
+}
+.app-page :is(.input, .textarea, .select, .select select) {
+  max-width: 100%;
+}
+.app-page .button {
+  height: auto;
+  min-height: 2.5em;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app-page .button > span:not(.icon) {
+  min-width: 0;
+}
+.app-page .button .icon {
+  flex-shrink: 0;
+}
+.app-page .modal-card {
+  max-width: calc(100vw - 1.5rem);
+  max-height: calc(100dvh - 1.5rem);
+}
+.app-page .modal-card-title {
+  flex-shrink: 1;
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.app-page .modal-card-foot {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.app-page :is(.notification.toast, .notification.is-loading) {
+  min-width: 0;
+  width: max-content;
+  max-width: calc(100vw - 1.5rem);
+}
+
+@media screen and (max-width: 1023px) {
+  .app-page .navbar > .container.is-fluid {
+    padding-inline: 0.75rem;
+  }
+  .app-page .navbar-brand {
+    min-width: 0;
+  }
+  .app-page .navbar-brand > .navbar-item {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  .app-page .navbar-logo-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .app-page .navbar-burger {
+    flex-shrink: 0;
+  }
+  .app-page .cal-name-col {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bulma-scheme-main);
+    border-right: 2px solid var(--bulma-border);
+  }
+  .app-page :is(.cal-name-col, .pcal-atelier-col) {
+    min-width: 7rem;
+    max-width: 9rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .app-page > .section {
+    padding: 1rem 0.75rem;
+  }
+  .app-page :is(.box, .card-content, .notification, .modal-card-head, .modal-card-body, .modal-card-foot) {
+    padding: 1rem;
+  }
+  .app-page .notification:has(> .delete) {
+    padding-right: 2.5rem;
+  }
+  .app-page .columns {
+    --bulma-column-gap: 0.5rem;
+  }
+  .app-page .level-left + .level-right {
+    margin-top: 0.75rem;
+  }
+  .app-page .title.is-3 {
+    font-size: 1.5rem;
+  }
+  .app-page .button {
+    min-height: 2.75rem;
+  }
+  .app-page :is(.input, .textarea, .select select) {
+    font-size: 1rem;
+  }
+  .app-page .field.is-grouped > .control {
+    max-width: 100%;
+    margin-right: 0;
+  }
+  .app-page .is-flex.is-justify-content-space-between {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .app-page .field.has-addons > .control.is-expanded {
+    flex: 1 1 0;
+  }
+  .app-page .file > .file-label {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .app-page .file-name {
+    max-width: 100%;
+  }
+  .app-page .staff-table-box {
+    padding: 0;
+  }
+  .app-page .staff-table .sticky-col {
+    max-width: none;
+  }
+  .app-page .staff-page .tags {
+    gap: 0.375rem;
+  }
+  .app-page .staff-page .tag.is-medium {
+    font-size: 0.875rem;
+  }
+  .app-page .staff-contact a {
+    padding-block: 0.125rem;
+  }
+  .app-page :is(.cal-check, .pcal-check) {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+  .app-page :is(.atelier-nav a, .calendar-links a) {
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .app-page .editor-columns {
+    gap: 1rem;
+  }
+  .app-page :is(.editor-left, .editor-right) {
+    min-width: 0;
+    max-width: 100%;
+    flex-basis: 100%;
+  }
+  .app-page .atelier-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .app-page :is(#add-modal, #opening-day-modal) .modal-card-body {
+    overflow: auto;
+  }
+  .app-page .datetimepicker {
+    max-width: 100%;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .app-page .staff-table .sticky-col {
+    min-width: 7rem;
+    max-width: none;
+    width: clamp(7rem, 28vw, 9rem);
+  }
+  .app-page .staff-table .table {
+    font-size: 0.875rem;
+  }
 }
 
 /* === Personal calendar (from person_detail()) === */

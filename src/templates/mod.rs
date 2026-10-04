@@ -342,7 +342,8 @@ fn page_with_footer(
                 }
                 (extra_head)
             }
-            body data-prefix=(p) {
+            // The homepage supplies its own footer contents and keeps its existing layout.
+            body class=[footer_contents.is_none().then_some("app-page")] data-prefix=(p) {
                 (nav)
                 (content)
                 (extra_scripts)

@@ -171,7 +171,7 @@ pub fn content_edit_page(
                                         }
                                         img src=(format!("{p}/content-images/{img_id}"))
                                             alt="Image actuelle"
-                                            style="max-width:300px;max-height:200px;border-radius:4px;";
+                                            style="max-width:min(300px,100%);max-height:200px;border-radius:4px;";
                                         div .mt-2 {
                                             label .checkbox {
                                                 input type="checkbox" name="remove_image" value="1";

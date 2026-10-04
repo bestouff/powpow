@@ -67,6 +67,18 @@ fn describe_user_agent(user_agent: Option<&str>) -> String {
     }
 }
 
+/// Native disclosure keeps column names available on touchscreens and without JavaScript.
+fn staff_column_label(icon: &str, label: &str) -> Markup {
+    html! {
+        details .staff-column-label {
+            summary aria-label=(label) {
+                span .icon aria-hidden="true" { i class={"fa-solid fa-" (icon)} {} }
+                span .staff-column-text { (label) }
+            }
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn staff_list(
     staff_with_seasons: Vec<(Staff, Option<i16>)>,
@@ -100,7 +112,7 @@ pub fn staff_list(
     let extra_head = html! {};
 
     let content = html! {
-        section .section {
+        section .section.staff-page {
             div .container.is-fluid {
                 div .level.mb-4 {
                     div .level-left {
@@ -119,103 +131,71 @@ pub fn staff_list(
                     }
                 }
 
-                div .notification.is-info.is-light.mb-4 {
-                    p {
-                        span .icon { i .fa-solid.fa-circle-info {} }
-                        strong { "Légende saison:" }
-                        span .tag.is-success.ml-2 { "Saison courante (" (current_season) ")" }
-                        span .tag.is-danger.ml-2 { "Saison précédente" }
-                        span .tag.is-light.ml-2 { "Aucun paiement" }
-                    }
-                    p .mt-2 {
-                        strong { "Légende ateliers:" }
-                        span .tag.is-warning.ml-2 {
-                            span .icon { i .fa-solid.fa-crown {} }
-                            " Chef"
-                        }
-                        span .tag.is-info.ml-2 {
-                            span .icon { i .fa-solid.fa-check {} }
-                            " Validé"
-                        }
-                        span .tag.is-grey.ml-2 {
-                            span .icon { i .fa-solid.fa-clock {} }
-                            " En attente"
-                        }
-                    }
-                    @if !qualifications.is_empty() {
-                        p .mt-2 {
-                            strong { "Légende formations:" }
-                            span .tag.is-success.ml-2 { "Valide" }
-                            span .tag.is-danger.ml-2 { "Expirée" }
-                        }
-                    }
+                p #staff-table-help .help.mb-3 {
+                    "Faites défiler le tableau pour voir toutes les colonnes. Survolez ou touchez une icône d’en-tête pour afficher son intitulé."
                 }
 
-                div .box {
-                    div .table-container.staff-table {
+                div .box.staff-table-box {
+                    div .table-container.staff-table tabindex="0" role="region"
+                        aria-label="Liste des Staff" aria-describedby="staff-table-help" {
                         table .table.is-fullwidth.is-striped.is-hoverable {
                             thead {
                                 tr {
-                                    th .sticky-col { "Nom" }
-                                    @if show_contact {
-                                        th { "Email" }
-                                        th { "Téléphone" }
-                                    }
-                                    th .has-text-centered.atelier-col {
-                                        span .vertical-text { "Dernière saison" }
+                                    th .sticky-col scope="col" { "Nom" }
+                                    th .has-text-centered.atelier-col.staff-season scope="col" {
+                                        (staff_column_label("calendar-days", "Dernière saison"))
                                     }
                                     @for atelier in ateliers {
-                                        th .has-text-centered.atelier-col {
-                                            span .vertical-text { (atelier.name) }
+                                        th .has-text-centered.atelier-col scope="col" {
+                                            (staff_column_label(&atelier.icon, &atelier.name))
                                         }
                                     }
-                                    th .has-text-centered.atelier-col {
-                                        span .vertical-text { "Admin" }
+                                    th .has-text-centered.atelier-col scope="col" {
+                                        (staff_column_label("user-shield", "Admin"))
                                     }
                                     @if !qualifications.is_empty() {
-                                        th { "Formations" }
+                                        th scope="col" { "Formations" }
                                     }
-                                    th { "Commentaire" }
+                                    @if show_contact {
+                                        th scope="col" { "Email" }
+                                        th scope="col" { "Téléphone" }
+                                    }
+                                    th scope="col" { "Commentaire" }
                                 }
                             }
                             tbody {
                                 @for (staff, latest_season) in &staff_with_seasons {
-                                    @let row_class = match latest_season {
-                                        Some(s) if *s == current_season => "",
-                                        _ => "inactive-staff",
-                                    };
                                     @let (season_tag_class, season_display) = match latest_season {
                                         Some(s) if *s == current_season => ("is-success", s.to_string()),
                                         Some(s) => ("is-danger", s.to_string()),
                                         None => ("is-light", "\u{2014}".to_string()),
                                     };
-                                    tr class=(row_class) {
+                                    tr {
                                         td .sticky-col {
                                             a href={(p) "/person/" (staff.id)} {
                                                 strong { (staff.first_name) " " (staff.last_name) }
                                             }
                                         }
-                                        @if show_contact {
-                                            td { (staff.email) }
-                                            td { (staff.phone.as_deref().unwrap_or("")) }
-                                        }
-                                        td {
+                                        td .has-text-centered.staff-season {
                                             span class={"tag " (season_tag_class)} { (season_display) }
                                         }
                                         @for atelier in ateliers {
                                             @let role = roles.iter().find(|r| r.staff == staff.id && r.atelier == atelier.id);
                                             @if let Some(r) = role {
                                                 @if r.chief {
-                                                    td .has-text-centered.atelier-col.has-background-warning {
-                                                        span .icon.has-text-black { i .fa-solid.fa-crown {} }
+                                                    td .has-text-centered.atelier-col.has-background-warning title="Chef" {
+                                                        span .icon.has-text-black aria-hidden="true" { i .fa-solid.fa-crown {} }
+                                                        span .is-sr-only { "Chef" }
                                                     }
                                                 } @else if r.validated {
-                                                    td .has-text-centered.atelier-col.has-background-info {
-                                                        span .icon.has-text-white { i .fa-solid.fa-check {} }
+                                                    td .has-text-centered.atelier-col.has-background-info title="Validé" {
+                                                        span .icon.has-text-white aria-hidden="true" { i .fa-solid.fa-check {} }
+                                                        span .is-sr-only { "Validé" }
                                                     }
                                                 } @else {
-                                                    td .has-text-centered.atelier-col.has-background-grey {
-                                                        span .icon.has-text-grey-dark { i .fa-solid.fa-clock {} }
+                                                    td .has-text-centered.atelier-col.has-background-grey title="En attente" {
+                                                        span .icon.has-text-white aria-hidden="true" { i .fa-solid.fa-clock {} }
+                                                        span .is-sr-only { "En attente" }
                                                     }
                                                 }
                                             } @else {
@@ -224,19 +204,21 @@ pub fn staff_list(
                                         }
                                         // Admin column
                                         @if staff.is_god {
-                                            td .has-text-centered.has-background-warning {
-                                                span .icon.has-text-black { i .fa-solid.fa-crown {} }
+                                            td .has-text-centered.has-background-warning title="Super administrateur" {
+                                                span .icon.has-text-black aria-hidden="true" { i .fa-solid.fa-crown {} }
+                                                span .is-sr-only { "Super administrateur" }
                                             }
                                         } @else if staff.is_admin {
-                                            td .has-text-centered.has-background-info {
-                                                span .icon.has-text-white { i .fa-solid.fa-check {} }
+                                            td .has-text-centered.has-background-info title="Administrateur" {
+                                                span .icon.has-text-white aria-hidden="true" { i .fa-solid.fa-check {} }
+                                                span .is-sr-only { "Administrateur" }
                                             }
                                         } @else {
                                             td {}
                                         }
                                         // Formations column
                                         @if !qualifications.is_empty() {
-                                            td {
+                                            td .staff-qualifications {
                                                 div .tags.is-flex-wrap-nowrap {
                                                     @for qual in qualifications {
                                                         // Find the most recent record for this staff + qualification
@@ -253,10 +235,61 @@ pub fn staff_list(
                                                 }
                                             }
                                         }
-                                        td { small { (staff.comment) } }
+                                        @if show_contact {
+                                            td .staff-contact {
+                                                @if !staff.email.is_empty() {
+                                                    a href={"mailto:" (staff.email)} { (staff.email) }
+                                                }
+                                            }
+                                            td .staff-contact.staff-phone {
+                                                @if let Some(phone) = staff.phone.as_deref().filter(|phone| !phone.is_empty()) {
+                                                    a href={"tel:" (phone)} { (format_phone_international(phone)) }
+                                                }
+                                            }
+                                        }
+                                        td .staff-comment { (staff.comment) }
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+
+                aside .notification.is-info.is-light.staff-legend aria-label="Légende du tableau" {
+                    p .staff-legend-items {
+                        strong { "Saisons :" }
+                        span .tag.is-success { "Saison courante (" (current_season) ")" }
+                        span .tag.is-danger { "Autre saison" }
+                        span .tag.is-light { "Aucun paiement" }
+                    }
+                    p .staff-legend-items.mt-2 {
+                        strong { "Ateliers :" }
+                        span .tag.is-warning {
+                            span .icon aria-hidden="true" { i .fa-solid.fa-crown {} }
+                            " Chef"
+                        }
+                        span .tag.is-info {
+                            span .icon aria-hidden="true" { i .fa-solid.fa-check {} }
+                            " Validé"
+                        }
+                        span .tag.has-background-grey.has-text-white {
+                            span .icon aria-hidden="true" { i .fa-solid.fa-clock {} }
+                            " En attente"
+                        }
+                    }
+                    div .staff-legend-items.mt-2 {
+                        @for atelier in ateliers {
+                            span .icon-text {
+                                span .icon aria-hidden="true" { i class={"fa-solid fa-" (atelier.icon)} {} }
+                                span { (atelier.name) }
+                            }
+                        }
+                    }
+                    @if !qualifications.is_empty() {
+                        p .staff-legend-items.mt-2 {
+                            strong { "Formations :" }
+                            span .tag.is-success { "Valide" }
+                            span .tag.is-danger { "Expirée" }
                         }
                     }
                 }
@@ -790,7 +823,7 @@ pub fn person_detail(
                                         "\u{00a0}Calendrier de " (staff.first_name)
                                     }
                                 }
-                                div .pcal-scroll {
+                                div .pcal-scroll tabindex="0" role="region" aria-label="Calendrier personnel" {
                                     table .pcal-table.table.is-bordered.is-narrow.is-hoverable {
                                         thead {
                                             tr {

@@ -70,7 +70,7 @@ pub fn mailchimp_page(staff: &[Staff], prefix: &str, configured: bool) -> Markup
                 }
 
                 div .box {
-                    div style="max-height: 60vh; overflow-y: auto;" {
+                    div .table-container tabindex="0" role="region" aria-label="Abonnements à la newsletter" style="max-height: 60vh;" {
                         table .table.is-fullwidth.is-hoverable {
                             thead {
                                 tr {
