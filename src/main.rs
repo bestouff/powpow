@@ -650,6 +650,7 @@ async fn main() -> anyhow::Result<()> {
             get(routes::staff::serve_training_proof),
         )
         .route("/login", get(routes::auth::login_page))
+        .route("/login/confirm", post(routes::auth::confirm_login))
         .route("/api/staff/search", get(routes::auth::api_search_staff))
         .route(
             "/api/staff/create-minimal",

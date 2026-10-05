@@ -461,7 +461,7 @@ pub fn calendar_editor(
                         @if is_admin {
                             button .button.is-info #open-add-opening-day-modal {
                                 span .icon { i .fa-solid.fa-sun {} }
-                                span { "Ajouter un jour d'ouverture" }
+                                span { "Ajouter des jours d'ouverture" }
                             }
                         }
                         button .button.is-primary #open-add-modal {
@@ -655,20 +655,40 @@ pub fn calendar_editor(
         // Modal: add opening day via calendar picker
         div .modal #opening-day-modal {
             div .modal-background {}
-            div .modal-card.modal-card-medium {
+            div .modal-card.modal-card-wide {
                 header .modal-card-head {
-                    p .modal-card-title { "Ajouter un jour d'ouverture" }
+                    p .modal-card-title { "Ajouter des jours d'ouverture" }
                     button .delete aria-label="close" #close-opening-day-modal {}
                 }
                 section .modal-card-body {
+                    p .mb-3 { "Sélectionnez le premier puis le dernier jour de la période. Pour un seul jour, sélectionnez une date puis cliquez sur Créer. Les jours d'ouverture existants seront conservés." }
                     div .has-text-centered {
                         input type="date" #opening-day-picker;
                     }
                     div .mt-4.has-text-centered.d-none #opening-day-confirm {
                         p .mb-3 #opening-day-confirm-text {}
+                        p .mb-3 { "Ces besoins seront appliqués à chaque nouveau jour. Indiquez 0 pour un rôle sans besoin." }
+                        div .atelier-cards.has-text-left.mb-4 #opening-day-needs {
+                            @for atelier in all_ateliers {
+                                div .atelier-card data-atelier-id=(atelier.id) {
+                                    div .card-title { (atelier.name) }
+                                    div .field {
+                                        label .label.is-small {
+                                            "Bénévoles nécessaires"
+                                            input .input.is-small.opening-qty type="number" min="0" max="32767" step="1" required
+                                                value=(atelier.opening_day_typical_needed);
+                                        }
+                                    }
+                                    label .checkbox {
+                                        input .opening-nightly type="checkbox" checked[atelier.default_nightly];
+                                        " Nocturne"
+                                    }
+                                }
+                            }
+                        }
                         button .button.is-info #opening-day-submit {
                             span .icon { i .fa-solid.fa-check {} }
-                            span { "Créer le jour d'ouverture" }
+                            span { "Créer les jours d'ouverture" }
                         }
                     }
                 }

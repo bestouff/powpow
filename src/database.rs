@@ -1552,46 +1552,97 @@ pub async fn get_opening_days_for_dates(
     Ok(rows)
 }
 
-/// Create an opening day and its default needs atomically, returning the need count.
-pub async fn create_opening_day(pool: &PgPool, day: chrono::NaiveDate) -> Result<u64> {
+/// Create an inclusive range atomically, skipping existing opening days.
+/// Returns the number of new days and default needs.
+pub async fn create_opening_days(
+    pool: &PgPool,
+    start: chrono::NaiveDate,
+    end: chrono::NaiveDate,
+    needs: Option<&[models::OpeningDayNeed]>,
+) -> Result<(u64, u64)> {
+    let day_count = (end - start).num_days() + 1;
+    anyhow::ensure!(
+        (1..=366).contains(&day_count),
+        "Sélectionnez entre 1 et 366 jours consécutifs"
+    );
     let mut tx = pool.begin().await?;
-    let row = sqlx::query_scalar::<_, chrono::NaiveDate>(
-        r"
+    if let Some(needs) = needs {
+        let mut seen = std::collections::HashSet::new();
+        for need in needs {
+            anyhow::ensure!(need.quantity >= 0, "Quantité invalide");
+            anyhow::ensure!(seen.insert(need.atelier_id), "Rôle indiqué plusieurs fois");
+            anyhow::ensure!(
+                sqlx::query_scalar::<_, bool>(
+                    "SELECT EXISTS (SELECT 1 FROM ateliers WHERE id = $1)"
+                )
+                .bind(need.atelier_id)
+                .fetch_one(&mut *tx)
+                .await?,
+                "Rôle inconnu"
+            );
+        }
+        anyhow::ensure!(
+            needs.iter().any(|need| need.quantity > 0),
+            "Indiquez un besoin pour au moins un rôle"
+        );
+    }
+    let mut days_created = 0;
+    let mut needs_created = 0;
+    for offset in 0..day_count {
+        let day = start + chrono::Duration::days(offset);
+        let row = sqlx::query_scalar::<_, chrono::NaiveDate>(
+            r"
         INSERT INTO opening_days (day, status) VALUES ($1, 'reserved')
         ON CONFLICT (day) DO NOTHING
         RETURNING day
         ",
-    )
-    .bind(day)
-    .fetch_optional(&mut *tx)
-    .await?;
+        )
+        .bind(day)
+        .fetch_optional(&mut *tx)
+        .await?;
 
-    if row.is_none() {
-        anyhow::bail!("Le jour d'ouverture {day} existe déjà");
-    }
-    let result = sqlx::query(
-        r"INSERT INTO needs (day, atelier, quantity, nightly)
+        if row.is_none() {
+            continue;
+        }
+        let created = if let Some(needs) = needs {
+            let mut created = 0;
+            for need in needs.iter().filter(|need| need.quantity > 0) {
+                created += sqlx::query(
+                    "INSERT INTO needs (day, atelier, quantity, nightly) VALUES ($1, $2, $3, $4)
+                     ON CONFLICT (day, atelier) DO UPDATE SET quantity = EXCLUDED.quantity, nightly = EXCLUDED.nightly",
+                )
+                .bind(day).bind(need.atelier_id).bind(need.quantity).bind(need.nightly)
+                .execute(&mut *tx).await?.rows_affected();
+            }
+            created
+        } else {
+            sqlx::query(
+                r"INSERT INTO needs (day, atelier, quantity, nightly)
           SELECT $1, id, opening_day_typical_needed, default_nightly FROM ateliers
           WHERE opening_day_typical_needed > 0
           ON CONFLICT (day, atelier) DO UPDATE SET
               quantity = EXCLUDED.quantity, nightly = EXCLUDED.nightly",
-    )
-    .bind(day)
-    .execute(&mut *tx)
-    .await?;
-    let created = result.rows_affected();
-    if created == 0
-        && !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM needs WHERE day = $1)")
+            )
             .bind(day)
-            .fetch_one(&mut *tx)
+            .execute(&mut *tx)
             .await?
-    {
-        anyhow::bail!(
-            "Aucun atelier n'a de besoin par défaut pour un jour d'ouverture. Configurez les ateliers avant de créer ce jour."
-        );
+            .rows_affected()
+        };
+        if created == 0
+            && !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM needs WHERE day = $1)")
+                .bind(day)
+                .fetch_one(&mut *tx)
+                .await?
+        {
+            anyhow::bail!(
+                "Aucun atelier n'a de besoin par défaut pour un jour d'ouverture. Configurez les ateliers avant de créer ce jour."
+            );
+        }
+        days_created += 1;
+        needs_created += created;
     }
     tx.commit().await?;
-    Ok(created)
+    Ok((days_created, needs_created))
 }
 
 /// Update the status of an opening day.
@@ -1860,6 +1911,100 @@ pub async fn create_login_token(pool: &PgPool, staff_id: uuid::Uuid) -> Result<u
     .await?;
 
     Ok(token)
+}
+
+/// Validate a login link without consuming it or creating a session.
+pub async fn login_token_staff(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    token: uuid::Uuid,
+) -> Result<Option<Staff>> {
+    Ok(sqlx::query_as::<_, Staff>(
+        "SELECT s.* FROM login_tokens t JOIN staff s ON s.id = t.staff
+         WHERE t.token = $1 AND t.staff = $2 AND t.expires_at > now()",
+    )
+    .bind(token)
+    .bind(staff_id)
+    .fetch_optional(pool)
+    .await?)
+}
+
+#[cfg(test)]
+mod login_link_tests {
+    #[tokio::test]
+    #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+    async fn login_link_reads_do_not_consume_tokens() -> anyhow::Result<()> {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&std::env::var("DATABASE_URL")?)
+            .await?;
+        // Temporary tables shadow the real tables on this single connection.
+        sqlx::raw_sql(
+            "CREATE TEMP TABLE staff (id uuid PRIMARY KEY, first_name text, last_name text, email text, phone text, comment text, is_admin bool DEFAULT false, is_god bool DEFAULT false, no_import_emails bool DEFAULT false, no_weekly_emails bool DEFAULT false, newsletter_status text DEFAULT 'subscribed', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+             CREATE TEMP TABLE login_tokens (token uuid PRIMARY KEY, staff uuid, expires_at timestamptz);
+             CREATE TEMP TABLE sessions (id uuid);",
+        ).execute(&pool).await?;
+        let staff = uuid::Uuid::new_v4();
+        sqlx::query("INSERT INTO staff (id,first_name,last_name,email,comment) VALUES ($1,'Login','Test','login@example.org','')").bind(staff).execute(&pool).await?;
+        let token = super::create_login_token(&pool, staff).await?;
+        sqlx::query("SET default_transaction_read_only = on")
+            .execute(&pool)
+            .await?;
+        for _ in 0..3 {
+            assert_eq!(
+                super::login_token_staff(&pool, staff, token)
+                    .await?
+                    .unwrap()
+                    .id,
+                staff
+            );
+        }
+        assert!(
+            super::login_token_staff(&pool, uuid::Uuid::new_v4(), token)
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM login_tokens")
+                .fetch_one(&pool)
+                .await?,
+            1
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM sessions")
+                .fetch_one(&pool)
+                .await?,
+            0
+        );
+        sqlx::query("SET default_transaction_read_only = off")
+            .execute(&pool)
+            .await?;
+        assert_eq!(
+            super::consume_login_token(&pool, staff, token).await?,
+            Some(staff)
+        );
+        assert_eq!(super::consume_login_token(&pool, staff, token).await?, None);
+        assert!(
+            super::login_token_staff(&pool, staff, token)
+                .await?
+                .is_none()
+        );
+        let expired = super::create_login_token(&pool, staff).await?;
+        sqlx::query("UPDATE login_tokens SET expires_at = now() - interval '1 minute'")
+            .execute(&pool)
+            .await?;
+        assert!(
+            super::login_token_staff(&pool, staff, expired)
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            super::consume_login_token(&pool, staff, expired).await?,
+            None
+        );
+        pool.close().await;
+        Ok(())
+    }
 }
 
 /// Atomically consume a login link token. Succeeds only if it matches the
@@ -3190,25 +3335,53 @@ mod opening_day_tests {
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
             assert!(sqlx::query("INSERT INTO opening_days VALUES ('2030-01-01', 'reserved')").execute(&pool).await.is_err());
             let day = chrono::NaiveDate::from_ymd_opt(2030, 1, 1).unwrap();
-            assert!(super::create_opening_day(&pool, day).await.is_err());
+            assert!(super::create_opening_days(&pool, day, day + chrono::Duration::days(2), None).await.is_err());
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
             let first = uuid::Uuid::new_v4();
             let second = uuid::Uuid::new_v4();
             sqlx::query("INSERT INTO ateliers VALUES ($1, 2, false), ($2, 1, true)")
                 .bind(first).bind(second).execute(&pool).await?;
-            assert_eq!(super::create_opening_day(&pool, day).await?, 2);
-            assert!(super::create_opening_day(&pool, day).await.is_err());
+            assert_eq!(super::create_opening_days(&pool, day, day, None).await?, (1, 2));
+            assert_eq!(super::create_opening_days(&pool, day, day, None).await?, (0, 0));
             super::delete_need(&pool, first, day).await?;
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 1);
             // Direct SQL deletion must enforce the invariant too.
             sqlx::query("DELETE FROM needs WHERE day = $1").bind(day).execute(&pool).await?;
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
-            assert_eq!(super::create_opening_day(&pool, day).await?, 2);
+            assert_eq!(super::create_opening_days(&pool, day, day, None).await?, (1, 2));
             // Moving the last needs to another date removes the old metadata.
             sqlx::query("UPDATE needs SET day = day + 1").execute(&pool).await?;
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
-            assert_eq!(super::create_opening_day(&pool, day).await?, 2);
+            assert_eq!(super::create_opening_days(&pool, day, day, None).await?, (1, 2));
             sqlx::query("TRUNCATE needs").execute(&pool).await?;
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
+            let end = day + chrono::Duration::days(2);
+            assert_eq!(super::create_opening_days(&pool, day, end, None).await?, (3, 6));
+            sqlx::query("UPDATE opening_days SET status = 'validated' WHERE day = $1")
+                .bind(end).execute(&pool).await?;
+            sqlx::query("UPDATE needs SET quantity = 7 WHERE day = $1")
+                .bind(end).execute(&pool).await?;
+            assert_eq!(super::create_opening_days(&pool, day, end + chrono::Duration::days(2), None).await?, (2, 4));
+            assert_eq!(sqlx::query_scalar::<_, String>("SELECT status FROM opening_days WHERE day = $1").bind(end).fetch_one(&pool).await?, "validated");
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT sum(quantity)::bigint FROM needs WHERE day = $1").bind(end).fetch_one(&pool).await?, 14);
+            assert!(super::create_opening_days(&pool, end, day, None).await.is_err());
+            assert!(super::create_opening_days(&pool, day, day + chrono::Duration::days(366), None).await.is_err());
+            sqlx::query("UPDATE ateliers SET opening_day_typical_needed = 0").execute(&pool).await?;
+            assert!(super::create_opening_days(&pool, end, end + chrono::Duration::days(4), None).await.is_err());
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 5);
+            let custom = [
+                crate::models::OpeningDayNeed { atelier_id: first, quantity: 4, nightly: true },
+                crate::models::OpeningDayNeed { atelier_id: second, quantity: 0, nightly: false },
+            ];
+            // Custom needs work without defaults and do not modify overlapping days.
+            assert_eq!(super::create_opening_days(&pool, end, end + chrono::Duration::days(4), Some(&custom)).await?, (2, 2));
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM needs WHERE day > $1 AND quantity = 4 AND nightly AND atelier = $2")
+                .bind(end + chrono::Duration::days(2)).bind(first).fetch_one(&pool).await?, 2);
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT sum(quantity)::bigint FROM needs WHERE day = $1").bind(end).fetch_one(&pool).await?, 14);
+            let invalid = [crate::models::OpeningDayNeed { atelier_id: uuid::Uuid::new_v4(), quantity: 1, nightly: false }];
+            assert!(super::create_opening_days(&pool, end, end + chrono::Duration::days(5), Some(&invalid)).await.is_err());
+            assert!(super::create_opening_days(&pool, end, end, Some(&[])).await.is_err());
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 7);
             Ok::<_, anyhow::Error>(())
         }.await;
         sqlx::raw_sql(sqlx::AssertSqlSafe(format!("DROP SCHEMA {schema} CASCADE")))

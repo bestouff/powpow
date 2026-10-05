@@ -16,7 +16,7 @@ mod staff;
 pub use admin::{
     admin_page, audit_page, qualifications_page, restore_page, restore_result, validation_page,
 };
-pub use auth::login_page;
+pub use auth::{invalid_login_link, login_confirmation, login_page};
 pub use calendar::{calendar, calendar_editor, render_upcoming_week_email};
 pub use cash::{cash_form, cash_list};
 pub use content::render_content_block;

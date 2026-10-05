@@ -1409,11 +1409,15 @@ function initCalendarEditor(prefix) {
   var closeOpeningDayModal = document.getElementById("close-opening-day-modal");
   var openingCalendarInit = false;
   var openingSelectedDay = null;
+  var openingSelectedEndDay = null;
+  var openingCalendar = null;
 
   if (openingDayBtn) {
     openingDayBtn.addEventListener("click", function () {
       openingDayModal.classList.add("is-active");
       openingSelectedDay = null;
+      openingSelectedEndDay = null;
+      if (openingCalendar) openingCalendar.clear();
       if (openingDayConfirm) openingDayConfirm.style.display = "none";
       if (!openingCalendarInit) {
         openingCalendarInit = true;
@@ -1428,6 +1432,8 @@ function initCalendarEditor(prefix) {
     var cals = bulmaCalendar.attach("#opening-day-picker", {
       displayMode: "inline",
       type: "date",
+      isRange: true,
+      allowSameDayRange: true,
       lang: "fr",
       weekStart: 1,
       dateFormat: "YYYY-MM-DD",
@@ -1435,29 +1441,62 @@ function initCalendarEditor(prefix) {
       showFooter: false,
     });
     if (cals.length > 0) {
-      cals[0].on("select", function (e) {
-        var dt = e.data.date.start;
-        if (dt) {
-          var y = dt.getFullYear();
-          var m = String(dt.getMonth() + 1).padStart(2, "0");
-          var d = String(dt.getDate()).padStart(2, "0");
-          openingSelectedDay = y + "-" + m + "-" + d;
-          openingDayConfirmText.textContent =
-            "Jour d'ouverture le " + formatDateTitle(openingSelectedDay) + " ?";
-          openingDayConfirm.style.display = "block";
-        }
+      openingCalendar = cals[0];
+      openingCalendar.on("select:start", function (e) {
+        updateOpeningSelection(e.data.date.start, e.data.date.start);
+      });
+      openingCalendar.on("select", function (e) {
+        updateOpeningSelection(e.data.date.start, e.data.date.end);
       });
     }
+  }
+
+  function updateOpeningSelection(start, end) {
+    if (!start || !end) return;
+    function dateKey(dt) {
+      return (
+        dt.getFullYear() + "-" +
+        String(dt.getMonth() + 1).padStart(2, "0") + "-" +
+        String(dt.getDate()).padStart(2, "0")
+      );
+    }
+    openingSelectedDay = dateKey(start);
+    openingSelectedEndDay = dateKey(end);
+    openingDayConfirmText.textContent =
+      openingSelectedDay === openingSelectedEndDay
+        ? "Jour d'ouverture le " + formatDateTitle(openingSelectedDay) + " ?"
+        : "Jours d'ouverture du " + formatDateTitle(openingSelectedDay) +
+          " au " + formatDateTitle(openingSelectedEndDay) + " inclus ?";
+    openingDayConfirm.style.display = "block";
   }
 
   if (openingDaySubmit) {
     openingDaySubmit.addEventListener("click", function () {
       if (!openingSelectedDay) return;
+      var needs = [];
+      var cards = document.querySelectorAll("#opening-day-needs .atelier-card");
+      for (var i = 0; i < cards.length; i++) {
+        var quantityInput = cards[i].querySelector(".opening-qty");
+        if (!quantityInput.reportValidity()) return;
+        needs.push({
+          atelier_id: cards[i].dataset.atelierId,
+          quantity: Number(quantityInput.value),
+          nightly: cards[i].querySelector(".opening-nightly").checked,
+        });
+      }
+      if (!needs.some(function (need) { return need.quantity > 0; })) {
+        showNotification("Indiquez un besoin pour au moins un rôle", "warning");
+        return;
+      }
       openingDaySubmit.classList.add("is-loading");
       fetch(prefix + "/api/calendar/opening-day", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ day: openingSelectedDay }),
+        body: JSON.stringify({
+          day: openingSelectedDay,
+          end_day: openingSelectedEndDay,
+          needs: needs,
+        }),
       })
         .then(function (resp) {
           if (!resp.ok)
@@ -1468,11 +1507,8 @@ function initCalendarEditor(prefix) {
         })
         .then(function (data) {
           showNotification(
-            "Jour d'ouverture le " +
-              formatDateTitle(openingSelectedDay) +
-              " (" +
-              data.needs_created +
-              " besoins)",
+            data.days_created + " jour(s) d'ouverture créé(s) (" +
+              data.needs_created + " besoins). Les jours existants sont conservés.",
             "success",
           );
           setTimeout(function () {

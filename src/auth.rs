@@ -39,6 +39,7 @@ fn public_path(path: &str, method: &axum::http::Method) -> bool {
     matches!(
         path,
         "/" | "/login"
+            | "/login/confirm"
             | "/logout"
             | "/health"
             | "/privacy"

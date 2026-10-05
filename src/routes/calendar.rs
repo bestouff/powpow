@@ -323,6 +323,8 @@ pub async fn toggle_presence_api(
 #[derive(Debug, Deserialize)]
 pub struct CreateOpeningDayRequest {
     day: String,
+    end_day: Option<String>,
+    needs: Option<Vec<models::OpeningDayNeed>>,
 }
 
 pub async fn api_create_opening_day(
@@ -337,8 +339,32 @@ pub async fn api_create_opening_day(
         );
     };
 
-    // The day and all default needs are created in one transaction.
-    let created_count = match database::create_opening_day(&state.db, day).await {
+    let Ok(end_day) = chrono::NaiveDate::parse_from_str(
+        payload.end_day.as_deref().unwrap_or(&payload.day),
+        "%Y-%m-%d",
+    ) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Format de date invalide (YYYY-MM-DD)"})),
+        );
+    };
+    if !(0..366).contains(&(end_day - day).num_days()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(
+                serde_json::json!({"error": "Sélectionnez entre 1 et 366 jours consécutifs, avec la fin après le début"}),
+            ),
+        );
+    }
+
+    let (days_created, created_count) = match database::create_opening_days(
+        &state.db,
+        day,
+        end_day,
+        payload.needs.as_deref(),
+    )
+    .await
+    {
         Ok(count) => count,
         Err(e) => {
             return (
@@ -352,15 +378,15 @@ pub async fn api_create_opening_day(
         &state.db,
         Some(me.id),
         &format!("{} {}", me.first_name, me.last_name),
-        "Jour d'ouverture créé",
-        &format!("{day} — {created_count} besoins créés"),
+        "Jours d'ouverture créés",
+        &format!("{day} au {end_day} — {days_created} jours et {created_count} besoins créés"),
     )
     .await;
 
     (
         StatusCode::OK,
         Json(
-            serde_json::json!({"success": true, "day": payload.day, "needs_created": created_count}),
+            serde_json::json!({"success": true, "day": payload.day, "end_day": end_day, "days_created": days_created, "needs_created": created_count}),
         ),
     )
 }

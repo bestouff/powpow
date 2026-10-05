@@ -2,6 +2,65 @@ use super::{NavKind, page};
 use crate::models::ContentBlock;
 use maud::{Markup, PreEscaped, html};
 
+pub fn login_confirmation(staff: &crate::models::Staff, token: uuid::Uuid, prefix: &str) -> Markup {
+    let content = html! {
+        section .section {
+            div .container {
+                div .columns.is-centered {
+                    div .column.is-5 {
+                        div .box {
+                            h1 .title.is-4 { "Confirmer la connexion" }
+                            p .mb-4 { "Vous allez vous connecter en tant que " strong { (staff.first_name) " " (staff.last_name) } "." }
+                            form method="POST" action={(prefix) "/login/confirm"} {
+                                input type="hidden" name="staff_id" value=(staff.id);
+                                input type="hidden" name="token" value=(token);
+                                button .button.is-primary.is-fullwidth type="submit" { "Se connecter" }
+                            }
+                            p .help.mt-3 { "Cette confirmation évite qu'un aperçu de lien, par exemple dans WhatsApp, utilise votre lien de connexion à votre place." }
+                        }
+                    }
+                }
+            }
+        }
+    };
+    page(
+        "Confirmer la connexion - PowPow",
+        prefix,
+        &NavKind::LoginOnly,
+        "",
+        html! {},
+        content,
+        html! {},
+    )
+}
+
+pub fn invalid_login_link(prefix: &str) -> Markup {
+    let content = html! {
+        section .section {
+            div .container {
+                div .columns.is-centered {
+                    div .column.is-5 {
+                        div .box {
+                            h1 .title.is-4 { "Lien de connexion invalide" }
+                            p .mb-4 { "Ce lien a expiré ou a déjà été utilisé. Demandez un nouveau lien de connexion." }
+                            a .button.is-primary href={(prefix) "/login"} { "Demander un nouveau lien" }
+                        }
+                    }
+                }
+            }
+        }
+    };
+    page(
+        "Lien de connexion invalide - PowPow",
+        prefix,
+        &NavKind::LoginOnly,
+        "",
+        html! {},
+        content,
+        html! {},
+    )
+}
+
 pub fn login_page(prefix: &str, about_block: Option<&ContentBlock>) -> Markup {
     let content = html! {
         section .section {

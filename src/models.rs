@@ -310,6 +310,14 @@ pub struct Need {
     pub nightly: bool,
 }
 
+/// Staffing needs shared by every new day in an opening-day range.
+#[derive(Debug, Deserialize)]
+pub struct OpeningDayNeed {
+    pub atelier_id: uuid::Uuid,
+    pub quantity: i16,
+    pub nightly: bool,
+}
+
 impl FromRow<'_, sqlx::postgres::PgRow> for Need {
     fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
         Ok(Need {
