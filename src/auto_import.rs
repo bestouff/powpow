@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
 pub const DUPLICATE_REASON: &str = "Adhésion déjà enregistrée pour cette personne et cette saison";
@@ -103,6 +104,44 @@ pub fn normalize_name(value: &str) -> String {
         }
     }
     normalized
+}
+
+/// Display casing for stored names: first letter uppercase, next letters
+/// lowercase, applied to EVERY word (e.g. "JEAN-PIERRE DUPONT" → "Jean-Pierre Dupont").
+/// Both spaces and hyphens are word separators; leading/trailing whitespace
+/// is dropped. The result is in canonical Unicode composed form (NFC), so a
+/// name spelled with a decomposed accent ("e" + U+0301 combining acute) and
+/// its composed form ("é") both yield the same stored string, whatever the
+/// source wrote.
+///
+/// THIS IS THE SHARED NAME-CASING HELPER. Always apply it wherever a person's
+/// name is written to the database (auto-import, manual import, cash form,
+/// minimal staff creation): removing those calls silently reintroduces the
+/// ALL-CAPS names supplied to the imports. It only touches presentation casing,
+/// so it never changes matching (see `normalize_name`); do not replace one
+/// with the other.
+pub fn capitalize_words(s: &str) -> String {
+    s.nfc()
+        .collect::<String>()
+        .split_whitespace()
+        .map(|word| {
+            // Handle hyphenated words like "Jean-Pierre"
+            word.split('-')
+                .map(|part| {
+                    let mut chars = part.chars();
+                    match chars.next() {
+                        None => String::new(),
+                        Some(first) => {
+                            first.to_uppercase().collect::<String>()
+                                + &chars.as_str().to_lowercase()
+                        }
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("-")
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 pub fn normalize_phone(value: &str) -> String {
@@ -400,6 +439,23 @@ mod tests {
             matches!(matcher.decide(&input(" eleonore ", "LE CORRE", "new@example.org")), Decision::Link { staff: id, .. } if id == staff)
         );
         assert_eq!(normalize_name("E\u{301}léonore"), "eleonore");
+    }
+
+    #[test]
+    fn capitalize_words_title_cases_every_word_and_keeps_hyphens() {
+        assert_eq!(capitalize_words("JEAN-PIERRE DUPONT"), "Jean-Pierre Dupont");
+        assert_eq!(capitalize_words("éléonore LE-corre"), "Éléonore Le-Corre");
+        assert_eq!(capitalize_words("  anne   marie  "), "Anne Marie");
+        assert_eq!(capitalize_words("Jean-Pierre Dupont"), "Jean-Pierre Dupont");
+        assert_eq!(capitalize_words(""), "");
+    }
+
+    #[test]
+    fn capitalize_words_canonicalizes_decomposed_unicode_forms() {
+        assert_eq!(capitalize_words("e\u{301}leonore"), "Éleonore");
+        assert_eq!(capitalize_words("E\u{301}LENE"), "Élene");
+        assert_eq!(capitalize_words("JEAN-e\u{301}TIENNE"), "Jean-Étienne");
+        assert_eq!(capitalize_words(&capitalize_words("e\u{301}LENE")), "Élene");
     }
 
     #[test]

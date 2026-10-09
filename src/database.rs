@@ -1208,6 +1208,8 @@ pub async fn create_cash_payment(
     is_membership: bool,
     payment_method: &str,
 ) -> Result<Cash> {
+    let first_name = crate::auto_import::capitalize_words(first_name);
+    let last_name = crate::auto_import::capitalize_words(last_name);
     let cash = sqlx::query_as::<_, Cash>(
         r"
         INSERT INTO cash (first_name, last_name, email, phone, date, amount, is_membership, payment_method)
@@ -2786,8 +2788,8 @@ pub async fn create_staff_minimal(
     let staff = sqlx::query_as::<_, Staff>(
         r"INSERT INTO staff (first_name, last_name, email, phone, comment) VALUES ($1, $2, $3, $4, '') RETURNING *"
     )
-    .bind(first_name.trim())
-    .bind(last_name.trim())
+    .bind(crate::auto_import::capitalize_words(first_name))
+    .bind(crate::auto_import::capitalize_words(last_name))
     .bind(email)
     .bind(phone)
     .fetch_one(&mut *tx).await?;

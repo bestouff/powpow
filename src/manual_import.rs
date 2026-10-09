@@ -35,8 +35,8 @@ impl From<&Staff> for StaffFields {
 
 impl StaffFields {
     pub fn validate(&mut self) -> Result<(), String> {
-        self.first_name = self.first_name.trim().to_string();
-        self.last_name = self.last_name.trim().to_string();
+        self.first_name = crate::auto_import::capitalize_words(&self.first_name);
+        self.last_name = crate::auto_import::capitalize_words(&self.last_name);
         self.email = self.email.trim().to_lowercase();
         self.phone = self.phone.trim().to_string();
         if !self.first_name.chars().any(char::is_alphabetic)

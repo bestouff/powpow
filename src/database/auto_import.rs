@@ -228,8 +228,8 @@ pub async fn auto_import_pending(pool: &PgPool) -> Result<ImportSummary> {
                     "INSERT INTO staff (first_name, last_name, email, phone, comment)
                      VALUES ($1, $2, $3, NULLIF($4, ''), $5) RETURNING id",
                 )
-                .bind(identity.first_name.trim())
-                .bind(identity.last_name.trim())
+                .bind(crate::auto_import::capitalize_words(&identity.first_name))
+                .bind(crate::auto_import::capitalize_words(&identity.last_name))
                 .bind(identity.email.trim().to_lowercase())
                 .bind(identity.phone.trim())
                 .bind(record.comment.trim())

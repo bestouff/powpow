@@ -174,29 +174,7 @@ pub fn format_phone_international(phone: &str) -> String {
     }
 }
 
-/// Capitalize each word in a string (first letter uppercase, rest lowercase)
-/// Handles both spaces and hyphens as word separators
-fn capitalize_words(s: &str) -> String {
-    s.split_whitespace()
-        .map(|word| {
-            // Handle hyphenated words like "Jean-Pierre"
-            word.split('-')
-                .map(|part| {
-                    let mut chars = part.chars();
-                    match chars.next() {
-                        None => String::new(),
-                        Some(first) => {
-                            first.to_uppercase().collect::<String>()
-                                + &chars.as_str().to_lowercase()
-                        }
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("-")
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
+pub(crate) use crate::auto_import::capitalize_words;
 
 enum NavKind {
     Full,      // Administration, Login
