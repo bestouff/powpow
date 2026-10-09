@@ -442,6 +442,26 @@ mod tests {
     }
 
     #[test]
+    fn phone_validation_accepts_common_french_formats() {
+        assert_ne!(normalize_phone("04 76 08 32 20"), "");
+        assert_ne!(normalize_phone("+33 4 76 08 32 20"), "");
+        assert_ne!(normalize_phone("06.12.34.56.78"), "");
+        assert_ne!(normalize_phone("0612345678"), "");
+        assert_eq!(normalize_phone("abc"), "");
+        assert_eq!(normalize_phone("123"), "");
+    }
+
+    #[test]
+    fn email_validation_rejects_invalid_formats() {
+        assert!(valid_email("xav@awak.mobi"));
+        assert!(valid_email("a.b+c@sub.example.com"));
+        assert!(!valid_email(""));
+        assert!(!valid_email("pas un email"));
+        assert!(!valid_email("foo"));
+        assert!(!valid_email("foo bar@baz.com"));
+    }
+
+    #[test]
     fn capitalize_words_title_cases_every_word_and_keeps_hyphens() {
         assert_eq!(capitalize_words("JEAN-PIERRE DUPONT"), "Jean-Pierre Dupont");
         assert_eq!(capitalize_words("éléonore LE-corre"), "Éléonore Le-Corre");

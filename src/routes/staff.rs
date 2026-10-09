@@ -855,13 +855,28 @@ pub async fn update_contact(
         )
             .into_response();
     }
+    if !crate::auto_import::valid_email(&email) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "L'adresse email est invalide."})),
+        )
+            .into_response();
+    }
 
+    // Phone is optional, but a non-empty value must be a valid phone format.
     let phone = payload
         .phone
         .as_deref()
         .map(str::trim)
-        .filter(|p| !p.is_empty())
-        .map(templates::format_phone_international);
+        .filter(|p| !p.is_empty());
+    if phone.is_some_and(|p| crate::auto_import::normalize_phone(p).is_empty()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Le numéro de téléphone est invalide."})),
+        )
+            .into_response();
+    }
+    let phone = phone.map(templates::format_phone_international);
 
     match database::update_staff_contact(&state.db, staff_id, &email, phone.as_deref()).await {
         Ok(()) => {

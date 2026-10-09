@@ -664,10 +664,13 @@ function initPersonDetail(prefix) {
             },
           );
 
-          if (!response.ok) {
-            var error = await response.text();
-            throw new Error(error);
-          }
+if (!response.ok) {
+          var error = await response.text();
+          try {
+            error = JSON.parse(error).error || error;
+          } catch (e) {}
+          throw new Error(error);
+        }
 
           if (validatedCheckbox) {
             if (checked) {
