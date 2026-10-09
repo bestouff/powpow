@@ -5,6 +5,7 @@ pub mod background;
 pub mod calendar;
 pub mod cash;
 pub mod content;
+pub mod email_change;
 pub mod home;
 pub mod legal;
 pub mod mailchimp;

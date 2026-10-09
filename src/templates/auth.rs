@@ -2,6 +2,41 @@ use super::{NavKind, page};
 use crate::models::ContentBlock;
 use maud::{Markup, PreEscaped, html};
 
+pub fn email_change_page(prefix: &str, title: &str, message: &str, token: Option<&str>) -> Markup {
+    let content = html! {
+        section .section {
+            div .container {
+                div .columns.is-centered {
+                    div .column.is-5 {
+                        div .box {
+                            h1 .title.is-4 { (title) }
+                            p .mb-4 { (message) }
+                            @if let Some(token) = token {
+                                form method="POST" action={(prefix) "/email-change"} {
+                                    input type="hidden" name="token" value=(token);
+                                    button .button.is-primary type="submit" { "Confirmer mon adresse email" }
+                                }
+                                p .help.mt-3 { "Votre adresse actuelle reste active jusqu'à cette confirmation." }
+                            } @else {
+                                a .button.is-primary href={(prefix) "/login"} { "Se connecter" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+    page(
+        title,
+        prefix,
+        &NavKind::LoginOnly,
+        "",
+        html! {},
+        content,
+        html! {},
+    )
+}
+
 pub fn login_confirmation(staff: &crate::models::Staff, token: uuid::Uuid, prefix: &str) -> Markup {
     let content = html! {
         section .section {

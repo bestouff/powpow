@@ -25,12 +25,14 @@ mod auto_import_replay;
 mod config;
 mod database;
 mod dicton;
+mod email_change;
 mod email_recipients;
 mod helloasso;
 mod mailchimp;
 mod manual_import;
 mod models;
 mod news;
+mod personal_email;
 mod routes;
 mod templates;
 
@@ -90,8 +92,7 @@ async fn security_headers(
         axum::http::header::HeaderName::from_static("x-frame-options"),
         axum::http::header::HeaderValue::from_static("DENY"),
     );
-    h.insert(
-        axum::http::header::HeaderName::from_static("referrer-policy"),
+    h.entry(axum::http::header::REFERRER_POLICY).or_insert(
         axum::http::header::HeaderValue::from_static("strict-origin-when-cross-origin"),
     );
     response
@@ -683,6 +684,10 @@ async fn main() -> anyhow::Result<()> {
         )
         .route("/login", get(routes::auth::login_page))
         .route("/login/confirm", post(routes::auth::confirm_login))
+        .route(
+            "/email-change",
+            axum::routing::get(routes::email_change::preview).post(routes::email_change::confirm),
+        )
         .route("/api/staff/search", get(routes::auth::api_search_staff))
         .route(
             "/api/staff/create-minimal",

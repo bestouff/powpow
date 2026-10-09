@@ -208,6 +208,17 @@ pub async fn view_person(
     let todos = if is_self {
         let mut items = Vec::new();
 
+        if database::email_change::is_pending(&state.db, id)
+            .await
+            .unwrap_or(false)
+        {
+            items.push(templates::TodoItem {
+                icon: "fa-envelope",
+                color: "info",
+                html: "Une modification d'adresse email attend votre confirmation. Consultez le message envoyé à votre nouvelle adresse. Votre adresse actuelle reste active.".to_string(),
+            });
+        }
+
         // Chiefs: pending validations
         if let Ok(pending) = database::count_pending_validations_for_chief(&state.db, id).await {
             for (atelier_name, count) in pending {
@@ -833,6 +844,7 @@ pub(crate) struct UpdateContactPayload {
 }
 
 pub async fn update_contact(
+    headers: HeaderMap,
     RequireStaff(me): RequireStaff,
     State(state): State<AppState>,
     axum::extract::Path(staff_id): axum::extract::Path<uuid::Uuid>,
@@ -877,6 +889,41 @@ pub async fn update_contact(
             .into_response();
     }
     let phone = phone.map(templates::format_phone_international);
+
+    // Self-service changes require ownership of the new mailbox. Do not write
+    // the pending address to staff or the audit log; it lives in the sealed link.
+    if me.id == staff_id && email != me.email.trim().to_lowercase() {
+        if let Err(e) = super::email_change::request(&state, &headers, &me, &email).await {
+            error!("Cannot send email-change confirmation: {e}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
+                "error": "Impossible d'envoyer l'email de confirmation. Votre adresse n'a pas été modifiée."
+            }))).into_response();
+        }
+        if let Err(e) =
+            database::email_change::update_phone(&state.db, staff_id, phone.as_deref()).await
+        {
+            error!("Cannot save phone during email change: {e}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
+                "error": "L'email de confirmation a été envoyé, mais le téléphone n'a pas pu être enregistré."
+            }))).into_response();
+        }
+        let _ = database::insert_audit(
+            &state.db,
+            Some(me.id),
+            &format!("{} {}", me.first_name, me.last_name),
+            "Confirmation email demandée",
+            &format!(
+                "staff={} phone={}",
+                staff_id,
+                phone.as_deref().unwrap_or("")
+            ),
+        )
+        .await;
+        return (StatusCode::OK, Json(serde_json::json!({
+            "success": true, "email_pending": true, "current_email": me.email,
+            "message": format!("Un email de confirmation a été envoyé à {email}. Votre adresse actuelle reste active jusqu'à la confirmation. Le téléphone a été enregistré.")
+        }))).into_response();
+    }
 
     match database::update_staff_contact(&state.db, staff_id, &email, phone.as_deref()).await {
         Ok(()) => {

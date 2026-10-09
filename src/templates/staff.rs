@@ -438,6 +438,7 @@ pub fn person_detail(
                                             span { "Enregistrer" }
                                         }
                                     }
+                                    p #contact-message .notification.is-info.is-light.mt-3.d-none role="status" {}
                                 } @else if show_contact {
                                     p {
                                         strong { "Email:" } br;

@@ -79,14 +79,8 @@ pub struct ConfirmLogin {
     token: uuid::Uuid,
 }
 
-pub async fn confirm_login(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    jar: SignedCookieJar,
-    Form(form): Form<ConfirmLogin>,
-) -> Response {
-    let prefix = get_prefix(&headers);
-    // Do not accept another website's form submission as a login confirmation.
+/// Confirmation forms must not be submitted by another website.
+pub(crate) fn confirmation_origin_allowed(headers: &HeaderMap) -> bool {
     if let Some(origin) = headers.get(header::ORIGIN) {
         let proto = headers
             .get("X-Forwarded-Proto")
@@ -105,8 +99,21 @@ pub async fn confirm_login(
             .zip(expected.ok())
             .is_some_and(|(submitted, expected)| submitted.origin() == expected.origin())
         {
-            return private_login_response(StatusCode::FORBIDDEN);
+            return false;
         }
+    }
+    true
+}
+
+pub async fn confirm_login(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    jar: SignedCookieJar,
+    Form(form): Form<ConfirmLogin>,
+) -> Response {
+    let prefix = get_prefix(&headers);
+    if !confirmation_origin_allowed(&headers) {
+        return private_login_response(StatusCode::FORBIDDEN);
     }
     match database::consume_login_token(&state.db, form.staff_id, form.token).await {
         Ok(Some(_)) => {}

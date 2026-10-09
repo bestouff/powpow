@@ -847,9 +847,20 @@ if (!response.ok) {
 
         if (!response.ok) {
           var error = await response.text();
+          try {
+            error = JSON.parse(error).error || error;
+          } catch (e) {}
           throw new Error(error);
         }
 
+        var result = await response.json();
+        if (result.email_pending) {
+          document.getElementById("edit-email").value = result.current_email;
+          var message = document.getElementById("contact-message");
+          message.textContent = result.message;
+          message.classList.remove("d-none");
+          return;
+        }
         location.reload();
       } catch (error) {
         console.error("Error:", error);

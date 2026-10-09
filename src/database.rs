@@ -9,6 +9,7 @@ use sqlx::Row;
 use tracing::info;
 
 pub mod auto_import;
+pub mod email_change;
 pub mod manual_import;
 
 /// Lifetime of a pending login link (magic link emailed to the staff member).
