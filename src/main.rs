@@ -25,6 +25,7 @@ mod auto_import_replay;
 mod config;
 mod database;
 mod dicton;
+mod email_recipients;
 mod helloasso;
 mod mailchimp;
 mod manual_import;
@@ -223,7 +224,24 @@ pub(crate) async fn send_notification_email(
         "smtp"
     };
 
-    for to_addr in to_addresses {
+    let recipients = match database::get_notification_recipients(&state.db, to_addresses).await {
+        Ok(recipients) => recipients,
+        Err(e) => {
+            warn!("Cannot resolve notification recipient names: {}", e);
+            email_recipients::group_recipients(
+                to_addresses.iter().map(|email| (email.as_str(), "", "")),
+            )
+        }
+    };
+    for recipient in recipients {
+        let to_addr = &recipient.email;
+        let recipient_name = recipient.name();
+        let html_body = if recipient_name.is_empty() {
+            html_body.to_string()
+        } else {
+            let greeting = maud::html! { p { "Bonjour " (recipient_name) "," } }.into_string();
+            html_body.replacen("<p>Bonjour,</p>", &greeting, 1)
+        };
         if mail_method == "gmail" {
             let Some(client) = &state.gmail_client else {
                 warn!(
@@ -251,9 +269,18 @@ pub(crate) async fn send_notification_email(
                 "=?UTF-8?B?{}?=",
                 base64::engine::general_purpose::STANDARD.encode(subject.as_bytes())
             );
+            let to_header = if recipient_name.is_empty() {
+                dest.to_string()
+            } else {
+                format!(
+                    "=?UTF-8?B?{}?= <{}>",
+                    base64::engine::general_purpose::STANDARD.encode(recipient_name.as_bytes()),
+                    dest
+                )
+            };
             let raw_message = format!(
                 "From: {}\r\nTo: {}\r\nSubject: {}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",
-                from, dest, encoded_subject, html_body
+                from, to_header, encoded_subject, html_body
             );
             let message_body = httpclient::InMemoryBody::Text(raw_message);
             match client.messages_send("me", message_body, None).await {
@@ -288,7 +315,12 @@ pub(crate) async fn send_notification_email(
                 &state.config.mail_destination_override
             };
             let to = match dest.parse::<lettre::message::Mailbox>() {
-                Ok(m) => m,
+                Ok(mut mailbox) => {
+                    if !recipient_name.is_empty() {
+                        mailbox.name = Some(recipient_name);
+                    }
+                    mailbox
+                }
                 Err(e) => {
                     error!("Invalid destination email {}: {}", dest, e);
                     continue;
@@ -299,7 +331,7 @@ pub(crate) async fn send_notification_email(
                 .to(to)
                 .subject(subject)
                 .header(lettre::message::header::ContentType::TEXT_HTML)
-                .body(html_body.to_string())
+                .body(html_body)
             {
                 Ok(m) => m,
                 Err(e) => {

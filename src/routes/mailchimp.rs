@@ -17,7 +17,7 @@ use crate::{AppState, auth::RequireAdmin, database, get_prefix, templates};
 ///
 /// 1. Pull every member of the audience (email + status) from Mailchimp and
 ///    store the status in `newsletter_status`.
-/// 2. Push every staff member who is `subscribed` to the Mailchimp audience.
+/// 2. Push subscribed staff grouped by email address to the Mailchimp audience.
 ///
 /// Returns a summary of the operation.
 pub async fn sync_newsletter(state: &AppState) -> Result<(usize, usize, usize, usize, usize)> {
@@ -60,10 +60,17 @@ async fn sync_newsletter_inner(state: &AppState) -> Result<(usize, usize, usize,
         progress.phase = "pushing".into();
         progress.stored = stored as u32;
     }
-    let recipients = database::get_newsletter_recipients(&state.db).await?;
+    let staff = database::get_newsletter_recipients(&state.db).await?;
+    let recipients = crate::email_recipients::group_recipients(staff.iter().map(|s| {
+        (
+            s.email.as_str(),
+            s.first_name.as_str(),
+            s.last_name.as_str(),
+        )
+    }));
     let (pushed_ok, push_errors) = state
         .mailchimp_client
-        .sync_staff(&recipients, Some(&state.mailchimp_sync_progress))
+        .sync_recipients(&recipients, Some(&state.mailchimp_sync_progress))
         .await?;
     {
         let mut progress = state.mailchimp_sync_progress.lock().await;

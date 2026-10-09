@@ -986,6 +986,31 @@ pub async fn update_staff_comment(
     Ok(())
 }
 
+/// Resolve all names sharing notification addresses, including household members.
+pub async fn get_notification_recipients(
+    pool: &PgPool,
+    emails: &[String],
+) -> Result<Vec<crate::email_recipients::EmailRecipient>> {
+    let emails: Vec<String> = emails
+        .iter()
+        .map(|email| email.trim().to_lowercase())
+        .collect();
+    let people = sqlx::query_as::<_, (String, String, String)>(
+        "SELECT addresses.email, COALESCE(s.first_name, ''), COALESCE(s.last_name, '')
+         FROM unnest($1::text[]) AS addresses(email)
+         LEFT JOIN staff s ON LOWER(TRIM(s.email)) = addresses.email
+         ORDER BY addresses.email, s.last_name, s.first_name, s.id",
+    )
+    .bind(&emails)
+    .fetch_all(pool)
+    .await?;
+    Ok(crate::email_recipients::group_recipients(
+        people
+            .iter()
+            .map(|(email, first, last)| (email.as_str(), first.as_str(), last.as_str())),
+    ))
+}
+
 /// Update a staff member's email and phone
 pub async fn update_staff_contact(
     pool: &PgPool,

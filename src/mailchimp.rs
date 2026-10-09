@@ -1,4 +1,4 @@
-use crate::models::Staff;
+use crate::email_recipients::EmailRecipient;
 use anyhow::{Result, anyhow};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -210,14 +210,14 @@ impl MailchimpClient {
         Ok(())
     }
 
-    /// Sync all staff members to the Mailchimp audience.
+    /// Sync grouped email recipients to the Mailchimp audience.
     /// Returns (`success_count`, `error_count`).
     ///
     /// When `progress` is provided, updates the `pushed` / `push_ok` /
     /// `push_errors` counters as the sync goes.
-    pub async fn sync_staff(
+    pub async fn sync_recipients(
         &self,
-        staff: &[Staff],
+        recipients: &[EmailRecipient],
         progress: Option<&SyncProgressHandle>,
     ) -> Result<(usize, usize)> {
         self.require_configured()?;
@@ -226,17 +226,21 @@ impl MailchimpClient {
 
         if let Some(progress) = progress {
             let mut p = progress.lock().await;
-            p.pushed_total = staff.len() as u32;
+            p.pushed_total = recipients.len() as u32;
         }
 
-        for s in staff {
+        for recipient in recipients {
             match self
-                .upsert_member(&s.email, &s.first_name, &s.last_name)
+                .upsert_member(
+                    &recipient.email,
+                    &recipient.first_name,
+                    &recipient.last_name,
+                )
                 .await
             {
                 Ok(()) => ok += 1,
                 Err(e) => {
-                    warn!("Mailchimp sync failed for {}: {}", s.email, e);
+                    warn!("Mailchimp sync failed for {}: {}", recipient.email, e);
                     err_count += 1;
                 }
             }
