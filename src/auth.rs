@@ -244,6 +244,27 @@ pub struct RequireChief(pub Staff);
 pub struct RequireAdmin(pub Staff);
 pub struct RequireGod(pub Staff);
 
+pub async fn can_manage_profile(
+    state: &AppState,
+    viewer: &Staff,
+    staff_id: uuid::Uuid,
+) -> Result<bool, (StatusCode, Json<serde_json::Value>)> {
+    if viewer.id == staff_id {
+        return Ok(true);
+    }
+    match database::get_staff_by_id(&state.db, staff_id).await {
+        Ok(Some(target)) => Ok(viewer.can_manage_profile(&target)),
+        Ok(None) => Ok(false),
+        Err(e) => {
+            error!("Error checking shared-email permissions: {e}");
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Impossible de vérifier les droits."})),
+            ))
+        }
+    }
+}
+
 pub async fn authorize_staff_management(
     state: &AppState,
     viewer: &Staff,
@@ -253,12 +274,15 @@ pub async fn authorize_staff_management(
     if viewer.is_admin || viewer.is_god {
         return Ok(());
     }
+    if can_manage_profile(state, viewer, staff_id).await? {
+        return Ok(());
+    }
     match database::chief_manages_staff(&state.db, viewer.id, staff_id, atelier_id).await {
         Ok(true) => Ok(()),
         Ok(false) => Err((
             StatusCode::FORBIDDEN,
             Json(
-                serde_json::json!({"error": "Vous ne pouvez modifier que le staff de vos ateliers."}),
+                serde_json::json!({"error": "Vous ne pouvez modifier que votre foyer ou le staff de vos ateliers."}),
             ),
         )),
         Err(e) => {

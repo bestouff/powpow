@@ -25,7 +25,7 @@ pub fn calendar(
     presence: &HashMap<(uuid::Uuid, uuid::Uuid), (bool, bool)>,
     all_ateliers: &[Atelier],
     prefix: &str,
-    viewer_id: Option<uuid::Uuid>,
+    viewer: Option<&Staff>,
     can_manage_presence: bool,
     opening_days: &[crate::models::OpeningDay],
     show_past: bool,
@@ -166,8 +166,8 @@ pub fn calendar(
                         }
                         tbody {
                             @for staff in staff_list {
-                                @let is_self = viewer_id.is_some_and(|vid| staff.id == vid);
-                                @let can_toggle = is_self || can_manage_presence;
+                                @let is_self = viewer.is_some_and(|viewer| staff.id == viewer.id);
+                                @let can_toggle = can_manage_presence || viewer.is_some_and(|viewer| viewer.can_manage_profile(staff));
                                 @let name = format!("{} {}", capitalize_words(&staff.first_name), capitalize_words(&staff.last_name));
                                 tr .cal-me[is_self] {
                                     td .cal-name-col {

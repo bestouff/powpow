@@ -159,6 +159,7 @@ pub async fn view_person(
 
     // Determine viewer permissions
     let is_self = viewer.id == id;
+    let can_manage_profile = viewer.can_manage_profile(&staff);
     let (is_viewer_admin, is_viewer_god, is_viewer_chief) = if is_self {
         (
             staff.is_admin,
@@ -176,7 +177,7 @@ pub async fn view_person(
                 .unwrap_or(false),
         )
     };
-    let show_contact = is_self || is_viewer_admin || is_viewer_chief;
+    let show_contact = can_manage_profile || is_viewer_admin || is_viewer_chief;
 
     // Get all ateliers
     let ateliers = match database::get_all_ateliers(&state.db).await {
@@ -319,7 +320,7 @@ pub async fn view_person(
         .any(|role| chief_atelier_ids.contains(&role.atelier));
 
     // Fetch qualification types for everyone allowed to manage this person.
-    let all_qualifications = if is_self || is_viewer_admin || manages_person {
+    let all_qualifications = if can_manage_profile || is_viewer_admin || manages_person {
         database::get_all_qualifications(&state.db)
             .await
             .unwrap_or_default()
@@ -329,7 +330,7 @@ pub async fn view_person(
 
     // Fetch person calendar (upcoming needs + presence across all ateliers)
     // Visible to self, admins, and chiefs
-    let person_calendar = if is_self || is_viewer_admin || is_viewer_chief {
+    let person_calendar = if can_manage_profile || is_viewer_admin || is_viewer_chief {
         match database::get_person_calendar(&state.db, id).await {
             Ok(c) => c,
             Err(e) => {
@@ -357,6 +358,7 @@ pub async fn view_person(
         current_season,
         &prefix,
         is_self,
+        can_manage_profile,
         is_viewer_admin,
         is_viewer_god,
         &chief_atelier_ids,
@@ -389,7 +391,10 @@ pub async fn toggle_role(
     axum::extract::Path(staff_id): axum::extract::Path<uuid::Uuid>,
     Json(payload): Json<ToggleRoleRequest>,
 ) -> impl IntoResponse {
-    let is_self = me.id == staff_id;
+    let can_manage_profile = match crate::auth::can_manage_profile(&state, &me, staff_id).await {
+        Ok(allowed) => allowed,
+        Err(response) => return response,
+    };
     let is_admin = me.is_admin;
 
     // Check if caller is chief of the target atelier
@@ -421,11 +426,13 @@ pub async fn toggle_role(
             ),
         );
     }
-    // Authorization: add/remove requires self, admin, or chief of that atelier
-    if payload.add.is_some() && !is_self && !is_admin && !is_chief_of_atelier {
+    // Household management follows self-service rules, not chief/admin powers.
+    if payload.add.is_some() && !can_manage_profile && !is_admin && !is_chief_of_atelier {
         return (
             StatusCode::FORBIDDEN,
-            Json(serde_json::json!({"error": "Vous ne pouvez modifier que vos propres ateliers"})),
+            Json(
+                serde_json::json!({"error": "Vous ne pouvez modifier que vos ateliers ou ceux des membres partageant votre email"}),
+            ),
         );
     }
 
@@ -850,8 +857,16 @@ pub async fn update_contact(
     axum::extract::Path(staff_id): axum::extract::Path<uuid::Uuid>,
     Json(payload): Json<UpdateContactPayload>,
 ) -> impl IntoResponse {
-    // Only allow editing own contact info, or if admin/god
-    if me.id != staff_id && !me.is_admin && !me.is_god {
+    let target = match database::get_staff_by_id(&state.db, staff_id).await {
+        Ok(Some(target)) => target,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            error!("Cannot fetch contact owner: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    let can_manage_profile = me.can_manage_profile(&target);
+    if !can_manage_profile && !me.is_admin && !me.is_god {
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Accès refusé"})),
@@ -892,8 +907,8 @@ pub async fn update_contact(
 
     // Self-service changes require ownership of the new mailbox. Do not write
     // the pending address to staff or the audit log; it lives in the sealed link.
-    if me.id == staff_id && email != me.email.trim().to_lowercase() {
-        if let Err(e) = super::email_change::request(&state, &headers, &me, &email).await {
+    if can_manage_profile && email != target.email.trim().to_lowercase() {
+        if let Err(e) = super::email_change::request(&state, &headers, &target, &email).await {
             error!("Cannot send email-change confirmation: {e}");
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
                 "error": "Impossible d'envoyer l'email de confirmation. Votre adresse n'a pas été modifiée."
@@ -920,7 +935,7 @@ pub async fn update_contact(
         )
         .await;
         return (StatusCode::OK, Json(serde_json::json!({
-            "success": true, "email_pending": true, "current_email": me.email,
+            "success": true, "email_pending": true, "current_email": target.email,
             "message": format!("Un email de confirmation a été envoyé à {email}. Votre adresse actuelle reste active jusqu'à la confirmation. Le téléphone a été enregistré.")
         }))).into_response();
     }
@@ -1021,14 +1036,17 @@ const ALLOWED_PROOF_TYPES: &[&str] = &[
     "application/pdf",
 ];
 
-/// Add a qualification for the logged-in staff member (self-service).
+/// Add a qualification for yourself or a member sharing your email.
 pub async fn api_add_own_staff_qualif(
     RequireStaff(me): RequireStaff,
     State(state): State<AppState>,
     Json(payload): Json<crate::routes::admin::AddStaffQualifRequest>,
 ) -> impl IntoResponse {
-    // Only allow adding qualifications for yourself
-    if payload.staff_id != me.id {
+    let allowed = match crate::auth::can_manage_profile(&state, &me, payload.staff_id).await {
+        Ok(allowed) => allowed,
+        Err(response) => return response,
+    };
+    if !allowed {
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Accès refusé"})),
@@ -1070,7 +1088,7 @@ pub async fn api_add_own_staff_qualif(
     }
 }
 
-/// Delete a qualification for the logged-in staff member (self-service).
+/// Delete a qualification for yourself or a member sharing your email.
 pub async fn api_delete_own_staff_qualif(
     RequireStaff(me): RequireStaff,
     State(state): State<AppState>,
@@ -1078,12 +1096,17 @@ pub async fn api_delete_own_staff_qualif(
 ) -> impl IntoResponse {
     // Verify ownership
     match database::get_staff_qualif_owner(&state.db, id).await {
-        Ok(Some(owner)) if owner == me.id => {}
-        Ok(Some(_)) => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(serde_json::json!({"error": "Accès refusé"})),
-            );
+        Ok(Some(owner)) => {
+            let allowed = match crate::auth::can_manage_profile(&state, &me, owner).await {
+                Ok(allowed) => allowed,
+                Err(response) => return response,
+            };
+            if !allowed {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({"error": "Accès refusé"})),
+                );
+            }
         }
         Ok(None) => {
             return (

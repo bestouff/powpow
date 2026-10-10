@@ -138,7 +138,7 @@ pub async fn calendar_view(
         &presence_map,
         &all_ateliers,
         &prefix,
-        me.as_ref().map(|s| s.id),
+        me.as_ref(),
         can_manage_presence,
         &opening_days,
         query.show_past,
@@ -160,7 +160,7 @@ pub async fn toggle_presence_api(
     State(state): State<AppState>,
     Json(payload): Json<TogglePresenceRequest>,
 ) -> impl IntoResponse {
-    // Chiefs may manage presence only in their own ateliers, for their staff.
+    // Household members have self-service rights; chiefs remain atelier-scoped.
     if payload.staff_id != me.id {
         let need = match database::get_need_by_id(&state.db, payload.needs_id).await {
             Ok(Some(need)) => need,

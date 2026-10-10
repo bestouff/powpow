@@ -165,6 +165,54 @@ pub struct Staff {
     pub updated_at: DateTime<Utc>,
 }
 
+impl Staff {
+    /// Self-service profile rights also cover household members sharing the
+    /// effective email address. Pending addresses grant no rights, and blank
+    /// addresses must never make unrelated members a household. This does not
+    /// grant the target's admin/chief privileges or access to their sessions.
+    pub fn can_manage_profile(&self, target: &Self) -> bool {
+        let email = self.email.trim().to_lowercase();
+        self.id == target.id || (!email.is_empty() && email == target.email.trim().to_lowercase())
+    }
+}
+
+#[cfg(test)]
+mod staff_permissions_tests {
+    use super::*;
+
+    #[test]
+    fn household_permissions_use_nonempty_effective_emails_not_target_privileges() {
+        let viewer = Staff {
+            id: uuid::Uuid::new_v4(),
+            first_name: "Parent".into(),
+            last_name: "Test".into(),
+            phone: None,
+            email: " Family@Example.org ".into(),
+            comment: String::new(),
+            is_admin: false,
+            is_god: false,
+            no_import_emails: false,
+            no_weekly_emails: false,
+            newsletter_status: "subscribed".into(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let mut target = viewer.clone();
+        target.id = uuid::Uuid::new_v4();
+        target.email = "family@example.org".into();
+        target.is_admin = true;
+        target.is_god = true;
+        assert!(viewer.can_manage_profile(&target));
+        target.email = "unrelated@example.org".into();
+        assert!(!viewer.can_manage_profile(&target));
+        let mut blank = viewer.clone();
+        blank.email.clear();
+        target.email = "  ".into();
+        assert!(!blank.can_manage_profile(&target));
+        assert!(blank.can_manage_profile(&blank));
+    }
+}
+
 impl FromRow<'_, sqlx::postgres::PgRow> for Staff {
     fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
         Ok(Staff {

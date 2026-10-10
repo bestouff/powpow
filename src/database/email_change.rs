@@ -107,6 +107,10 @@ mod tests {
         };
         create(&pool, &change).await?;
         assert!(is_pending(&pool, staff_id).await?);
+        let child_staff = crate::database::get_staff_by_id(&pool, child)
+            .await?
+            .unwrap();
+        assert!(child_staff.can_manage_profile(&pending_staff(&pool, &change).await?.unwrap()));
         update_phone(&pool, staff_id, Some("+33 6 12 34 56 78")).await?;
         for _ in 0..3 {
             let staff = pending_staff(&pool, &change).await?.unwrap();
@@ -125,6 +129,7 @@ mod tests {
         change.staff_id = staff_id;
         let applied = apply(&pool, &change).await?.unwrap();
         assert_eq!(applied.email, "new@example.org");
+        assert!(!child_staff.can_manage_profile(&applied));
         assert_eq!(applied.phone.as_deref(), Some("+33 6 12 34 56 78"));
         assert!(!is_pending(&pool, staff_id).await?);
         assert!(apply(&pool, &change).await?.is_none());

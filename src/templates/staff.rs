@@ -317,6 +317,7 @@ pub fn person_detail(
     current_season: i16,
     prefix: &str,
     is_self: bool,
+    can_manage_profile: bool,
     is_admin: bool,
     is_god: bool,
     chief_atelier_ids: &[uuid::Uuid],
@@ -330,12 +331,12 @@ pub fn person_detail(
     current_session_id: uuid::Uuid,
 ) -> Markup {
     let p = prefix;
-    let can_edit_ateliers = is_self || is_admin;
-    let can_edit_contact = is_self || is_admin;
+    let can_edit_ateliers = can_manage_profile || is_admin;
+    let can_edit_contact = can_manage_profile || is_admin;
     let manages_person = roles
         .iter()
         .any(|role| chief_atelier_ids.contains(&role.atelier));
-    let can_manage_qualifs = is_self || is_admin || manages_person;
+    let can_manage_qualifs = can_manage_profile || is_admin || manages_person;
 
     let comment_display = if staff.comment.is_empty() {
         "\u{2014}"
@@ -343,7 +344,7 @@ pub fn person_detail(
         &staff.comment
     };
 
-    let info_text = if is_admin {
+    let info_text = if is_admin || (can_manage_profile && !is_self) {
         "Cochez les ateliers auxquels ce membre participe pour la saison en cours."
     } else if is_self {
         "Cochez les ateliers auxquels vous participez pour la saison en cours."
@@ -868,7 +869,7 @@ pub fn person_detail(
                                                             @let first_title = if need.nightly { "Soirée" } else { "Matin" };
                                                             @let second_title = if need.nightly { "Nuit" } else { "Après-midi" };
                                                             td .pcal-cell.has-text-centered.pcal-active[is_active].pcal-sunday[is_sunday] {
-                                                                @if is_self || is_admin || chief_atelier_ids.contains(atelier_id) {
+                                                                @if can_manage_profile || is_admin || chief_atelier_ids.contains(atelier_id) {
                                                                     label .pcal-check title=(first_title) {
                                                                         input .pcal-presence-cb type="checkbox"
                                                                             data-need=(need.id)
