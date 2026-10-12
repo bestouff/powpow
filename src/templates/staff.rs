@@ -79,6 +79,16 @@ fn staff_column_label(icon: &str, label: &str) -> Markup {
     }
 }
 
+fn staff_filter_label(icon: &str, label: &str, filter: &str) -> Markup {
+    html! {
+        button .staff-filter.staff-column-filter type="button" data-filter=(filter)
+            aria-label=(label) aria-pressed="false" title={"Filtrer : " (label)} {
+            span .icon aria-hidden="true" { i class={"fa-solid fa-" (icon)} {} }
+            span .staff-column-text { (label) }
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn staff_list(
     staff_with_seasons: Vec<(Staff, Option<i16>)>,
@@ -86,6 +96,7 @@ pub fn staff_list(
     roles: &[Role],
     qualifications: &[Qualification],
     staff_qualifs: &[StaffQualif],
+    current_members: &std::collections::HashSet<uuid::Uuid>,
     current_season: i16,
     prefix: &str,
     show_contact: bool,
@@ -94,18 +105,19 @@ pub fn staff_list(
     let count_all = staff_with_seasons.len();
     let count_members = staff_with_seasons
         .iter()
-        .filter(|(_, s)| *s == Some(current_season))
+        .filter(|(staff, _)| current_members.contains(&staff.id))
         .count();
     let count_volunteers = staff_with_seasons
         .iter()
-        .filter(|(staff, s)| {
-            *s == Some(current_season) && roles.iter().any(|r| r.staff == staff.id)
+        .filter(|(staff, _)| {
+            current_members.contains(&staff.id) && roles.iter().any(|r| r.staff == staff.id)
         })
         .count();
     let count_chiefs = staff_with_seasons
         .iter()
-        .filter(|(staff, s)| {
-            *s == Some(current_season) && roles.iter().any(|r| r.staff == staff.id && r.chief)
+        .filter(|(staff, _)| {
+            current_members.contains(&staff.id)
+                && roles.iter().any(|r| r.staff == staff.id && r.chief)
         })
         .count();
 
@@ -132,29 +144,36 @@ pub fn staff_list(
                 }
 
                 p #staff-table-help .help.mb-3 {
-                    "Faites défiler le tableau pour voir toutes les colonnes. Survolez ou touchez une icône d’en-tête pour afficher son intitulé."
+                    "Cliquez sur Dernière saison, un atelier ou Formations pour filtrer. Les filtres se combinent ; cliquez à nouveau pour les retirer. Survolez une icône d’en-tête pour afficher son intitulé."
+                }
+
+                div .is-flex.is-align-items-center.mb-3 {
+                    span #staff-filter-count role="status" aria-live="polite" { (count_all) " personnes affichées sur " (count_all) }
+                    button #staff-filter-reset .button.is-small.is-light.ml-3.d-none type="button" { "Réinitialiser les filtres" }
                 }
 
                 div .box.staff-table-box {
                     div .table-container.staff-table tabindex="0" role="region"
                         aria-label="Liste des Staff" aria-describedby="staff-table-help" {
-                        table .table.is-fullwidth.is-striped.is-hoverable {
+                        table #staff-list-table .table.is-fullwidth.is-striped.is-hoverable {
                             thead {
                                 tr {
                                     th .sticky-col scope="col" { "Nom" }
                                     th .has-text-centered.atelier-col.staff-season scope="col" {
-                                        (staff_column_label("calendar-days", "Dernière saison"))
+                                        (staff_filter_label("calendar-days", "Dernière saison", "membership"))
                                     }
                                     @for atelier in ateliers {
                                         th .has-text-centered.atelier-col scope="col" {
-                                            (staff_column_label(&atelier.icon, &atelier.name))
+                                            (staff_filter_label(&atelier.icon, &atelier.name, &format!("atelier:{}", atelier.id)))
                                         }
                                     }
                                     th .has-text-centered.atelier-col scope="col" {
                                         (staff_column_label("user-shield", "Admin"))
                                     }
                                     @if !qualifications.is_empty() {
-                                        th scope="col" { "Formations" }
+                                        th scope="col" {
+                                            button .staff-filter type="button" data-filter="qualifications" aria-pressed="false" { "Formations" }
+                                        }
                                     }
                                     @if show_contact {
                                         th scope="col" { "Email" }
@@ -170,7 +189,11 @@ pub fn staff_list(
                                         Some(s) => ("is-danger", s.to_string()),
                                         None => ("is-light", "\u{2014}".to_string()),
                                     };
-                                    tr {
+                                    @let staff_ateliers = roles.iter().filter(|role| role.staff == staff.id)
+                                        .map(|role| role.atelier.to_string()).collect::<Vec<_>>().join(",");
+                                    tr data-current-member=(current_members.contains(&staff.id))
+                                        data-ateliers=(staff_ateliers)
+                                        data-has-qualifications=(staff_qualifs.iter().any(|qualification| qualification.staff == staff.id)) {
                                         td .sticky-col {
                                             a href={(p) "/person/" (staff.id)} {
                                                 strong { (staff.first_name) " " (staff.last_name) }
@@ -254,6 +277,8 @@ pub fn staff_list(
                         }
                     }
                 }
+
+                p #staff-filter-empty .notification.is-warning.is-light.d-none { "Aucune personne ne correspond aux filtres sélectionnés." }
 
                 aside .notification.is-info.is-light.staff-legend aria-label="Légende du tableau" {
                     p .staff-legend-items {

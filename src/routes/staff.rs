@@ -71,6 +71,15 @@ pub async fn list_staff(
         }
     };
 
+    let current_members = match database::get_staff_ids_for_season(&state.db, current_season).await
+    {
+        Ok(members) => members,
+        Err(e) => {
+            error!("Error fetching current season memberships: {e}");
+            return html! { p { "Error loading staff memberships" } };
+        }
+    };
+
     // Sort staff list: chiefs or gods first, then by name
     let mut staff_list = staff_list;
     staff_list.sort_by(|(staff_a, _), (staff_b, _)| {
@@ -89,6 +98,7 @@ pub async fn list_staff(
         &roles,
         &qualifications,
         &staff_qualifs,
+        &current_members,
         current_season,
         &prefix,
         show_contact,

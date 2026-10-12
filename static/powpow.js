@@ -37,6 +37,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initStaffCarousel(prefix);
   initEquipmentBars();
   initSearchFilter();
+  initStaffFilters();
   initPersonDetail(prefix);
   initCalendarView(prefix);
   initCalendarEditor(prefix);
@@ -47,6 +48,47 @@ document.addEventListener("DOMContentLoaded", function () {
   initPhotoPage(prefix);
   initManualImport();
 });
+
+function initStaffFilters() {
+  const table = document.getElementById("staff-list-table");
+  if (!table) return;
+  const buttons = Array.from(table.querySelectorAll(".staff-filter"));
+  const rows = Array.from(table.querySelectorAll("tbody tr"));
+  const active = new Set();
+  const reset = document.getElementById("staff-filter-reset");
+
+  function update() {
+    let count = 0;
+    rows.forEach(function (row) {
+      const matches = Array.from(active).every(function (filter) {
+        if (filter === "membership") return row.dataset.currentMember === "true";
+        if (filter === "qualifications") return row.dataset.hasQualifications === "true";
+        return row.dataset.ateliers.split(",").includes(filter.slice("atelier:".length));
+      });
+      row.hidden = !matches;
+      if (matches) count += 1;
+    });
+    buttons.forEach(function (button) {
+      button.setAttribute("aria-pressed", String(active.has(button.dataset.filter)));
+    });
+    document.getElementById("staff-filter-count").textContent = count + " personnes affichées sur " + rows.length;
+    document.getElementById("staff-filter-empty").classList.toggle("d-none", count !== 0);
+    reset.classList.toggle("d-none", active.size === 0);
+  }
+
+  buttons.forEach(function (button) {
+    button.addEventListener("click", function () {
+      const filter = button.dataset.filter;
+      if (active.has(filter)) active.delete(filter);
+      else active.add(filter);
+      update();
+    });
+  });
+  reset.addEventListener("click", function () {
+    active.clear();
+    update();
+  });
+}
 
 function initManualImport() {
   const data = document.getElementById("manual-import-data");

@@ -540,8 +540,26 @@ pub async fn get_all_memberships_filtered(
     Ok(result)
 }
 
-/// Get all staff members with their latest paid season
-/// Sorted by: chiefs first, then alphabetically by last name, first name
+/// Members with a payment for this exact season, even if their latest payment
+/// is for a later season as well.
+pub async fn get_staff_ids_for_season(
+    pool: &PgPool,
+    season: i16,
+) -> Result<std::collections::HashSet<uuid::Uuid>> {
+    Ok(
+        sqlx::query_scalar::<_, uuid::Uuid>(
+            "SELECT DISTINCT staff FROM payments WHERE season = $1",
+        )
+        .bind(season)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .collect(),
+    )
+}
+
+/// Get all staff members with their latest paid season.
+/// Sorted by: chiefs first, then alphabetically by last name, first name.
 pub async fn get_all_staff_with_season(pool: &PgPool) -> Result<Vec<(Staff, Option<i16>)>> {
     let rows = sqlx::query(
         r"
@@ -3318,17 +3336,42 @@ mod chief_permissions_tests {
             .execute(&pool)
             .await?;
         assert!(!super::has_current_membership(&pool, staff).await?);
+        assert!(
+            !super::get_staff_ids_for_season(&pool, season)
+                .await?
+                .contains(&staff)
+        );
         sqlx::query("INSERT INTO payments VALUES ($1, $2)")
             .bind(staff)
             .bind(season)
             .execute(&pool)
             .await?;
         assert!(super::has_current_membership(&pool, staff).await?);
+        assert!(
+            super::get_staff_ids_for_season(&pool, season)
+                .await?
+                .contains(&staff)
+        );
         sqlx::query("UPDATE payments SET season = $1")
             .bind(season + 1)
             .execute(&pool)
             .await?;
         assert!(super::has_current_membership(&pool, staff).await?);
+        assert!(
+            !super::get_staff_ids_for_season(&pool, season)
+                .await?
+                .contains(&staff)
+        );
+        sqlx::query("INSERT INTO payments VALUES ($1, $2)")
+            .bind(staff)
+            .bind(season)
+            .execute(&pool)
+            .await?;
+        assert!(
+            super::get_staff_ids_for_season(&pool, season)
+                .await?
+                .contains(&staff)
+        );
         pool.close().await;
         Ok(())
     }
