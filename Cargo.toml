@@ -1,6 +1,6 @@
 [package]
 name = "powpow"
-version = "1.19.5"
+version = "1.19.6"
 edition = "2024"
 
 [dependencies]
