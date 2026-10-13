@@ -397,8 +397,7 @@ pub fn calendar_editor(
             default_nightly: a.default_nightly,
         })
         .collect();
-    let ateliers_json: String =
-        serde_json::to_string(&atelier_cards).unwrap_or_else(|_| "[]".to_string());
+    let ateliers_json: String = super::script_json(&atelier_cards);
 
     let extra_head = html! {
         link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/css/bulma-calendar.min.css" integrity="sha384-PWg6kRaCiFAMYaANyvWqUS4fYZ2uKHjaQj1BDiCnzwBvLZTVoh6TvAFYRA+QpRhT" crossorigin="anonymous";

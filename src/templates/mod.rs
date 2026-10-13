@@ -33,6 +33,27 @@ pub use staff::{person_detail, staff_list};
 use crate::models::{ContentBlock, ContentMap};
 use maud::{DOCTYPE, Markup, html};
 
+/// JSON inside a script element needs HTML raw-text escaping, even for
+/// application/json: the HTML parser recognizes closing script tags first.
+fn script_json(value: &impl serde::Serialize) -> String {
+    serde_json::to_string(value)
+        .expect("template data is serializable")
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026")
+}
+
+#[cfg(test)]
+mod script_tests {
+    #[test]
+    fn script_data_cannot_close_its_element() {
+        let name = "</script><script>alert(1)</script>&é";
+        let json = super::script_json(&name);
+        assert!(!json.contains('<'));
+        assert_eq!(serde_json::from_str::<String>(&json).unwrap(), name);
+    }
+}
+
 pub fn membership_notice(association_slug: &str, is_admin: bool) -> Markup {
     let mut url = reqwest::Url::parse("https://www.helloasso.com/associations")
         .expect("HelloAsso base URL is valid");

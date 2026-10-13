@@ -8,7 +8,8 @@ function showNotification(message, type) {
   if (!container) return;
   const notification = document.createElement("div");
   notification.className = "notification is-" + type + " is-loading";
-  notification.innerHTML = '<button class="delete"></button>' + message;
+  notification.innerHTML = '<button class="delete"></button>';
+  notification.appendChild(document.createTextNode(message));
   container.appendChild(notification);
   notification.querySelector(".delete").addEventListener("click", function () {
     notification.remove();
@@ -524,11 +525,8 @@ function initLoginCheck(prefix) {
     .then(function (d) {
       var b = document.getElementById("login-btn");
       if (b) {
-        b.innerHTML =
-          '<i class="fa-solid fa-user"></i>&nbsp;' +
-          d.first_name +
-          " " +
-          d.last_name;
+        b.innerHTML = '<i class="fa-solid fa-user"></i>&nbsp;';
+        b.appendChild(document.createTextNode(d.first_name + " " + d.last_name));
         b.href = d.membership_only ? prefix + "/admin" : prefix + "/person/" + d.id;
         var lo = document.createElement("a");
         lo.className = "navbar-item";
@@ -1132,9 +1130,7 @@ function initCalendarEditor(prefix) {
 
       if (canEdit) {
         card.innerHTML =
-          '<div class="card-title">' +
-          atelier.name +
-          "</div>" +
+          '<div class="card-title"></div>' +
           '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
           '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' +
           qty +
@@ -1160,9 +1156,7 @@ function initCalendarEditor(prefix) {
           "</div>";
       } else {
         card.innerHTML =
-          '<div class="card-title">' +
-          atelier.name +
-          "</div>" +
+          '<div class="card-title"></div>' +
           '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
           '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' +
           qty +
@@ -1180,6 +1174,7 @@ function initCalendarEditor(prefix) {
           "</div></div>";
       }
 
+      card.querySelector(".card-title").textContent = atelier.name;
       if (canEdit) {
         (function (card, atelier, targetDay) {
           var cb = card.querySelector(".nightly-cb");
