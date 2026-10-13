@@ -875,7 +875,7 @@ pub async fn update_contact(
         }
     };
     let can_manage_profile = me.can_manage_profile(&target);
-    if !can_manage_profile && !me.is_admin && !me.is_god {
+    if !me.can_edit_contact(&target) {
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Accès refusé"})),

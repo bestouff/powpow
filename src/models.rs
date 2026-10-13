@@ -166,6 +166,13 @@ pub struct Staff {
 }
 
 impl Staff {
+    /// Changing a login identity must not bypass the target's privilege level.
+    pub fn can_edit_contact(&self, target: &Self) -> bool {
+        self.is_god
+            || self.id == target.id
+            || (!target.is_god && (self.is_admin || self.can_manage_profile(target)))
+    }
+
     /// Self-service profile rights also cover household members sharing the
     /// effective email address. Pending addresses grant no rights, and blank
     /// addresses must never make unrelated members a household. This does not
@@ -203,6 +210,13 @@ mod staff_permissions_tests {
         target.is_admin = true;
         target.is_god = true;
         assert!(viewer.can_manage_profile(&target));
+        assert!(!viewer.can_edit_contact(&target));
+        let mut admin = viewer.clone();
+        admin.is_admin = true;
+        assert!(!admin.can_edit_contact(&target));
+        admin.is_god = true;
+        assert!(admin.can_edit_contact(&target));
+        assert!(target.can_edit_contact(&target));
         target.email = "unrelated@example.org".into();
         assert!(!viewer.can_manage_profile(&target));
         let mut blank = viewer.clone();

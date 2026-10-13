@@ -325,7 +325,17 @@ pub async fn submit(
         return Err(Error::AlreadyImported);
     }
     let old = if let Some(id) = request.staff_id {
-        let row = sqlx::query("SELECT id, first_name, last_name, email, phone, comment, updated_at FROM staff WHERE id = $1 FOR UPDATE").bind(id).fetch_optional(&mut *tx).await?.ok_or(Error::NotFound)?;
+        let row = sqlx::query("SELECT * FROM staff WHERE id = $1 FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or(Error::NotFound)?;
+        let target = <crate::models::Staff as sqlx::FromRow<_>>::from_row(&row)?;
+        if request.fields.email != target.email && !admin.can_edit_contact(&target) {
+            return Err(Error::Invalid(
+                "Seul un God peut modifier l'adresse d'un autre God.".into(),
+            ));
+        }
         if Some(row.get::<DateTime<Utc>, _>("updated_at")) != request.expected_updated_at {
             return Err(Error::StaleStaff);
         }
