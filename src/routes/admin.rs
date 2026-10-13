@@ -262,16 +262,7 @@ pub async fn audit_page_handler(
     // Resolve staff=<UUID> patterns in detail strings to include the staff name
     let mut uuids = Vec::new();
     for e in &entries {
-        let mut rest = e.detail.as_str();
-        while let Some(pos) = rest.find("staff=") {
-            let after = &rest[pos + 6..];
-            if after.len() >= 36
-                && let Ok(id) = uuid::Uuid::parse_str(&after[..36])
-            {
-                uuids.push(id);
-            }
-            rest = if after.len() >= 36 { &after[36..] } else { "" };
-        }
+        uuids.extend(audit_staff_ids(&e.detail));
     }
     uuids.sort();
     uuids.dedup();
@@ -294,6 +285,24 @@ pub async fn audit_page_handler(
     }
 
     templates::audit_page(&entries, current_page, total_pages.max(1), &prefix)
+}
+
+fn audit_staff_ids(detail: &str) -> impl Iterator<Item = uuid::Uuid> + '_ {
+    detail.match_indices("staff=").filter_map(|(pos, _)| {
+        detail
+            .get(pos + 6..pos + 42)
+            .and_then(|value| uuid::Uuid::parse_str(value).ok())
+    })
+}
+
+#[cfg(test)]
+mod audit_tests {
+    #[test]
+    fn arbitrary_unicode_details_do_not_panic() {
+        let id = uuid::Uuid::new_v4();
+        let detail = format!("staff=123456789{} staff={id} staff=x", "é".repeat(40));
+        assert_eq!(super::audit_staff_ids(&detail).collect::<Vec<_>>(), [id]);
+    }
 }
 
 pub async fn validation_page_handler(
