@@ -861,7 +861,6 @@ pub(crate) struct UpdateContactPayload {
 }
 
 pub async fn update_contact(
-    headers: HeaderMap,
     RequireStaff(me): RequireStaff,
     State(state): State<AppState>,
     axum::extract::Path(staff_id): axum::extract::Path<uuid::Uuid>,
@@ -918,7 +917,7 @@ pub async fn update_contact(
     // Self-service changes require ownership of the new mailbox. Do not write
     // the pending address to staff or the audit log; it lives in the sealed link.
     if can_manage_profile && email != target.email.trim().to_lowercase() {
-        if let Err(e) = super::email_change::request(&state, &headers, &target, &email).await {
+        if let Err(e) = super::email_change::request(&state, &target, &email).await {
             error!("Cannot send email-change confirmation: {e}");
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
                 "error": "Impossible d'envoyer l'email de confirmation. Votre adresse n'a pas été modifiée."

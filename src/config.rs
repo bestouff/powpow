@@ -5,6 +5,7 @@ const DEFAULT_ADDRESS: &str = "127.0.0.1:3000";
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
+    pub public_base_url: reqwest::Url,
     pub listen_address: String,
     pub database_url: String,
     pub helloasso_client_id: String,
@@ -43,6 +44,9 @@ impl AppConfig {
             env::var("DATABASE_URL").map_err(|_| anyhow::anyhow!("DATABASE_URL must be set"))?;
 
         Ok(Self {
+            public_base_url: parse_public_url(
+                &env::var("PUBLIC_BASE_URL").unwrap_or_else(|_| "http://localhost:3000".into()),
+            )?,
             listen_address: env::var("LISTEN_ADDRESS").unwrap_or(DEFAULT_ADDRESS.into()),
             database_url,
             helloasso_client_id: env::var("HELLOASSO_CLIENT_ID")
@@ -81,5 +85,42 @@ impl AppConfig {
             entity_name: env::var("ENTITY_NAME").unwrap_or_else(|_| "AG'HIL".into()),
             entity_email: env::var("ENTITY_EMAIL").unwrap_or_default(),
         })
+    }
+}
+
+fn parse_public_url(value: &str) -> Result<reqwest::Url> {
+    let mut url = reqwest::Url::parse(value)?;
+    anyhow::ensure!(
+        matches!(url.scheme(), "http" | "https")
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none(),
+        "PUBLIC_BASE_URL must be an HTTP(S) URL without credentials, query, or fragment"
+    );
+    url.set_path(&format!("{}/", url.path().trim_end_matches('/')));
+    Ok(url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn public_links_preserve_deployment_path() {
+        let base = parse_public_url("https://station.example/powpow").unwrap();
+        assert_eq!(
+            base.join("person/123?token=secret").unwrap().as_str(),
+            "https://station.example/powpow/person/123?token=secret"
+        );
+        for bad in [
+            "javascript:alert(1)",
+            "https://user:pass@example.org",
+            "https://example.org/?x=y",
+            "https://example.org/#fragment",
+        ] {
+            assert!(parse_public_url(bad).is_err());
+        }
     }
 }

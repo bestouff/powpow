@@ -80,29 +80,36 @@ pub struct ConfirmLogin {
 }
 
 /// Confirmation forms must not be submitted by another website.
-pub(crate) fn confirmation_origin_allowed(headers: &HeaderMap) -> bool {
+pub(crate) fn confirmation_origin_allowed(headers: &HeaderMap, base: &reqwest::Url) -> bool {
     if let Some(origin) = headers.get(header::ORIGIN) {
-        let proto = headers
-            .get("X-Forwarded-Proto")
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or("http");
-        let host = headers
-            .get(header::HOST)
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or("");
-        let expected = reqwest::Url::parse(&format!("{proto}://{host}"));
         let submitted = origin
             .to_str()
             .ok()
             .and_then(|value| reqwest::Url::parse(value).ok());
-        if !submitted
-            .zip(expected.ok())
-            .is_some_and(|(submitted, expected)| submitted.origin() == expected.origin())
-        {
+        if !submitted.is_some_and(|submitted| submitted.origin() == base.origin()) {
             return false;
         }
     }
     true
+}
+
+#[cfg(test)]
+mod origin_tests {
+    use super::*;
+
+    #[test]
+    fn forwarded_headers_cannot_authorize_an_attacker_origin() {
+        let base = reqwest::Url::parse("https://station.example/powpow/").unwrap();
+        let mut headers = HeaderMap::new();
+        for key in ["host", "x-forwarded-host"] {
+            headers.insert(key, "attacker.example".parse().unwrap());
+        }
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert(header::ORIGIN, "https://attacker.example".parse().unwrap());
+        assert!(!confirmation_origin_allowed(&headers, &base));
+        headers.insert(header::ORIGIN, "https://station.example".parse().unwrap());
+        assert!(confirmation_origin_allowed(&headers, &base));
+    }
 }
 
 pub async fn confirm_login(
@@ -112,7 +119,7 @@ pub async fn confirm_login(
     Form(form): Form<ConfirmLogin>,
 ) -> Response {
     let prefix = get_prefix(&headers);
-    if !confirmation_origin_allowed(&headers) {
+    if !confirmation_origin_allowed(&headers, &state.config.public_base_url) {
         return private_login_response(StatusCode::FORBIDDEN);
     }
     match database::consume_login_token(&state.db, form.staff_id, form.token).await {
@@ -221,12 +228,9 @@ pub(crate) struct SendLoginRequest {
 }
 
 pub async fn api_send_login_email(
-    headers: HeaderMap,
     State(state): State<AppState>,
     Json(payload): Json<SendLoginRequest>,
 ) -> impl IntoResponse {
-    let prefix = get_prefix(&headers);
-
     // Get staff to find their email
     let staff = match database::get_staff_by_id(&state.db, payload.staff_id).await {
         Ok(Some(s)) => s,
@@ -265,19 +269,12 @@ pub async fn api_send_login_email(
     };
 
     // Build login URL
-    let proto = headers
-        .get("X-Forwarded-Proto")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("http");
-    let host = headers
-        .get("X-Forwarded-Host")
-        .or_else(|| headers.get("Host"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("localhost:3000");
-    let login_url = format!(
-        "{}://{}{}/person/{}?token={}",
-        proto, host, prefix, staff.id, token
-    );
+    let login_url = state
+        .config
+        .public_base_url
+        .join(&format!("person/{}?token={token}", staff.id))
+        .expect("UUIDs form a valid relative URL")
+        .to_string();
 
     // Determine mail method: "gmail" or "smtp" (default)
     let mail_method = if state.config.mail_method.eq_ignore_ascii_case("gmail") {
@@ -304,7 +301,7 @@ async fn send_login_email_smtp(
 ) -> (StatusCode, Json<serde_json::Value>) {
     use lettre::Transport;
     if state.config.smtp_host.is_empty() {
-        warn!("SMTP not configured - login URL: {}", login_url);
+        warn!("SMTP not configured");
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(
@@ -416,7 +413,7 @@ async fn send_login_email_gmail(
     login_url: &str,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let Some(client) = &state.gmail_client else {
-        warn!("Gmail not configured - login URL: {}", login_url);
+        warn!("Gmail not configured");
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(

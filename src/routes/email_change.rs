@@ -15,12 +15,7 @@ use crate::{
 };
 
 /// Account confirmation is person-specific even when several people share an address.
-pub async fn request(
-    state: &AppState,
-    headers: &HeaderMap,
-    staff: &Staff,
-    email: &str,
-) -> anyhow::Result<()> {
+pub async fn request(state: &AppState, staff: &Staff, email: &str) -> anyhow::Result<()> {
     let change = EmailChange {
         staff_id: staff.id,
         token: uuid::Uuid::new_v4(),
@@ -29,24 +24,15 @@ pub async fn request(
         expires_at: (chrono::Utc::now() + email_change::LIFETIME).timestamp(),
     };
     let token = email_change::seal(&state.cookie_key, &change)?;
-    let proto = headers
-        .get("X-Forwarded-Proto")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("http");
-    let host = headers
-        .get("X-Forwarded-Host")
-        .or_else(|| headers.get("Host"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("localhost:3000");
-    let url = format!(
-        "{proto}://{host}{}/email-change?token={token}",
-        get_prefix(headers)
-    );
+    let url = state
+        .config
+        .public_base_url
+        .join(&format!("email-change?token={token}"))?;
     let name = format!("{} {}", staff.first_name, staff.last_name);
     let body = maud::html! {
         p { "Bonjour " (name) "," }
         p { "Vous avez demandé à remplacer votre adresse email par " strong { (email) } "." }
-        p { a href=(url) { "Confirmer mon adresse email" } }
+        p { a href=(url.as_str()) { "Confirmer mon adresse email" } }
         p { "Sur la page suivante, cliquez sur « Confirmer mon adresse email »." }
         p { "Ce lien est valable 24 heures et ne peut être utilisé qu'une fois. Votre adresse actuelle reste active jusqu'à la confirmation." }
         p { "Si vous n'avez pas demandé cette modification, ignorez cet email." }
@@ -139,7 +125,7 @@ pub async fn confirm(
     Form(form): Form<Confirmation>,
 ) -> Response {
     let prefix = get_prefix(&headers);
-    if !super::auth::confirmation_origin_allowed(&headers) {
+    if !super::auth::confirmation_origin_allowed(&headers, &state.config.public_base_url) {
         return private(StatusCode::FORBIDDEN);
     }
     let Ok(change) = email_change::open(

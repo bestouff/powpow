@@ -129,11 +129,16 @@ Key variables:
 | `HELLOASSO_ASSOCIATION_SLUG`  | Your association's slug on HelloAsso                     |
 | `MAIL_METHOD`                 | `smtp` or `gmail`                                        |
 | `COOKIE_SECRET`               | Random string (64+ hex chars) for signed session cookies |
+| `PUBLIC_BASE_URL`             | Public URL including any path prefix (e.g. `https://station.example/powpow`); defaults to `http://localhost:3000` |
 | `HUGGINGFACE_TOKEN`           | Optional HF Inference API token (enables dicton du jour) |
 | `RSS_NEWS_FEED`               | Optional RSS feed URL (enables news section)             |
 | `SYNC_TOKEN` / `BACKUP_TOKEN` | Optional tokens for headless API access                  |
 
 See `.env.example` for the full list including SMTP/Gmail and Mailchimp settings.
+
+For a Debian/systemd installation, set `PUBLIC_BASE_URL` in `/etc/powpow.conf`
+to the address visitors use, then restart `powpow`. Emailed authentication links
+use this address rather than request headers.
 
 ### Run with Docker (recommended)
 
