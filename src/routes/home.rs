@@ -40,7 +40,6 @@ pub async fn index(
     const HOW_MANY_NEWS: i64 = 6;
 
     let prefix = get_prefix(&headers);
-    let current_season = get_current_season();
     let logged_in = match resolve_caller(&jar, &state).await {
         Some(staff) => {
             staff.is_admin
@@ -71,9 +70,7 @@ pub async fn index(
             .unwrap_or_default(),
     );
 
-    // Generate (or retrieve from cache) the "dicton du jour"
-    let dicton =
-        dicton::get_or_generate(&state.db, current_season, &state.config.huggingface_token).await;
+    let dicton = dicton::cached();
 
     // Fetch news items from the database (synced by background task)
     // (Add 1 for the fake title news)

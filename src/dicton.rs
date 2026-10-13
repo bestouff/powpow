@@ -2,8 +2,7 @@
 //! weather data, station state and a random staff member ("saint du jour") to
 //! `DeepSeek` V3-turbo via the Hugging Face Inference API (Novita router).
 //!
-//! The LLM response is computed once per calendar day (Paris time) on the first
-//! request, then cached in memory until the day rolls over.
+//! Background tasks generate the daily response. Page requests only read the cache.
 
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
@@ -18,6 +17,11 @@ use crate::models::{Equipment, EquipmentStatus, EquipmentType};
 
 /// Cached LLM response keyed by the date it was generated for.
 static DICTON_CACHE: RwLock<Option<(NaiveDate, String)>> = RwLock::new(None);
+static GENERATION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+pub fn cached() -> Option<String> {
+    read_cache(paris_today())
+}
 
 /// Return today's dicton, generating it via the LLM if necessary.
 ///
@@ -36,13 +40,26 @@ pub async fn get_or_generate(pool: &PgPool, season: i16, hf_token: &str) -> Opti
     }
 
     // Slow path: build prompt, call LLM, cache result
-    match generate_dicton(pool, season, today, hf_token).await {
-        Ok(text) => {
+    let _guard = GENERATION.try_lock().ok()?;
+    if let Some(cached) = read_cache(today) {
+        return Some(cached);
+    }
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(90),
+        generate_dicton(pool, season, today, hf_token),
+    )
+    .await
+    {
+        Ok(Ok(text)) => {
             write_cache(today, &text);
             Some(text)
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             warn!("dicton du jour: generation failed: {e}");
+            None
+        }
+        Err(_) => {
+            warn!("dicton du jour: generation timed out");
             None
         }
     }
