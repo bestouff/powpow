@@ -1,4 +1,4 @@
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
 use axum::{
@@ -21,6 +21,8 @@ use crate::{AppState, auth::RequireAdmin, database, get_prefix, templates};
 ///
 /// Returns a summary of the operation.
 pub async fn sync_newsletter(state: &AppState) -> Result<(usize, usize, usize, usize, usize)> {
+    let _guard = SyncGuard::acquire(&state.mailchimp_sync_in_progress)
+        .ok_or_else(|| anyhow::anyhow!("Une synchronisation Mailchimp est déjà en cours."))?;
     let result = sync_newsletter_inner(state).await;
     if let Err(e) = &result {
         let mut progress = state.mailchimp_sync_progress.lock().await;
@@ -28,6 +30,36 @@ pub async fn sync_newsletter(state: &AppState) -> Result<(usize, usize, usize, u
         progress.error = Some(e.to_string());
     }
     result
+}
+
+struct SyncGuard<'a>(&'a AtomicBool);
+
+impl<'a> SyncGuard<'a> {
+    fn acquire(flag: &'a AtomicBool) -> Option<Self> {
+        flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .ok()
+            .map(|_| Self(flag))
+    }
+}
+
+impl Drop for SyncGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::*;
+
+    #[test]
+    fn cancellation_releases_sync_guard() {
+        let flag = AtomicBool::new(false);
+        let guard = SyncGuard::acquire(&flag).unwrap();
+        assert!(SyncGuard::acquire(&flag).is_none());
+        drop(guard);
+        assert!(SyncGuard::acquire(&flag).is_some());
+    }
 }
 
 async fn sync_newsletter_inner(state: &AppState) -> Result<(usize, usize, usize, usize, usize)> {
@@ -148,13 +180,7 @@ pub async fn cancel_pending_sync(state: &AppState) {
 /// Run a Mailchimp sync protected by the "in progress" flag, logging the
 /// outcome. Non-overlapping: if another sync is already running, skip.
 async fn sync_newsletter_guarded(state: &AppState) {
-    let flag = state.mailchimp_sync_in_progress.clone();
-    if flag.swap(true, Ordering::SeqCst) {
-        info!("Mailchimp newsletter sync already in progress, skipping");
-        return;
-    }
     let result = sync_newsletter(state).await;
-    flag.store(false, Ordering::SeqCst);
     match result {
         Ok((pulled, stored, recpt, ok, err)) => info!(
             "Mailchimp newsletter sync done: {} pulled, {} stored, {} recipients ({} ok, {} errors)",
@@ -205,17 +231,7 @@ pub async fn mailchimp_sync_now(
     }
     // A manual sync supersedes any pending debounced sync.
     cancel_pending_sync(&state).await;
-    let flag = state.mailchimp_sync_in_progress.clone();
-    if flag.swap(true, Ordering::SeqCst) {
-        return templates::mailchimp_sync_result(
-            &prefix,
-            false,
-            "Une synchronisation Mailchimp est déjà en cours.",
-        )
-        .into_response();
-    }
     let result = sync_newsletter(&state).await;
-    flag.store(false, Ordering::SeqCst);
 
     match result {
         Ok((_pulled, stored, recpt, ok, err)) => {
