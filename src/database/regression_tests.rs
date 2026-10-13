@@ -55,3 +55,47 @@ async fn session_cap_keeps_recent_sessions(pool: PgPool) -> Result<()> {
     }
     Ok(())
 }
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn backup_roundtrip_preserves_reviews_news_and_sequences(pool: PgPool) -> Result<()> {
+    sqlx::raw_sql("INSERT INTO memberships (helloasso_order_id, helloasso_item_id) VALUES (1,1);
+        INSERT INTO auto_import_reviews (helloasso_item_id, reason) VALUES (1, 'deliberately unimported');
+        INSERT INTO news (guid, text, link) VALUES ('test', 'News', 'https://example.org');
+        INSERT INTO qualifications (name) VALUES ('First');
+        SELECT setval('qualifications_id_seq', 100);").execute(&pool).await?;
+    let backup = backup_all_tables(&pool).await?;
+    sqlx::raw_sql("TRUNCATE qualifications RESTART IDENTITY CASCADE; DELETE FROM news; DELETE FROM auto_import_reviews;").execute(&pool).await?;
+    restore_from_sql(&pool, &backup).await?;
+    let reason: String =
+        sqlx::query_scalar("SELECT reason FROM auto_import_reviews WHERE helloasso_item_id = 1")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(reason, "deliberately unimported");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM news")
+            .fetch_one(&pool)
+            .await?,
+        1
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i32>(
+            "INSERT INTO qualifications (name) VALUES ('Next') RETURNING id"
+        )
+        .fetch_one(&pool)
+        .await?,
+        101
+    );
+    assert!(
+        restore_from_sql(&pool, "TRUNCATE news;\nINVALID SQL;")
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM news")
+            .fetch_one(&pool)
+            .await?,
+        1
+    );
+    Ok(())
+}

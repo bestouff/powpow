@@ -2557,6 +2557,7 @@ const TABLES_PARENT_FIRST: &[&str] = &[
     "equipments",
     "opening_days",
     "memberships",
+    "auto_import_reviews",
     "payments",
     "roles",
     "needs",
@@ -2567,10 +2568,13 @@ const TABLES_PARENT_FIRST: &[&str] = &[
     "contents",
     "qualifications",
     "staff_qualif",
+    "news",
 ];
 
 /// Tables in reverse dependency order (children first). Used for TRUNCATE.
 const TABLES_CHILD_FIRST: &[&str] = &[
+    "news",
+    "auto_import_reviews",
     "staff_qualif",
     "qualifications",
     "contents",
@@ -2593,7 +2597,10 @@ const TABLES_CHILD_FIRST: &[&str] = &[
 /// Produce a full database backup as a SQL string using COPY protocol.
 /// Output format: TRUNCATE statements (children first) + COPY FROM stdin blocks (parents first).
 pub async fn backup_all_tables(pool: &PgPool) -> Result<String> {
-    let mut conn = pool.acquire().await?;
+    let mut conn = pool.begin().await?;
+    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .execute(&mut *conn)
+        .await?;
     let mut sql = String::new();
 
     // Header
@@ -2613,7 +2620,7 @@ pub async fn backup_all_tables(pool: &PgPool) -> Result<String> {
     for table in TABLES_PARENT_FIRST {
         // Get column names for this table
         let columns: Vec<String> = sqlx::query_scalar::<_, String>(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position",
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position",
         )
         .bind(table)
         .fetch_all(&mut *conn)
@@ -2623,7 +2630,11 @@ pub async fn backup_all_tables(pool: &PgPool) -> Result<String> {
             continue;
         }
 
-        let col_list = columns.join(", ");
+        let col_list = columns
+            .iter()
+            .map(|c| format!("\"{}\"", c.replace('"', "\"\"")))
+            .collect::<Vec<_>>()
+            .join(", ");
         let copy_query = format!("COPY {} ({}) TO STDOUT", table, col_list);
 
         let mut stream = conn.copy_out_raw(&copy_query).await?;
@@ -2634,6 +2645,7 @@ pub async fn backup_all_tables(pool: &PgPool) -> Result<String> {
             let chunk = chunk?;
             data.extend_from_slice(&chunk);
         }
+        drop(stream);
 
         // Only emit the COPY block if there is data
         if !data.is_empty() {
@@ -2646,37 +2658,39 @@ pub async fn backup_all_tables(pool: &PgPool) -> Result<String> {
             }
             sql.push_str("\\.\n\n");
         }
+        // Sequence state is not part of COPY. Reading it can run ahead of the
+        // row snapshot, which only leaves harmless gaps after a restore.
+        for column in columns {
+            let sequence: Option<String> =
+                sqlx::query_scalar("SELECT pg_get_serial_sequence($1, $2)")
+                    .bind(table)
+                    .bind(&column)
+                    .fetch_one(&mut *conn)
+                    .await?;
+            if let Some(sequence) = sequence {
+                let (last, called): (i64, bool) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+                    "SELECT last_value, is_called FROM {sequence}"
+                )))
+                .fetch_one(&mut *conn)
+                .await?;
+                sql.push_str(&format!("SELECT setval(pg_get_serial_sequence('{table}', '{column}'), {last}, {called});\n"));
+            }
+        }
     }
-
+    conn.commit().await?;
     Ok(sql)
 }
 
 /// Restore database from a SQL backup string produced by `backup_all_tables`.
 /// Parses TRUNCATE statements and COPY FROM stdin blocks, executes in a transaction.
 pub async fn restore_from_sql(pool: &PgPool, sql: &str) -> Result<()> {
-    let mut conn = pool.acquire().await?;
-
-    // Begin transaction using raw SQL (works on the underlying PgConnection)
-    sqlx::query("BEGIN").execute(&mut *conn).await?;
-
-    let result = restore_inner(&mut conn, sql).await;
-
-    match result {
-        Ok(()) => {
-            sqlx::query("COMMIT").execute(&mut *conn).await?;
-            Ok(())
-        }
-        Err(e) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(e)
-        }
-    }
+    let mut tx = pool.begin().await?;
+    restore_inner(&mut tx, sql).await?;
+    tx.commit().await?;
+    Ok(())
 }
 
-async fn restore_inner(
-    conn: &mut sqlx::pool::PoolConnection<sqlx::Postgres>,
-    sql: &str,
-) -> Result<()> {
+async fn restore_inner(conn: &mut sqlx::PgConnection, sql: &str) -> Result<()> {
     let lines: Vec<&str> = sql.lines().collect();
     let mut i = 0;
 
@@ -2722,7 +2736,7 @@ async fn restore_inner(
 
         // TRUNCATE and other SQL statements — execute directly
         sqlx::query(sqlx::AssertSqlSafe(line))
-            .execute(&mut **conn)
+            .execute(&mut *conn)
             .await?;
         i += 1;
     }
