@@ -994,6 +994,16 @@ pub async fn api_create_staff_minimal(
     State(state): State<AppState>,
     Json(payload): Json<CreateStaffMinimalRequest>,
 ) -> impl IntoResponse {
+    if payload.email.as_deref().is_some_and(|email| {
+        !email.trim().is_empty() && !crate::auto_import::valid_email(email.trim())
+    }) || payload.phone.as_deref().is_some_and(|phone| {
+        !phone.trim().is_empty() && crate::auto_import::normalize_phone(phone).is_empty()
+    }) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Adresse email ou numéro de téléphone invalide."})),
+        );
+    }
     let email = payload
         .email
         .as_deref()

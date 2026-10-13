@@ -145,6 +145,14 @@ pub fn capitalize_words(s: &str) -> String {
 }
 
 pub fn normalize_phone(value: &str) -> String {
+    let value = value.trim();
+    if !value.chars().enumerate().all(|(i, c)| {
+        c.is_ascii_digit()
+            || matches!(c, ' ' | '\u{a0}' | '\u{202f}' | '(' | ')' | '.' | '-')
+            || (c == '+' && i == 0)
+    }) {
+        return String::new();
+    }
     let digits: String = value.chars().filter(char::is_ascii_digit).collect();
     let digits = digits.strip_prefix("00").unwrap_or(&digits);
     if digits.len() == 10 && digits.starts_with('0') {
@@ -449,6 +457,9 @@ mod tests {
         assert_ne!(normalize_phone("0612345678"), "");
         assert_eq!(normalize_phone("abc"), "");
         assert_eq!(normalize_phone("123"), "");
+        assert_eq!(normalize_phone("staff=123456789é"), "");
+        assert_eq!(normalize_phone("06\n12\r34\t56 78"), "");
+        assert_eq!(normalize_phone("06+12+34+56+78"), "");
     }
 
     #[test]
