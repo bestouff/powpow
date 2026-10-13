@@ -140,14 +140,17 @@ For a Debian/systemd installation, set `PUBLIC_BASE_URL` in `/etc/powpow.conf`
 to the address visitors use, then restart `powpow`. Emailed authentication links
 use this address rather than request headers.
 
-### Run with Docker (recommended)
+### Run with Docker for development
+
+Set `DEV_POSTGRES_PASSWORD` in `.env` to a random hex password (for example, from
+`openssl rand -hex 24`). For an existing database volume, use its current password.
 
 ```sh
 docker compose up --build
 ```
 
-This starts PostgreSQL 15 and the application on port 3000. Migrations run automatically on startup.
-**This is for development only, if you want to use it to deploy change the password in the docker file !**
+This starts PostgreSQL 17 and the application on loopback ports 5432 and 3000.
+Migrations run automatically on startup. Production uses the Debian package below.
 
 ### Run as a Debian package (recommended for Debian servers)
 
