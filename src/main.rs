@@ -27,6 +27,8 @@ mod dicton;
 mod email_change;
 mod email_recipients;
 mod helloasso;
+#[cfg(test)]
+mod http_tests;
 mod mailchimp;
 mod manual_import;
 mod models;
@@ -411,7 +413,19 @@ async fn main() -> anyhow::Result<()> {
     templates::set_entity_name(app_state.config.entity_name.clone());
 
     // Build router
-    let app = Router::new()
+    let app = build_router(app_state);
+    tokio::spawn(routes::background::weekly_morning_email_loop(
+        state_for_weekly,
+    ));
+    tokio::spawn(routes::background::daily_preload_loop(state_for_preload));
+    let listener = tokio::net::TcpListener::bind(&listen_address).await?;
+    info!("Server running on {listen_address}");
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+fn build_router(app_state: AppState) -> Router {
+    Router::new()
         .route("/", get(routes::home::index))
         .route("/admin", get(routes::admin::admin_page_handler))
         .route("/online", get(routes::membership::list_users))
@@ -616,23 +630,5 @@ async fn main() -> anyhow::Result<()> {
             auth::membership_gate,
         ))
         .layer(axum::middleware::from_fn(security_headers))
-        .with_state(app_state);
-
-    // Spawn daily morning email task
-    tokio::spawn(routes::background::weekly_morning_email_loop(
-        state_for_weekly,
-    ));
-
-    // Spawn background preload loop:
-    // - runs dicton + news sync once at startup
-    // - re-syncs news every 15 minutes
-    // - regenerates dicton daily at 5 AM
-    tokio::spawn(routes::background::daily_preload_loop(state_for_preload));
-
-    // Start server
-    let listener = tokio::net::TcpListener::bind(&listen_address).await?;
-    info!("Server running on {listen_address}");
-
-    axum::serve(listener, app).await?;
-    Ok(())
+        .with_state(app_state)
 }

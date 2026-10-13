@@ -2109,6 +2109,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-test",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "unicode-normalization",
