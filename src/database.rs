@@ -11,6 +11,7 @@ use tracing::info;
 pub mod auto_import;
 pub mod email_change;
 pub mod manual_import;
+pub mod planning;
 #[cfg(test)]
 mod regression_tests;
 
@@ -641,7 +642,7 @@ pub async fn get_staff_roles(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<
 }
 
 pub async fn can_register_for_need(
-    pool: &PgPool,
+    pool: impl sqlx::PgExecutor<'_>,
     staff: uuid::Uuid,
     need: uuid::Uuid,
 ) -> Result<bool> {
@@ -1728,7 +1729,7 @@ pub async fn delete_needs_for_day(pool: &PgPool, day: chrono::NaiveDate) -> Resu
 
 /// Upsert presence; delete row if both halves are false
 pub async fn upsert_presence(
-    pool: &PgPool,
+    pool: impl sqlx::PgExecutor<'_>,
     needs_id: uuid::Uuid,
     staff_id: uuid::Uuid,
     first_half: bool,
@@ -1764,7 +1765,7 @@ pub async fn upsert_presence(
 
 /// Get current presence for a specific need+staff
 pub async fn get_presence(
-    pool: &PgPool,
+    pool: impl sqlx::PgExecutor<'_>,
     needs_id: uuid::Uuid,
     staff_id: uuid::Uuid,
 ) -> Result<Option<(bool, bool)>> {
@@ -1783,7 +1784,10 @@ pub async fn get_presence(
 }
 
 /// Get a single need by ID
-pub async fn get_need_by_id(pool: &PgPool, need_id: uuid::Uuid) -> Result<Option<Need>> {
+pub async fn get_need_by_id(
+    pool: impl sqlx::PgExecutor<'_>,
+    need_id: uuid::Uuid,
+) -> Result<Option<Need>> {
     let need = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE id = $1")
         .bind(need_id)
         .fetch_optional(pool)
@@ -1794,7 +1798,7 @@ pub async fn get_need_by_id(pool: &PgPool, need_id: uuid::Uuid) -> Result<Option
 /// Check whether a staff member already has presence on the same day for a different atelier,
 /// on the specified half-day. Returns the conflicting atelier name if found.
 pub async fn check_presence_conflict(
-    pool: &PgPool,
+    pool: impl sqlx::PgExecutor<'_>,
     staff_id: uuid::Uuid,
     day: chrono::NaiveDate,
     exclude_need_id: uuid::Uuid,

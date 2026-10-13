@@ -190,116 +190,16 @@ pub async fn toggle_presence_api(
         }
     }
 
-    // Fetch current presence
-    if payload.value {
-        match database::can_register_for_need(&state.db, payload.staff_id, payload.needs_id).await {
-            Ok(true) => {}
-            Ok(false) => {
-                return (
-                    StatusCode::FORBIDDEN,
-                    Json(
-                        serde_json::json!({"error": "Une inscription validée à cet atelier est nécessaire."}),
-                    ),
-                );
-            }
-            Err(e) => {
-                error!("Cannot check atelier enrollment: {e}");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(
-                        serde_json::json!({"error": "Impossible de vérifier l'inscription à l'atelier."}),
-                    ),
-                );
-            }
-        }
-    }
-    let (mut first_half, mut second_half) =
-        match database::get_presence(&state.db, payload.needs_id, payload.staff_id).await {
-            Ok(Some((f, s))) => (f, s),
-            Ok(None) => (false, false),
-            Err(e) => {
-                error!("Error fetching presence: {}", e);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"error": e.to_string()})),
-                );
-            }
-        };
-
-    // Apply the toggle
-    match payload.half.as_str() {
-        "first" => first_half = payload.value,
-        "second" => second_half = payload.value,
-        _ => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "half must be 'first' or 'second'"})),
-            );
-        }
-    }
-
-    // Conflict check: prevent registering for the same half-day in two different ateliers
-    if payload.value {
-        // Look up the need to get the day
-        let need = match database::get_need_by_id(&state.db, payload.needs_id).await {
-            Ok(Some(n)) => n,
-            Ok(None) => {
-                return (
-                    StatusCode::NOT_FOUND,
-                    Json(serde_json::json!({"error": "Besoin introuvable"})),
-                );
-            }
-            Err(e) => {
-                error!("Error fetching need: {}", e);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"error": e.to_string()})),
-                );
-            }
-        };
-
-        match database::check_presence_conflict(
-            &state.db,
-            payload.staff_id,
-            need.day,
-            payload.needs_id,
-            &payload.half,
-        )
-        .await
-        {
-            Ok(Some(conflicting_atelier)) => {
-                return (
-                    StatusCode::CONFLICT,
-                    Json(serde_json::json!({
-                        "error": format!(
-                            "Vous êtes déjà inscrit(e) sur ce créneau pour l'atelier « {} »",
-                            conflicting_atelier
-                        )
-                    })),
-                );
-            }
-            Ok(None) => {} // No conflict
-            Err(e) => {
-                error!("Error checking presence conflict: {}", e);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"error": e.to_string()})),
-                );
-            }
-        }
-    }
-
-    // Upsert (or delete if both false)
-    match database::upsert_presence(
+    match database::planning::toggle(
         &state.db,
-        payload.needs_id,
         payload.staff_id,
-        first_half,
-        second_half,
+        payload.needs_id,
+        &payload.half,
+        payload.value,
     )
     .await
     {
-        Ok(()) => {
+        Ok((first_half, second_half)) => {
             let target_name = if payload.staff_id == me.id {
                 format!("{} {}", me.first_name, me.last_name)
             } else {
@@ -331,11 +231,21 @@ pub async fn toggle_presence_api(
             )
         }
         Err(e) => {
-            error!("Error upserting presence: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": e.to_string()})),
-            )
+            use database::planning::Error;
+            let code = match &e {
+                Error::InvalidHalf => StatusCode::BAD_REQUEST,
+                Error::NotFound => StatusCode::NOT_FOUND,
+                Error::Enrollment => StatusCode::FORBIDDEN,
+                Error::Conflict(_) => StatusCode::CONFLICT,
+                Error::Database(_) => {
+                    error!("Cannot update presence: {e}");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": "Impossible de modifier la présence."})),
+                    );
+                }
+            };
+            (code, Json(serde_json::json!({"error": e.to_string()})))
         }
     }
 }

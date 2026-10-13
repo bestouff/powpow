@@ -31,6 +31,38 @@ async fn planning_requires_validated_enrollment(pool: PgPool) -> Result<()> {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn concurrent_planning_checks_are_atomic(pool: PgPool) -> Result<()> {
+    let person = staff(&pool).await?;
+    let first = need(&pool, "First").await?;
+    let second = need(&pool, "Second").await?;
+    for need in [&first, &second] {
+        add_role(&pool, person.id, need.atelier, true).await?;
+    }
+    let (a, b) = tokio::join!(
+        planning::toggle(&pool, person.id, first.id, "first", true),
+        planning::toggle(&pool, person.id, second.id, "first", true)
+    );
+    assert_ne!(a.is_ok(), b.is_ok());
+    assert!(
+        matches!(a, Err(planning::Error::Conflict(_)))
+            || matches!(b, Err(planning::Error::Conflict(_)))
+    );
+    let winner = if a.is_ok() { first.id } else { second.id };
+    let (a, b) = tokio::join!(
+        planning::toggle(&pool, person.id, winner, "first", true),
+        planning::toggle(&pool, person.id, winner, "second", true)
+    );
+    a?;
+    b?;
+    assert_eq!(
+        get_presence(&pool, winner, person.id).await?,
+        Some((true, true))
+    );
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn email_updates_revoke_old_links(pool: PgPool) -> Result<()> {
     let person = staff(&pool).await?;
     let token = create_login_token(&pool, person.id, &person.email).await?;
