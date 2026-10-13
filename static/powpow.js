@@ -63,6 +63,7 @@ function initStaffFilters() {
     rows.forEach(function (row) {
       const matches = Array.from(active).every(function (filter) {
         if (filter === "membership") return row.dataset.currentMember === "true";
+        if (filter === "admin") return row.dataset.isAdmin === "true";
         if (filter === "qualifications") return row.dataset.hasQualifications === "true";
         return row.dataset.ateliers.split(",").includes(filter.slice("atelier:".length));
       });

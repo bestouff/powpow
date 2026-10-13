@@ -61,18 +61,6 @@ fn describe_user_agent(user_agent: Option<&str>) -> String {
     }
 }
 
-/// Native disclosure keeps column names available on touchscreens and without JavaScript.
-fn staff_column_label(icon: &str, label: &str) -> Markup {
-    html! {
-        details .staff-column-label {
-            summary aria-label=(label) {
-                span .icon aria-hidden="true" { i class={"fa-solid fa-" (icon)} {} }
-                span .staff-column-text { (label) }
-            }
-        }
-    }
-}
-
 fn staff_filter_label(icon: &str, label: &str, filter: &str) -> Markup {
     html! {
         button .staff-filter.staff-column-filter type="button" data-filter=(filter)
@@ -138,7 +126,7 @@ pub fn staff_list(
                 }
 
                 p #staff-table-help .help.mb-3 {
-                    "Cliquez sur Dernière saison, un atelier ou Formations pour filtrer. Les filtres se combinent ; cliquez à nouveau pour les retirer. Survolez une icône d’en-tête pour afficher son intitulé."
+                    "Cliquez sur Dernière saison, un atelier, Admin ou Formations pour filtrer. Les filtres se combinent ; cliquez à nouveau pour les retirer. Survolez une icône d’en-tête pour afficher son intitulé."
                 }
 
                 div .is-flex.is-align-items-center.mb-3 {
@@ -162,7 +150,7 @@ pub fn staff_list(
                                         }
                                     }
                                     th .has-text-centered.atelier-col scope="col" {
-                                        (staff_column_label("user-shield", "Admin"))
+                                        (staff_filter_label("user-shield", "Admin", "admin"))
                                     }
                                     @if !qualifications.is_empty() {
                                         th scope="col" {
@@ -187,6 +175,7 @@ pub fn staff_list(
                                         .map(|role| role.atelier.to_string()).collect::<Vec<_>>().join(",");
                                     tr data-current-member=(current_members.contains(&staff.id))
                                         data-ateliers=(staff_ateliers)
+                                        data-is-admin=(staff.is_admin || staff.is_god)
                                         data-has-qualifications=(staff_qualifs.iter().any(|qualification| qualification.staff == staff.id)) {
                                         td .sticky-col {
                                             a href={(p) "/person/" (staff.id)} {
