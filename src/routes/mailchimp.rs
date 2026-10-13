@@ -87,6 +87,17 @@ async fn sync_newsletter_inner(state: &AppState) -> Result<(usize, usize, usize,
     let stored =
         database::set_mailchimp_statuses(&state.db, &members, Some(&state.mailchimp_sync_progress))
             .await?;
+    // Retire only former PowPow addresses, and retain addresses still used by
+    // another household member. Failed archives remain queued for retry.
+    let retired: Vec<String> = sqlx::query_scalar("SELECT email FROM mailchimp_retired_emails r WHERE NOT EXISTS (SELECT 1 FROM staff s WHERE lower(trim(s.email)) = r.email)")
+        .fetch_all(&state.db).await?;
+    for email in retired {
+        state.mailchimp_client.archive_member(&email).await?;
+        sqlx::query("DELETE FROM mailchimp_retired_emails WHERE email = $1")
+            .bind(email)
+            .execute(&state.db)
+            .await?;
+    }
     {
         let mut progress = state.mailchimp_sync_progress.lock().await;
         progress.phase = "pushing".into();

@@ -120,6 +120,25 @@ async fn unimport_uses_june_to_may_seasons(pool: PgPool) -> Result<()> {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn retired_addresses_preserve_household_delivery(pool: PgPool) -> Result<()> {
+    let first = staff(&pool).await?;
+    let second = staff(&pool).await?;
+    update_staff_contact(&pool, first.id, "new@example.org", None).await?;
+    let count = "SELECT count(*) FROM mailchimp_retired_emails r WHERE NOT EXISTS (SELECT 1 FROM staff s WHERE lower(trim(s.email)) = r.email)";
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(count).fetch_one(&pool).await?,
+        0
+    );
+    update_staff_contact(&pool, second.id, "other@example.org", None).await?;
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(count).fetch_one(&pool).await?,
+        1
+    );
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn email_updates_revoke_old_links(pool: PgPool) -> Result<()> {
     let person = staff(&pool).await?;
     let token = create_login_token(&pool, person.id, &person.email).await?;

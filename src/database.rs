@@ -2583,10 +2583,12 @@ const TABLES_PARENT_FIRST: &[&str] = &[
     "qualifications",
     "staff_qualif",
     "news",
+    "mailchimp_retired_emails",
 ];
 
 /// Tables in reverse dependency order (children first). Used for TRUNCATE.
 const TABLES_CHILD_FIRST: &[&str] = &[
+    "mailchimp_retired_emails",
     "news",
     "auto_import_reviews",
     "staff_qualif",

@@ -215,6 +215,26 @@ impl MailchimpClient {
     }
 
     /// Sync grouped email recipients to the Mailchimp audience.
+    pub async fn archive_member(&self, email: &str) -> Result<()> {
+        self.require_configured()?;
+        let hash = md5_hex(email.trim().to_lowercase().as_bytes());
+        let response = self
+            .client
+            .delete(format!(
+                "{}/lists/{}/members/{hash}",
+                self.base_url(),
+                self.list_id
+            ))
+            .basic_auth("aghil", Some(&self.api_key))
+            .send()
+            .await?;
+        if response.status() != reqwest::StatusCode::NOT_FOUND {
+            response.error_for_status()?;
+        }
+        Ok(())
+    }
+
+    /// Sync grouped email recipients to the Mailchimp audience.
     /// Returns (`success_count`, `error_count`).
     ///
     /// When `progress` is provided, updates the `pushed` / `push_ok` /
