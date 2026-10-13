@@ -32,6 +32,7 @@ mod manual_import;
 mod models;
 mod news;
 mod personal_email;
+mod public_http;
 mod qualifications;
 mod rate_limit;
 mod routes;

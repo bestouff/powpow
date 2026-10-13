@@ -36,10 +36,13 @@ pub async fn sync_news(pool: &PgPool, feed_url: &str) {
         .await
         .unwrap_or_default();
 
-    let client = reqwest::Client::builder()
-        .timeout(FETCH_TIMEOUT)
-        .build()
-        .unwrap_or_default();
+    let client = match crate::public_http::client(FETCH_TIMEOUT) {
+        Ok(client) => client,
+        Err(e) => {
+            warn!("news: cannot build HTTP client: {e}");
+            return;
+        }
+    };
 
     for item in &items {
         let image = if have_images.contains(&item.guid) {
@@ -90,19 +93,15 @@ struct ParsedItem {
 // ── RSS fetch + parse ───────────────────────────────────────────────
 
 async fn fetch_and_parse(url: &str) -> anyhow::Result<Vec<ParsedItem>> {
-    let body = reqwest::Client::new()
-        .get(url)
-        .timeout(FETCH_TIMEOUT)
-        .send()
-        .await?
-        .bytes()
-        .await?;
+    let client = crate::public_http::client(FETCH_TIMEOUT)?;
+    let body = crate::public_http::get(&client, url, MAX_IMAGE_BYTES).await?;
 
     let channel = rss::Channel::read_from(&body[..])?;
 
     let mut items: Vec<ParsedItem> = channel
         .items()
         .iter()
+        .take(KEEP_ITEMS as usize)
         .filter_map(|item| {
             let guid = item.guid().map(|g| g.value().to_string())?;
             let link = item.link().unwrap_or_default().to_string();
@@ -216,37 +215,13 @@ fn decode_xml_entities(s: &str) -> String {
 /// Returns `None` if the download fails, exceeds 2 MB, or the body is not
 /// a recognised image format (validated by magic bytes).
 async fn download_image(client: &reqwest::Client, url: &str) -> Option<(Vec<u8>, String)> {
-    let resp = match client.get(url).send().await {
-        Ok(r) => r,
-        Err(e) => {
-            warn!("news: image download failed for {url}: {e}");
-            return None;
-        }
-    };
-
-    // Check Content-Length hint (if present) before reading the body
-    if let Some(cl) = resp.content_length()
-        && cl as usize > MAX_IMAGE_BYTES
-    {
-        warn!("news: image too large ({cl} bytes), skipping {url}");
-        return None;
-    }
-
-    let data = match resp.bytes().await {
-        Ok(b) => b.to_vec(),
+    let data = match crate::public_http::get(client, url, MAX_IMAGE_BYTES).await {
+        Ok(b) => b,
         Err(e) => {
             warn!("news: failed to read image body from {url}: {e}");
             return None;
         }
     };
-
-    if data.len() > MAX_IMAGE_BYTES {
-        warn!(
-            "news: image body too large ({} bytes), skipping {url}",
-            data.len()
-        );
-        return None;
-    }
 
     // Validate the body is actually an image by checking magic bytes.
     // This protects against CDN error pages (e.g. "URL signature expired")
