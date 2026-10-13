@@ -257,7 +257,7 @@ pub async fn api_send_login_email(
     }
 
     // Generate token
-    let token = match database::create_login_token(&state.db, staff.id).await {
+    let token = match database::create_login_token(&state.db, staff.id, &staff.email).await {
         Ok(t) => t,
         Err(e) => {
             error!("Error setting token: {}", e);

@@ -11,6 +11,8 @@ use tracing::info;
 pub mod auto_import;
 pub mod email_change;
 pub mod manual_import;
+#[cfg(test)]
+mod regression_tests;
 
 /// Lifetime of a pending login link (magic link emailed to the staff member).
 const LOGIN_TOKEN_LIFETIME: std::time::Duration = std::time::Duration::from_hours(24);
@@ -1941,7 +1943,21 @@ pub async fn search_staff_by_name(pool: &PgPool, query: &str) -> Result<Vec<Staf
 
 /// Generate a login link token for a staff member. Multiple pending tokens
 /// can coexist (one per client/device that needs to log in).
-pub async fn create_login_token(pool: &PgPool, staff_id: uuid::Uuid) -> Result<uuid::Uuid> {
+pub async fn create_login_token(
+    pool: &PgPool,
+    staff_id: uuid::Uuid,
+    email: &str,
+) -> Result<uuid::Uuid> {
+    let mut tx = pool.begin().await?;
+    let current: Option<String> =
+        sqlx::query_scalar("SELECT email FROM staff WHERE id = $1 FOR UPDATE")
+            .bind(staff_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    anyhow::ensure!(
+        current.as_deref() == Some(email),
+        "Login address changed; request a new link"
+    );
     let token = uuid::Uuid::new_v4();
     let expires_at = chrono::Utc::now() + LOGIN_TOKEN_LIFETIME;
     sqlx::query(
@@ -1953,9 +1969,9 @@ pub async fn create_login_token(pool: &PgPool, staff_id: uuid::Uuid) -> Result<u
     .bind(token)
     .bind(staff_id)
     .bind(expires_at)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
-
+    tx.commit().await?;
     Ok(token)
 }
 
@@ -1992,7 +2008,7 @@ mod login_link_tests {
         ).execute(&pool).await?;
         let staff = uuid::Uuid::new_v4();
         sqlx::query("INSERT INTO staff (id,first_name,last_name,email,comment) VALUES ($1,'Login','Test','login@example.org','')").bind(staff).execute(&pool).await?;
-        let token = super::create_login_token(&pool, staff).await?;
+        let token = super::create_login_token(&pool, staff, "login@example.org").await?;
         sqlx::query("SET default_transaction_read_only = on")
             .execute(&pool)
             .await?;
@@ -2035,7 +2051,7 @@ mod login_link_tests {
                 .await?
                 .is_none()
         );
-        let expired = super::create_login_token(&pool, staff).await?;
+        let expired = super::create_login_token(&pool, staff, "login@example.org").await?;
         sqlx::query("UPDATE login_tokens SET expires_at = now() - interval '1 minute'")
             .execute(&pool)
             .await?;
