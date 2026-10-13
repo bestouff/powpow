@@ -58,7 +58,9 @@ pub(crate) fn get_prefix(headers: &HeaderMap) -> String {
         .and_then(|v| v.to_str().ok())
         .map(|s| s.trim_end_matches('/'))
         .filter(|s| {
-            !s.is_empty()
+            s.starts_with('/')
+                && !s.starts_with("//")
+                && !s.split('/').any(|segment| matches!(segment, "." | ".."))
                 && s.bytes().all(|b| {
                     b.is_ascii_alphanumeric() || b == b'/' || b == b'_' || b == b'-' || b == b'.'
                 })

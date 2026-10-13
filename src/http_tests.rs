@@ -5,6 +5,17 @@ use axum::{
 };
 use tower::ServiceExt;
 
+#[test]
+fn proxy_prefix_cannot_be_an_external_or_parent_relative_url() {
+    let mut headers = HeaderMap::new();
+    for prefix in ["//evil.example", "relative", "/../evil", "/a/./b"] {
+        headers.insert("x-forwarded-prefix", prefix.parse().unwrap());
+        assert_eq!(get_prefix(&headers), "");
+    }
+    headers.insert("x-forwarded-prefix", "/powpow/".parse().unwrap());
+    assert_eq!(get_prefix(&headers), "/powpow");
+}
+
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn atelier_names_are_escaped_in_reminders_and_calendar_data(
