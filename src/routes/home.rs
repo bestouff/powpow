@@ -5,7 +5,6 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::cookie::SignedCookieJar;
-use base64::Engine;
 use tracing::{error, info, warn};
 
 use crate::{
@@ -246,7 +245,7 @@ pub async fn contact_submit(
         name, email, state.config.entity_email
     );
 
-    send_contact_email(
+    if let Err(e) = send_contact_email(
         &state,
         name,
         email,
@@ -254,7 +253,16 @@ pub async fn contact_submit(
         &full_subject,
         &html_body,
     )
-    .await;
+    .await
+    {
+        error!("Contact delivery failed: {e}");
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(
+                serde_json::json!({"error": "Le message n'a pas pu être envoyé. Veuillez réessayer plus tard."}),
+            ),
+        );
+    }
 
     (StatusCode::OK, Json(serde_json::json!({"ok": true})))
 }
@@ -286,9 +294,7 @@ mod contact_tests {
     }
 }
 
-/// Send an email with `From` display-name set to `sender_name` and `Reply-To`
-/// set to `sender_email`.  The actual envelope `From` address stays the
-/// configured SMTP / Gmail account.
+/// Use the visitor's typed mailbox only as Reply-To.
 async fn send_contact_email(
     state: &AppState,
     sender_name: &str,
@@ -296,115 +302,16 @@ async fn send_contact_email(
     to_addr: &str,
     subject: &str,
     html_body: &str,
-) {
-    use lettre::Transport;
-
-    let mail_method = if state.config.mail_method.eq_ignore_ascii_case("gmail") {
-        "gmail"
-    } else {
-        "smtp"
-    };
-
-    let dest = if state.config.mail_destination_override.is_empty() {
-        to_addr
-    } else {
-        warn!(
-            "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting contact from {} to {}",
-            to_addr, state.config.mail_destination_override
-        );
-        &state.config.mail_destination_override
-    };
-
-    if mail_method == "gmail" {
-        let Some(client) = &state.gmail_client else {
-            warn!(
-                "Gmail not configured, cannot send contact email to {}",
-                dest
-            );
-            return;
-        };
-        let client = client.clone();
-        let from_addr = if state.config.gmail_from.is_empty() {
-            "me".to_string()
-        } else {
-            state.config.gmail_from.clone()
-        };
-        let encoded_subject = format!(
-            "=?UTF-8?B?{}?=",
-            base64::engine::general_purpose::STANDARD.encode(subject.as_bytes())
-        );
-        let encoded_name = format!(
-            "=?UTF-8?B?{}?=",
-            base64::engine::general_purpose::STANDARD.encode(sender_name.as_bytes())
-        );
-        let raw_message = format!(
-            "From: {} <{}>\r\nReply-To: {}\r\nTo: {}\r\nSubject: {}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",
-            encoded_name, from_addr, sender_email, dest, encoded_subject, html_body
-        );
-        let message_body = httpclient::InMemoryBody::Text(raw_message);
-        match client.messages_send("me", message_body, None).await {
-            Ok(_) => info!("Contact email sent via Gmail to {}", dest),
-            Err(e) => error!("Failed to send contact email via Gmail to {}: {}", dest, e),
-        }
-    } else {
-        if state.config.smtp_host.is_empty() {
-            warn!("SMTP not configured, cannot send contact email to {}", dest);
-            return;
-        }
-        // Parse the configured SMTP_FROM address, then override the display name
-        let base_from = match state.config.smtp_from.parse::<lettre::message::Mailbox>() {
-            Ok(m) => m,
-            Err(e) => {
-                error!("Invalid SMTP_FROM address: {}", e);
-                return;
-            }
-        };
-        let from = lettre::message::Mailbox::new(Some(sender_name.to_string()), base_from.email);
-        let to = match dest.parse::<lettre::message::Mailbox>() {
-            Ok(m) => m,
-            Err(e) => {
-                error!("Invalid destination email {}: {}", dest, e);
-                return;
-            }
-        };
-        let reply_to = match sender_email.parse::<lettre::message::Mailbox>() {
-            Ok(m) => m,
-            Err(e) => {
-                error!("Invalid reply-to email {}: {}", sender_email, e);
-                return;
-            }
-        };
-        let email = match lettre::Message::builder()
-            .from(from)
-            .reply_to(reply_to)
-            .to(to)
-            .subject(subject)
-            .header(lettre::message::header::ContentType::TEXT_HTML)
-            .body(html_body.to_string())
-        {
-            Ok(m) => m,
-            Err(e) => {
-                error!("Failed to build contact email: {}", e);
-                return;
-            }
-        };
-        let creds = lettre::transport::smtp::authentication::Credentials::new(
-            state.config.smtp_user.clone(),
-            state.config.smtp_password.clone(),
-        );
-        let mailer = match lettre::SmtpTransport::relay(&state.config.smtp_host) {
-            Ok(builder) => builder
-                .port(state.config.smtp_port)
-                .credentials(creds)
-                .build(),
-            Err(e) => {
-                error!("SMTP transport error: {}", e);
-                return;
-            }
-        };
-        match mailer.send(&email) {
-            Ok(_) => info!("Contact email sent via SMTP to {}", dest),
-            Err(e) => error!("Failed to send contact email via SMTP to {}: {}", dest, e),
-        }
-    }
+) -> anyhow::Result<()> {
+    let reply_to =
+        lettre::message::Mailbox::new(Some(sender_name.to_string()), sender_email.parse()?);
+    crate::personal_email::send_with_reply(
+        state,
+        to_addr,
+        &state.config.entity_name,
+        subject,
+        html_body.to_string(),
+        Some(reply_to),
+    )
+    .await
 }

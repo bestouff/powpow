@@ -15,6 +15,17 @@ pub async fn send(
     subject: &str,
     html: String,
 ) -> Result<()> {
+    send_with_reply(state, address, name, subject, html, None).await
+}
+
+pub async fn send_with_reply(
+    state: &AppState,
+    address: &str,
+    name: &str,
+    subject: &str,
+    html: String,
+    reply_to: Option<Mailbox>,
+) -> Result<()> {
     let gmail = state.config.mail_method.eq_ignore_ascii_case("gmail");
     let from = if gmail {
         &state.config.gmail_from
@@ -26,12 +37,15 @@ pub async fn send(
     } else {
         &state.config.mail_destination_override
     };
-    let email = lettre::Message::builder()
+    let mut builder = lettre::Message::builder()
         .from(from.parse::<Mailbox>()?)
         .to(Mailbox::new(Some(name.to_string()), destination.parse()?))
         .subject(subject)
-        .header(ContentType::TEXT_HTML)
-        .body(html)?;
+        .header(ContentType::TEXT_HTML);
+    if let Some(reply_to) = reply_to {
+        builder = builder.reply_to(reply_to);
+    }
+    let email = builder.body(html)?;
     if gmail {
         let client = state
             .gmail_client
@@ -54,6 +68,7 @@ pub async fn send(
         let mailer = lettre::SmtpTransport::relay(&state.config.smtp_host)?
             .port(state.config.smtp_port)
             .credentials(credentials)
+            .timeout(Some(std::time::Duration::from_secs(30)))
             .build();
         tokio::task::spawn_blocking(move || mailer.send(&email)).await??;
     }
