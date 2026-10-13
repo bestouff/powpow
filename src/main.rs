@@ -13,7 +13,6 @@ use axum::{
     routing::{delete, get, post},
 };
 use axum_extra::extract::cookie::{Key, SignedCookieJar};
-use base64::Engine;
 use chrono::Datelike;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -214,16 +213,9 @@ pub(crate) async fn send_notification_email(
     subject: &str,
     html_body: &str,
 ) {
-    use lettre::Transport;
     if to_addresses.is_empty() {
         return;
     }
-
-    let mail_method = if state.config.mail_method.eq_ignore_ascii_case("gmail") {
-        "gmail"
-    } else {
-        "smtp"
-    };
 
     let recipients = match database::get_notification_recipients(&state.db, to_addresses).await {
         Ok(recipients) => recipients,
@@ -243,121 +235,10 @@ pub(crate) async fn send_notification_email(
             let greeting = maud::html! { p { "Bonjour " (recipient_name) "," } }.into_string();
             html_body.replacen("<p>Bonjour,</p>", &greeting, 1)
         };
-        if mail_method == "gmail" {
-            let Some(client) = &state.gmail_client else {
-                warn!(
-                    "Gmail not configured, cannot send notification to {}",
-                    to_addr
-                );
-                continue;
-            };
-            let client = client.clone();
-            let from = if state.config.gmail_from.is_empty() {
-                "me".to_string()
-            } else {
-                state.config.gmail_from.clone()
-            };
-            let dest = if state.config.mail_destination_override.is_empty() {
-                to_addr.as_str()
-            } else {
-                warn!(
-                    "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}",
-                    to_addr, state.config.mail_destination_override
-                );
-                &state.config.mail_destination_override
-            };
-            let encoded_subject = format!(
-                "=?UTF-8?B?{}?=",
-                base64::engine::general_purpose::STANDARD.encode(subject.as_bytes())
-            );
-            let to_header = if recipient_name.is_empty() {
-                dest.to_string()
-            } else {
-                format!(
-                    "=?UTF-8?B?{}?= <{}>",
-                    base64::engine::general_purpose::STANDARD.encode(recipient_name.as_bytes()),
-                    dest
-                )
-            };
-            let raw_message = format!(
-                "From: {}\r\nTo: {}\r\nSubject: {}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",
-                from, to_header, encoded_subject, html_body
-            );
-            let message_body = httpclient::InMemoryBody::Text(raw_message);
-            match client.messages_send("me", message_body, None).await {
-                Ok(_) => info!("Notification email sent via Gmail to {}", to_addr),
-                Err(e) => error!(
-                    "Failed to send notification via Gmail to {}: {}",
-                    to_addr, e
-                ),
-            }
-        } else {
-            if state.config.smtp_host.is_empty() {
-                warn!(
-                    "SMTP not configured, cannot send notification to {}",
-                    to_addr
-                );
-                continue;
-            }
-            let from = match state.config.smtp_from.parse::<lettre::message::Mailbox>() {
-                Ok(m) => m,
-                Err(e) => {
-                    error!("Invalid SMTP_FROM address: {}", e);
-                    continue;
-                }
-            };
-            let dest = if state.config.mail_destination_override.is_empty() {
-                to_addr.as_str()
-            } else {
-                warn!(
-                    "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting notification from {} to {}",
-                    to_addr, state.config.mail_destination_override
-                );
-                &state.config.mail_destination_override
-            };
-            let to = match dest.parse::<lettre::message::Mailbox>() {
-                Ok(mut mailbox) => {
-                    if !recipient_name.is_empty() {
-                        mailbox.name = Some(recipient_name);
-                    }
-                    mailbox
-                }
-                Err(e) => {
-                    error!("Invalid destination email {}: {}", dest, e);
-                    continue;
-                }
-            };
-            let email = match lettre::Message::builder()
-                .from(from)
-                .to(to)
-                .subject(subject)
-                .header(lettre::message::header::ContentType::TEXT_HTML)
-                .body(html_body)
-            {
-                Ok(m) => m,
-                Err(e) => {
-                    error!("Failed to build notification email: {}", e);
-                    continue;
-                }
-            };
-            let creds = lettre::transport::smtp::authentication::Credentials::new(
-                state.config.smtp_user.clone(),
-                state.config.smtp_password.clone(),
-            );
-            let mailer = match lettre::SmtpTransport::relay(&state.config.smtp_host) {
-                Ok(builder) => builder
-                    .port(state.config.smtp_port)
-                    .credentials(creds)
-                    .build(),
-                Err(e) => {
-                    error!("SMTP transport error: {}", e);
-                    continue;
-                }
-            };
-            match mailer.send(&email) {
-                Ok(_) => info!("Notification email sent via SMTP to {}", to_addr),
-                Err(e) => error!("Failed to send notification via SMTP to {}: {}", to_addr, e),
-            }
+        if let Err(e) =
+            personal_email::send(state, to_addr, &recipient_name, subject, html_body).await
+        {
+            error!("Notification delivery failed for {to_addr}: {e}");
         }
     }
 }

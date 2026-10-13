@@ -5,11 +5,10 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::cookie::SignedCookieJar;
-use base64::Engine;
 use serde::Deserialize;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
-use crate::{AppState, database, get_prefix, models, templates};
+use crate::{AppState, database, get_prefix, templates};
 
 #[derive(Debug, Deserialize)]
 pub struct StaffSearchQuery {
@@ -276,191 +275,28 @@ pub async fn api_send_login_email(
         .expect("UUIDs form a valid relative URL")
         .to_string();
 
-    // Determine mail method: "gmail" or "smtp" (default)
-    let mail_method = if state.config.mail_method.eq_ignore_ascii_case("gmail") {
-        "gmail"
-    } else {
-        "smtp"
-    };
-    info!(
-        "Sending login email via {} (MAIL_METHOD={:?})",
-        mail_method, state.config.mail_method
-    );
-
-    match mail_method {
-        "gmail" => send_login_email_gmail(&state, &staff, &login_url).await,
-        _ => send_login_email_smtp(&state, &staff, &login_url).await,
+    let html = maud::html! {
+        p { "Bonjour " (staff.first_name) "," }
+        p { "Cliquez sur le lien ci-dessous pour vous connecter à PowPow :" }
+        p { a href=(&login_url) { "Se connecter" } }
+        p { "Ou copiez ce lien : " (&login_url) }
+        p { "Sur la page suivante, cliquez sur « Se connecter » pour confirmer votre connexion." }
+        p { em { "Ce lien est à usage unique et valable 24 heures." } }
+        (maud::PreEscaped(crate::email_signature(&state.config.entity_name)))
     }
-}
-
-#[allow(clippy::unused_async)]
-async fn send_login_email_smtp(
-    state: &AppState,
-    staff: &models::Staff,
-    login_url: &str,
-) -> (StatusCode, Json<serde_json::Value>) {
-    use lettre::Transport;
-    if state.config.smtp_host.is_empty() {
-        warn!("SMTP not configured");
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(
-                serde_json::json!({"error": "L'envoi d'email n'est pas configuré (SMTP). Contactez l'administrateur."}),
-            ),
-        );
-    }
-
-    let html_body = format!(
-        r#"<p>Bonjour {},</p>
-<p>Cliquez sur le lien ci-dessous pour vous connecter à PowPow :</p>
-<p><a href="{}" style="display:inline-block;padding:12px 24px;background:#3273dc;color:white;text-decoration:none;border-radius:4px;">Se connecter</a></p>
-<p>Ou copiez ce lien : {}</p>
-<p>Sur la page suivante, cliquez sur « Se connecter » pour confirmer votre connexion.</p>
-<p><em>Ce lien est à usage unique.</em></p>
-{}"#,
-        staff.first_name,
-        login_url,
-        login_url,
-        crate::email_signature(&state.config.entity_name),
-    );
-
-    let from = match state.config.smtp_from.parse::<lettre::message::Mailbox>() {
-        Ok(m) => m,
-        Err(e) => {
-            error!("Invalid SMTP_FROM address: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Invalid SMTP_FROM configuration"})),
-            );
-        }
-    };
-
-    let to_address = if state.config.mail_destination_override.is_empty() {
-        &staff.email
-    } else {
-        warn!(
-            "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting email from {} to {}",
-            staff.email, state.config.mail_destination_override
-        );
-        &state.config.mail_destination_override
-    };
-
-    let to = match to_address.parse::<lettre::message::Mailbox>() {
-        Ok(m) => m,
-        Err(e) => {
-            error!("Invalid destination email address: {}", e);
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "Invalid email address"})),
-            );
-        }
-    };
-
-    let email = match lettre::Message::builder()
-        .from(from)
-        .to(to)
-        .subject(format!("{} — Connexion PowPow", state.config.entity_name))
-        .header(lettre::message::header::ContentType::TEXT_HTML)
-        .body(html_body)
+    .into_string();
+    match crate::personal_email::send(
+        &state,
+        &staff.email,
+        &format!("{} {}", staff.first_name, staff.last_name),
+        &format!("{} — Connexion PowPow", state.config.entity_name),
+        html,
+    )
+    .await
     {
-        Ok(m) => m,
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"success": true}))),
         Err(e) => {
-            error!("Error building email: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Failed to build email"})),
-            );
-        }
-    };
-
-    let creds = lettre::transport::smtp::authentication::Credentials::new(
-        state.config.smtp_user.clone(),
-        state.config.smtp_password.clone(),
-    );
-
-    let mailer = match lettre::SmtpTransport::relay(&state.config.smtp_host) {
-        Ok(builder) => builder
-            .port(state.config.smtp_port)
-            .credentials(creds)
-            .build(),
-        Err(e) => {
-            error!("Error creating SMTP transport: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "SMTP configuration error"})),
-            );
-        }
-    };
-
-    match mailer.send(&email) {
-        Ok(_) => {
-            info!("Login email sent via SMTP to {}", staff.email);
-            (StatusCode::OK, Json(serde_json::json!({"success": true})))
-        }
-        Err(e) => {
-            error!("Error sending email via SMTP: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Échec de l'envoi de l'email"})),
-            )
-        }
-    }
-}
-
-async fn send_login_email_gmail(
-    state: &AppState,
-    staff: &models::Staff,
-    login_url: &str,
-) -> (StatusCode, Json<serde_json::Value>) {
-    let Some(client) = &state.gmail_client else {
-        warn!("Gmail not configured");
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(
-                serde_json::json!({"error": "L'envoi d'email n'est pas configuré (Gmail). Contactez l'administrateur."}),
-            ),
-        );
-    };
-    let client = client.clone();
-
-    let from = if state.config.gmail_from.is_empty() {
-        "me".to_string()
-    } else {
-        state.config.gmail_from.clone()
-    };
-
-    let to_address = if state.config.mail_destination_override.is_empty() {
-        &staff.email
-    } else {
-        warn!(
-            "MAIL_DESTINATION_ADDRESS_OVERRIDE active: redirecting email from {} to {}",
-            staff.email, state.config.mail_destination_override
-        );
-        &state.config.mail_destination_override
-    };
-
-    // Build RFC 2822 message with HTML content
-    let sig = crate::email_signature(&state.config.entity_name);
-    let subject_text = format!("{} \u{2014} Connexion PowPow", state.config.entity_name);
-    let encoded_subject = format!(
-        "=?UTF-8?B?{}?=",
-        base64::engine::general_purpose::STANDARD.encode(subject_text.as_bytes())
-    );
-    let raw_message = format!(
-        "From: {from}\r\nTo: {to_address}\r\nSubject: {encoded_subject}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>Bonjour {first_name},</p>\n<p>Cliquez sur le lien ci-dessous pour vous connecter à PowPow :</p>\n<p><a href=\"{url}\" style=\"display:inline-block;padding:12px 24px;background:#3273dc;color:white;text-decoration:none;border-radius:4px;\">Se connecter</a></p>\n<p>Ou copiez ce lien : {url}</p>\n<p>Sur la page suivante, cliquez sur « Se connecter » pour confirmer votre connexion.</p>\n<p><em>Ce lien est à usage unique.</em></p>\n{sig}",
-        first_name = staff.first_name,
-        url = login_url,
-    );
-
-    let message_body = httpclient::InMemoryBody::Text(raw_message);
-
-    match client.messages_send("me", message_body, None).await {
-        Ok(_) => {
-            info!("Login email sent via Gmail to {}", staff.email);
-            (StatusCode::OK, Json(serde_json::json!({"success": true})))
-        }
-        Err(e) => {
-            error!("Error sending email via Gmail: {}", e);
+            error!("Login delivery failed: {e}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": "Échec de l'envoi de l'email"})),

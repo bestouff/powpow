@@ -1,4 +1,5 @@
-//! Person-specific delivery for account changes; never group household recipients.
+//! Typed delivery shared by account, contact, and notification emails.
+//! Callers decide whether recipients are person-specific or household-grouped.
 
 use anyhow::{Result, anyhow, ensure};
 use lettre::{
@@ -7,6 +8,8 @@ use lettre::{
 };
 
 use crate::AppState;
+
+static DELIVERY_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(8);
 
 pub async fn send(
     state: &AppState,
@@ -26,6 +29,7 @@ pub async fn send_with_reply(
     html: String,
     reply_to: Option<Mailbox>,
 ) -> Result<()> {
+    let permit = DELIVERY_SLOTS.acquire().await?;
     let gmail = state.config.mail_method.eq_ignore_ascii_case("gmail");
     let from = if gmail {
         &state.config.gmail_from
@@ -51,14 +55,16 @@ pub async fn send_with_reply(
             .gmail_client
             .as_ref()
             .ok_or_else(|| anyhow!("Gmail is not configured"))?;
-        client
-            .messages_send(
+        tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            client.messages_send(
                 "me",
                 httpclient::InMemoryBody::Text(String::from_utf8(email.formatted())?),
                 None,
-            )
-            .await
-            .map_err(|e| anyhow!("Gmail delivery failed: {e}"))?;
+            ),
+        )
+        .await?
+        .map_err(|e| anyhow!("Gmail delivery failed: {e}"))?;
     } else {
         ensure!(!state.config.smtp_host.is_empty(), "SMTP is not configured");
         let credentials = lettre::transport::smtp::authentication::Credentials::new(
@@ -70,7 +76,11 @@ pub async fn send_with_reply(
             .credentials(credentials)
             .timeout(Some(std::time::Duration::from_secs(30)))
             .build();
-        tokio::task::spawn_blocking(move || mailer.send(&email)).await??;
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            mailer.send(&email)
+        })
+        .await??;
     }
     Ok(())
 }
