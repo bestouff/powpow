@@ -127,7 +127,11 @@ impl MailchimpClient {
         from_email: String,
     ) -> Self {
         Self {
-            client: Client::new(),
+            client: Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("Mailchimp HTTP client configuration is valid"),
             api_key,
             server_prefix,
             list_id,
