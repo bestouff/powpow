@@ -205,6 +205,15 @@ pub async fn contact_submit(
     State(state): State<AppState>,
     Json(form): Json<ContactForm>,
 ) -> impl IntoResponse {
+    if !state
+        .mail_limits
+        .allow("contact:global", 10, std::time::Duration::from_secs(60))
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({"error": "Trop de messages. Réessayez dans une minute."})),
+        );
+    }
     if state.config.entity_email.is_empty() {
         warn!("Contact form submitted but ENTITY_EMAIL is not configured");
         return (

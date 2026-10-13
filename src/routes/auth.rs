@@ -230,6 +230,17 @@ pub async fn api_send_login_email(
     State(state): State<AppState>,
     Json(payload): Json<SendLoginRequest>,
 ) -> impl IntoResponse {
+    if !state
+        .mail_limits
+        .allow("login:global", 60, std::time::Duration::from_secs(60))
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(
+                serde_json::json!({"error": "Trop de demandes de connexion. Réessayez dans une minute."}),
+            ),
+        );
+    }
     // Get staff to find their email
     let staff = match database::get_staff_by_id(&state.db, payload.staff_id).await {
         Ok(Some(s)) => s,
@@ -256,6 +267,18 @@ pub async fn api_send_login_email(
     }
 
     // Generate token
+    if !state.mail_limits.allow(
+        &format!("login:{}", staff.email.trim().to_lowercase()),
+        3,
+        std::time::Duration::from_secs(600),
+    ) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(
+                serde_json::json!({"error": "Un lien a déjà été envoyé récemment. Réessayez dans dix minutes."}),
+            ),
+        );
+    }
     let token = match database::create_login_token(&state.db, staff.id, &staff.email).await {
         Ok(t) => t,
         Err(e) => {

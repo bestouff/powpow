@@ -33,6 +33,7 @@ mod models;
 mod news;
 mod personal_email;
 mod qualifications;
+mod rate_limit;
 mod routes;
 mod templates;
 
@@ -100,6 +101,7 @@ async fn security_headers(
 
 #[derive(Clone)]
 pub struct AppState {
+    pub mail_limits: std::sync::Arc<rate_limit::MailLimits>,
     pub db: PgPool,
     pub helloasso_client: HelloAssoClient,
     pub mailchimp_client: MailchimpClient,
@@ -365,6 +367,7 @@ async fn main() -> anyhow::Result<()> {
     let listen_address = app_config.listen_address.clone();
 
     let app_state = AppState {
+        mail_limits: std::sync::Arc::default(),
         db,
         helloasso_client,
         mailchimp_client,
