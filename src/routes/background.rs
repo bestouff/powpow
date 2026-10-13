@@ -271,7 +271,9 @@ pub async fn weekly_morning_email_loop(state: AppState) {
             for (first_name, last_name, source) in &unimported {
                 body.push_str(&format!(
                     "<li>{} {} <em>({})</em></li>\n",
-                    first_name, last_name, source,
+                    templates::escape_html_public(first_name),
+                    templates::escape_html_public(last_name),
+                    templates::escape_html_public(source),
                 ));
             }
             body.push_str("</ul>\n");

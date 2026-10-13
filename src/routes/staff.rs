@@ -238,7 +238,7 @@ pub async fn view_person(
                     color: "warning",
                     html: format!(
                         r#"<a href="{}/validation"><strong>{}</strong> demande(s) en attente de validation pour <strong>{}</strong></a>"#,
-                        prefix, count, atelier_name,
+                        prefix, count, templates::escape_html_public(&atelier_name),
                     ),
                 });
             }
@@ -514,8 +514,8 @@ pub async fn toggle_role(
 <p><strong>{staff}</strong> souhaite rejoindre l'atelier <strong>{atelier}</strong> et attend votre validation.</p>
 <p>Connectez-vous à PowPow pour valider ou refuser cette demande.</p>
 {sig}",
-                                    staff = staff_name,
-                                    atelier = atelier_name,
+                                    staff = templates::escape_html_public(&staff_name),
+                                    atelier = templates::escape_html_public(&atelier_name),
                                     sig = crate::email_signature(&state_clone.config.entity_name),
                                 );
                                 send_notification_email(

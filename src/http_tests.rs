@@ -5,6 +5,33 @@ use axum::{
 };
 use tower::ServiceExt;
 
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn atelier_names_are_escaped_in_reminders_and_calendar_data(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let state = state(pool);
+    let (chief, cookie) = member(&state, "chief@example.org").await?;
+    let (pending, _) = member(&state, "pending@example.org").await?;
+    let attack = "</script><script>window.reviewXss=1</script>";
+    let atelier: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation) VALUES ($1, 'test-escaping', true) RETURNING id")
+        .bind(attack).fetch_one(&state.db).await?;
+    database::add_role(&state.db, chief.id, atelier, true).await?;
+    database::update_role(&state.db, chief.id, atelier, None, Some(true)).await?;
+    database::add_role(&state.db, pending.id, atelier, false).await?;
+    sqlx::query("INSERT INTO needs (day, atelier, quantity, nightly) VALUES (current_date + 1, $1, 1, false)")
+        .bind(atelier).execute(&state.db).await?;
+    let app = build_router(state);
+    for path in [format!("/person/{}", chief.id), "/calendar".into()] {
+        let response = request(&app, "GET", &path, Some(&cookie), serde_json::Value::Null).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = String::from_utf8(to_bytes(response.into_body(), 1_000_000).await?.to_vec())?;
+        assert!(body.contains("reviewXss"));
+        assert!(!body.contains(attack));
+    }
+    Ok(())
+}
+
 fn state(db: PgPool) -> AppState {
     let config = AppConfig {
         public_base_url: "https://station.example/powpow/".parse().unwrap(),
