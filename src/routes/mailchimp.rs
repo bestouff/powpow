@@ -48,20 +48,6 @@ impl Drop for SyncGuard<'_> {
     }
 }
 
-#[cfg(test)]
-mod guard_tests {
-    use super::*;
-
-    #[test]
-    fn cancellation_releases_sync_guard() {
-        let flag = AtomicBool::new(false);
-        let guard = SyncGuard::acquire(&flag).unwrap();
-        assert!(SyncGuard::acquire(&flag).is_none());
-        drop(guard);
-        assert!(SyncGuard::acquire(&flag).is_some());
-    }
-}
-
 async fn sync_newsletter_inner(state: &AppState) -> Result<(usize, usize, usize, usize, usize)> {
     if !state.mailchimp_client.is_configured() {
         anyhow::bail!(
@@ -312,4 +298,18 @@ pub async fn mailchimp_progress(
             "error": progress.error,
         })),
     )
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::*;
+
+    #[test]
+    fn cancellation_releases_sync_guard() {
+        let flag = AtomicBool::new(false);
+        let guard = SyncGuard::acquire(&flag).unwrap();
+        assert!(SyncGuard::acquire(&flag).is_none());
+        drop(guard);
+        assert!(SyncGuard::acquire(&flag).is_some());
+    }
 }

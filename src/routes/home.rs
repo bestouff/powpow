@@ -286,20 +286,6 @@ fn contact_body(name: &str, email: &str, subject: &str, message: &str, signature
     .into_string()
 }
 
-#[cfg(test)]
-mod contact_tests {
-    #[test]
-    fn contact_inputs_cannot_inject_headers_or_html() {
-        assert!(!crate::auto_import::valid_email(
-            "a@b.org\r\nBcc: other@example.org"
-        ));
-        let attack = "<img src=x onerror=alert(1)>";
-        let body = super::contact_body(attack, "a@b.org", attack, attack, "");
-        assert!(!body.contains("<img"));
-        assert!(body.contains("&lt;img"));
-    }
-}
-
 /// Use the visitor's typed mailbox only as Reply-To.
 async fn send_contact_email(
     state: &AppState,
@@ -320,4 +306,18 @@ async fn send_contact_email(
         Some(reply_to),
     )
     .await
+}
+
+#[cfg(test)]
+mod contact_tests {
+    #[test]
+    fn contact_inputs_cannot_inject_headers_or_html() {
+        assert!(!crate::auto_import::valid_email(
+            "a@b.org\r\nBcc: other@example.org"
+        ));
+        let attack = "<img src=x onerror=alert(1)>";
+        let body = super::contact_body(attack, "a@b.org", attack, attack, "");
+        assert!(!body.contains("<img"));
+        assert!(body.contains("&lt;img"));
+    }
 }

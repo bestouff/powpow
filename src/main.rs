@@ -116,9 +116,7 @@ pub struct AppState {
     pub mailchimp_sync_progress: mailchimp::SyncProgressHandle,
     /// Pending (debounced) sync: its task handle and the trigger used to cancel
     /// the delay when another sync is armed or run.
-    pub mailchimp_sync_pending: std::sync::Arc<
-        tokio::sync::Mutex<Option<(tokio::task::JoinHandle<()>, tokio::sync::watch::Sender<()>)>>,
-    >,
+    pub mailchimp_sync_pending: mailchimp::PendingSync,
 }
 
 impl axum::extract::FromRef<AppState> for Key {
