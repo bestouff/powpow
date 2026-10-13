@@ -1441,7 +1441,7 @@ pub async fn get_staff_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Res
 }
 
 /// Get upcoming needs with their deficit (quantity - filled) for the next N days.
-/// Returns (day, `atelier_name`, quantity, `filled_count`) rows, ordered by day then atelier name.
+/// Returns (day, `atelier_name`, quantity, minimum half-day coverage) rows.
 pub async fn get_upcoming_needs_deficit(
     pool: &PgPool,
     from: chrono::NaiveDate,
@@ -1450,12 +1450,13 @@ pub async fn get_upcoming_needs_deficit(
     let rows = sqlx::query(
         r"
         SELECT n.day, a.name AS atelier_name, n.quantity,
-               COUNT(DISTINCT p.staff) AS filled
+               LEAST(COUNT(DISTINCT p.staff) FILTER (WHERE p.first_half),
+                     COUNT(DISTINCT p.staff) FILTER (WHERE p.second_half)) AS filled
         FROM needs n
         JOIN ateliers a ON a.id = n.atelier
         LEFT JOIN presence p ON p.needs = n.id AND (p.first_half OR p.second_half)
         WHERE n.day >= $1 AND n.day <= $2
-        GROUP BY n.day, a.name, n.quantity
+        GROUP BY n.id, a.name
         ORDER BY n.day, a.name
         ",
     )

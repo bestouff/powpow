@@ -83,6 +83,24 @@ async fn leaving_or_revoking_an_atelier_clears_future_presence(pool: PgPool) -> 
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn shortage_counts_the_least_filled_half(pool: PgPool) -> Result<()> {
+    let need = need(&pool, "Coverage").await?;
+    for _ in 0..2 {
+        let person = staff(&pool).await?;
+        upsert_presence(&pool, need.id, person.id, true, false).await?;
+    }
+    let coverage = get_upcoming_needs_deficit(&pool, need.day, need.day).await?;
+    assert_eq!(coverage[0].3, 0);
+    sqlx::query("UPDATE presence SET second_half = true")
+        .execute(&pool)
+        .await?;
+    let coverage = get_upcoming_needs_deficit(&pool, need.day, need.day).await?;
+    assert_eq!(coverage[0].3, 2);
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn email_updates_revoke_old_links(pool: PgPool) -> Result<()> {
     let person = staff(&pool).await?;
     let token = create_login_token(&pool, person.id, &person.email).await?;
