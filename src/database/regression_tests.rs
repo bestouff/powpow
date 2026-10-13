@@ -63,6 +63,26 @@ async fn concurrent_planning_checks_are_atomic(pool: PgPool) -> Result<()> {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn leaving_or_revoking_an_atelier_clears_future_presence(pool: PgPool) -> Result<()> {
+    let person = staff(&pool).await?;
+    let future = need(&pool, "Leaving").await?;
+    add_role(&pool, person.id, future.atelier, true).await?;
+    planning::toggle(&pool, person.id, future.id, "first", true).await?;
+    let past: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, atelier, quantity, nightly) VALUES (current_date - 7, $1, 2, false) RETURNING id")
+        .bind(future.atelier).fetch_one(&pool).await?;
+    upsert_presence(&pool, past, person.id, true, false).await?;
+    remove_role(&pool, person.id, future.atelier).await?;
+    assert!(get_presence(&pool, future.id, person.id).await?.is_none());
+    assert!(get_presence(&pool, past, person.id).await?.is_some());
+    add_role(&pool, person.id, future.atelier, true).await?;
+    planning::toggle(&pool, person.id, future.id, "first", true).await?;
+    update_role(&pool, person.id, future.atelier, Some(false), None).await?;
+    assert!(get_presence(&pool, future.id, person.id).await?.is_none());
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn email_updates_revoke_old_links(pool: PgPool) -> Result<()> {
     let person = staff(&pool).await?;
     let token = create_login_token(&pool, person.id, &person.email).await?;
