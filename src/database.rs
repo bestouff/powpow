@@ -2101,6 +2101,11 @@ pub async fn create_session(
     user_agent: Option<&str>,
     ip: Option<&str>,
 ) -> Result<uuid::Uuid> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT id FROM staff WHERE id = $1 FOR UPDATE")
+        .bind(staff_id)
+        .fetch_one(&mut *tx)
+        .await?;
     // Evict the oldest sessions so that the cap is at most `MAX_SESSIONS_PER_STAFF`
     // after the new one is inserted (keep the newest MAX_SESSIONS_PER_STAFF - 1).
     sqlx::query(
@@ -2109,14 +2114,14 @@ pub async fn create_session(
         WHERE staff = $1
           AND id IN (
             SELECT id FROM sessions WHERE staff = $1
-            ORDER BY last_seen ASC
+            ORDER BY last_seen DESC, created_at DESC, id
             OFFSET $2
           )
         ",
     )
     .bind(staff_id)
     .bind(MAX_SESSIONS_PER_STAFF - 1)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
     let session_id = uuid::Uuid::new_v4();
@@ -2132,9 +2137,9 @@ pub async fn create_session(
     .bind(expires_at)
     .bind(user_agent)
     .bind(ip)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
-
+    tx.commit().await?;
     Ok(session_id)
 }
 
