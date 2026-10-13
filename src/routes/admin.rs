@@ -581,6 +581,15 @@ pub async fn api_create_qualification(
     Json(payload): Json<CreateQualificationRequest>,
 ) -> impl IntoResponse {
     let name = payload.name.trim();
+    if payload
+        .duration
+        .is_some_and(|years| !(1..=100).contains(&years))
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "La durée doit être comprise entre 1 et 100 ans."})),
+        );
+    }
     if name.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
@@ -647,11 +656,28 @@ pub struct AddStaffQualifRequest {
     pub obtained_date: chrono::NaiveDate,
 }
 
+impl AddStaffQualifRequest {
+    pub fn validate(&self) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+        if crate::qualifications::valid_obtained_date(self.obtained_date) {
+            return Ok(());
+        }
+        Err((
+            StatusCode::BAD_REQUEST,
+            Json(
+                serde_json::json!({"error": "La date d'obtention doit être comprise entre 1900 et aujourd'hui."}),
+            ),
+        ))
+    }
+}
+
 pub async fn api_add_staff_qualif(
     RequireChief(admin): RequireChief,
     State(state): State<AppState>,
     Json(payload): Json<AddStaffQualifRequest>,
 ) -> impl IntoResponse {
+    if let Err(response) = payload.validate() {
+        return response;
+    }
     if let Err(response) =
         crate::auth::authorize_staff_management(&state, &admin, payload.staff_id, None).await
     {

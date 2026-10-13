@@ -739,11 +739,7 @@ pub fn qualifications_page(
                                     }
                                     tbody {
                                         @for (sq, staff_name, qual_name, duration) in staff_qualifs {
-                                            @let expired = duration.is_some_and(|d| {
-                                                let months = u32::from(d.unsigned_abs()) * 12;
-                                                let expiry = sq.obtained_date + chrono::Months::new(months);
-                                                expiry < today
-                                            });
+                                            @let expired = crate::qualifications::expired(sq.obtained_date, *duration);
                                             @let status_tag = if expired {
                                                 ("is-danger", "Expirée")
                                             } else if duration.is_some() {
@@ -759,8 +755,7 @@ pub fn qualifications_page(
                                                 td { (sq.obtained_date.format("%d/%m/%Y")) }
                                                 td {
                                                     span class={"tag " (status_tag.0)} { (status_tag.1) }
-                                                    @if let Some(d) = duration {
-                                                        @let expiry_date = sq.obtained_date + chrono::Months::new(u32::from(d.unsigned_abs()) * 12);
+                                                    @if let Some(expiry_date) = duration.and_then(|d| crate::qualifications::expiry(sq.obtained_date, d)) {
                                                         small .ml-1.has-text-grey { " → " (expiry_date.format("%d/%m/%Y")) }
                                                     }
                                                 }

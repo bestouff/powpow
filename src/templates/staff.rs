@@ -6,13 +6,7 @@ use maud::{Markup, PreEscaped, html};
 /// Check if a qualification is expired given its duration (years) and obtained date.
 /// Returns `true` if expired, `false` if still valid or lifelong.
 fn is_qualification_expired(qual: &Qualification, obtained_date: chrono::NaiveDate) -> bool {
-    if let Some(duration) = qual.duration {
-        let months = u32::from(duration.unsigned_abs()) * 12;
-        let expiry = obtained_date + chrono::Months::new(months);
-        expiry < chrono::Utc::now().date_naive()
-    } else {
-        false
-    }
+    crate::qualifications::expired(obtained_date, qual.duration)
 }
 
 /// Give a short human-readable description of a device from its User-Agent
@@ -728,11 +722,7 @@ pub fn person_detail(
                                             }
                                             tbody {
                                                 @for (sq, name, duration) in person_qualifications {
-                                                    @let expired = duration.is_some_and(|d| {
-                                                        let months = u32::from(d.unsigned_abs()) * 12;
-                                                        let expiry = sq.obtained_date + chrono::Months::new(months);
-                                                        expiry < chrono::Utc::now().date_naive()
-                                                    });
+                                                    @let expired = crate::qualifications::expired(sq.obtained_date, *duration);
                                                     @let (tag_class, tag_text) = if expired {
                                                         ("is-danger", "Expirée")
                                                     } else if duration.is_some() {
@@ -745,8 +735,7 @@ pub fn person_detail(
                                                         td { (sq.obtained_date.format("%d/%m/%Y")) }
                                                         td {
                                                             span class={"tag " (tag_class)} { (tag_text) }
-                                                            @if let Some(d) = duration {
-                                                                @let expiry_date = sq.obtained_date + chrono::Months::new(u32::from(d.unsigned_abs()) * 12);
+                                                            @if let Some(expiry_date) = duration.and_then(|d| crate::qualifications::expiry(sq.obtained_date, d)) {
                                                                 small .ml-1.has-text-grey { " → " (expiry_date.format("%d/%m/%Y")) }
                                                             }
                                                         }

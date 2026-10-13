@@ -33,6 +33,7 @@ mod manual_import;
 mod models;
 mod news;
 mod personal_email;
+mod qualifications;
 mod routes;
 mod templates;
 

@@ -1055,6 +1055,9 @@ pub async fn api_add_own_staff_qualif(
     State(state): State<AppState>,
     Json(payload): Json<crate::routes::admin::AddStaffQualifRequest>,
 ) -> impl IntoResponse {
+    if let Err(response) = payload.validate() {
+        return response;
+    }
     let allowed = match crate::auth::can_manage_profile(&state, &me, payload.staff_id).await {
         Ok(allowed) => allowed,
         Err(response) => return response,
