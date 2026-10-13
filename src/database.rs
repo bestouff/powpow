@@ -640,6 +640,15 @@ pub async fn get_staff_roles(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<
     Ok(roles)
 }
 
+pub async fn can_register_for_need(
+    pool: &PgPool,
+    staff: uuid::Uuid,
+    need: uuid::Uuid,
+) -> Result<bool> {
+    Ok(sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM roles r JOIN needs n ON n.atelier = r.atelier WHERE r.staff = $1 AND n.id = $2 AND r.validated)")
+        .bind(staff).bind(need).fetch_one(pool).await?)
+}
+
 pub async fn has_current_membership(pool: &PgPool, staff_id: uuid::Uuid) -> Result<bool> {
     Ok(sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM payments WHERE staff = $1 AND season >= $2)",

@@ -5,6 +5,30 @@ async fn staff(pool: &PgPool) -> Result<Staff> {
         .fetch_one(pool).await?)
 }
 
+async fn need(pool: &PgPool, name: &str) -> Result<Need> {
+    let atelier: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO ateliers (name, slug, needs_validation) VALUES ($1, $1, true) RETURNING id",
+    )
+    .bind(name)
+    .fetch_one(pool)
+    .await?;
+    Ok(sqlx::query_as("INSERT INTO needs (day, atelier, quantity, nightly) VALUES (current_date + 7, $1, 2, false) RETURNING *")
+        .bind(atelier).fetch_one(pool).await?)
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn planning_requires_validated_enrollment(pool: PgPool) -> Result<()> {
+    let person = staff(&pool).await?;
+    let need = need(&pool, "Validation").await?;
+    assert!(!can_register_for_need(&pool, person.id, need.id).await?);
+    add_role(&pool, person.id, need.atelier, false).await?;
+    assert!(!can_register_for_need(&pool, person.id, need.id).await?);
+    update_role(&pool, person.id, need.atelier, Some(true), None).await?;
+    assert!(can_register_for_need(&pool, person.id, need.id).await?);
+    Ok(())
+}
+
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn email_updates_revoke_old_links(pool: PgPool) -> Result<()> {

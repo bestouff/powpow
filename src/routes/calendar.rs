@@ -191,6 +191,28 @@ pub async fn toggle_presence_api(
     }
 
     // Fetch current presence
+    if payload.value {
+        match database::can_register_for_need(&state.db, payload.staff_id, payload.needs_id).await {
+            Ok(true) => {}
+            Ok(false) => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(
+                        serde_json::json!({"error": "Une inscription validée à cet atelier est nécessaire."}),
+                    ),
+                );
+            }
+            Err(e) => {
+                error!("Cannot check atelier enrollment: {e}");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(
+                        serde_json::json!({"error": "Impossible de vérifier l'inscription à l'atelier."}),
+                    ),
+                );
+            }
+        }
+    }
     let (mut first_half, mut second_half) =
         match database::get_presence(&state.db, payload.needs_id, payload.staff_id).await {
             Ok(Some((f, s))) => (f, s),
