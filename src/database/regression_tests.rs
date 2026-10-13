@@ -101,6 +101,25 @@ async fn shortage_counts_the_least_filled_half(pool: PgPool) -> Result<()> {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn unimport_uses_june_to_may_seasons(pool: PgPool) -> Result<()> {
+    let person = staff(&pool).await?;
+    let need = need(&pool, "Season").await?;
+    for date in ["2025-05-31", "2025-06-01", "2026-05-31", "2026-06-01"] {
+        let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, atelier, quantity, nightly) VALUES ($1::text::date, $2, 1, false) RETURNING id")
+            .bind(date).bind(need.atelier).fetch_one(&pool).await?;
+        upsert_presence(&pool, id, person.id, true, false).await?;
+    }
+    assert_eq!(
+        get_unimport_consequences(&pool, person.id, uuid::Uuid::new_v4(), 2026)
+            .await?
+            .presences,
+        2
+    );
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn email_updates_revoke_old_links(pool: PgPool) -> Result<()> {
     let person = staff(&pool).await?;
     let token = create_login_token(&pool, person.id, &person.email).await?;

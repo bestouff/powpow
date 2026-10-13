@@ -1189,10 +1189,10 @@ pub async fn get_unimport_consequences(
     payment_id: uuid::Uuid,
     season: i16,
 ) -> Result<UnimportConsequences> {
-    // Season runs from September of `season` to August of `season+1`
-    let season_start = chrono::NaiveDate::from_ymd_opt(i32::from(season), 9, 1).unwrap_or_default();
-    let season_end =
-        chrono::NaiveDate::from_ymd_opt(i32::from(season) + 1, 8, 31).unwrap_or_default();
+    // Season N runs from June of N-1 through May of N.
+    let season_start =
+        chrono::NaiveDate::from_ymd_opt(i32::from(season) - 1, 6, 1).unwrap_or_default();
+    let season_end = chrono::NaiveDate::from_ymd_opt(i32::from(season), 5, 31).unwrap_or_default();
 
     let presence_count: i64 = sqlx::query_scalar(
         r"SELECT COUNT(*) FROM presence pr
