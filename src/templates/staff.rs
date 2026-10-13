@@ -357,7 +357,7 @@ pub fn person_detail(
 ) -> Markup {
     let p = prefix;
     let can_edit_ateliers = can_manage_profile || is_admin;
-    let can_edit_contact = can_manage_profile || is_admin;
+    let can_edit_contact = is_self || is_god || (!staff.is_god && (can_manage_profile || is_admin));
     let manages_person = roles
         .iter()
         .any(|role| chief_atelier_ids.contains(&role.atelier));
@@ -751,7 +751,7 @@ pub fn person_detail(
                                                             }
                                                         }
                                                         td .pq-proof-cell data-id=(sq.id) {
-                                                            @if sq.has_training_proof {
+                                                            @if sq.has_training_proof && can_manage_qualifs {
                                                                 a .button.is-small.is-info.is-outlined
                                                                     href={(p) "/staff-qualif/" (sq.id) "/proof"}
                                                                     target="_blank" {

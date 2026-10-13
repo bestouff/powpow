@@ -302,12 +302,16 @@ pub async fn view_person(
         Vec::new()
     };
 
-    let payment_history = match database::get_staff_payment_history(&state.db, id).await {
-        Ok(h) => h,
-        Err(e) => {
-            error!("Error fetching payment history: {}", e);
-            Vec::new()
+    let payment_history = if can_manage_profile || is_viewer_admin {
+        match database::get_staff_payment_history(&state.db, id).await {
+            Ok(h) => h,
+            Err(e) => {
+                error!("Error fetching payment history: {}", e);
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
         }
+    } else {
+        Vec::new()
     };
 
     let person_qualifications =
@@ -1280,10 +1284,21 @@ pub async fn upload_training_proof(
 
 /// Serve the training proof image for a staff qualification.
 pub async fn serve_training_proof(
-    RequireStaff(_me): RequireStaff,
+    RequireStaff(me): RequireStaff,
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<i32>,
 ) -> Response {
+    let owner = match database::get_staff_qualif_owner(&state.db, id).await {
+        Ok(Some(owner)) => owner,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            error!("Cannot check proof ownership: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if let Err(response) = crate::auth::authorize_staff_management(&state, &me, owner, None).await {
+        return response.into_response();
+    }
     match database::get_training_proof(&state.db, id).await {
         Ok(Some((data, mime))) => {
             let content_type = header::HeaderValue::from_str(&mime)
@@ -1294,7 +1309,7 @@ pub async fn serve_training_proof(
                 .insert(header::CONTENT_TYPE, content_type);
             response.headers_mut().insert(
                 header::CACHE_CONTROL,
-                header::HeaderValue::from_static("private, max-age=3600"),
+                header::HeaderValue::from_static("private, no-store"),
             );
             response.headers_mut().insert(
                 header::HeaderName::from_static("x-content-type-options"),
