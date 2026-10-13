@@ -81,7 +81,10 @@ Every significant action (membership imports, role changes, qualification update
 
 ### Backup and restore
 
-Full database backup (JSON export of all 17+ tables) and restore, accessible via the admin panel or via automation token for headless/cron usage.
+SQL backups and restores are accessible via the admin panel or an automation token.
+Exports use one consistent PostgreSQL snapshot and include import-review decisions,
+news, pending newsletter cleanup, and sequence counters. Login sessions and pending
+account tokens are excluded; restoring a backup clears them.
 
 ## Tech stack
 
@@ -202,16 +205,29 @@ cargo build --release
 cargo run
 ```
 
-The application runs database migrations on startup via SQLx. There are currently 30 migration files covering all schema changes.
+The application runs database migrations on startup via SQLx.
 
 ## Code quality
 
 The project enforces strict linting:
 
 ```sh
-cargo clippy -- -Dclippy::pedantic   # must produce zero warnings
-cargo fmt                              # always run after changes
+cargo clippy --locked --all-targets -- -Dwarnings -Dclippy::pedantic
+cargo fmt
+cargo test --locked
 ```
+
+PostgreSQL and HTTP regression tests are ignored by default. Run them against a
+disposable local PostgreSQL database with a role allowed to create test databases:
+
+```sh
+DATABASE_URL=postgres://user:password@127.0.0.1/powpow_test \
+  cargo test --locked -- --include-ignored
+```
+
+These tests cover account authorization, private profile data, malformed dates,
+mail errors and limits, concurrent planning, role removal, and backup round trips.
+`Cargo.lock` is tracked so Debian builds use the tested dependency versions.
 
 ## Project structure
 
@@ -220,16 +236,22 @@ src/
   main.rs          # App setup, routes, state, background tasks
   auth.rs          # Passwordless auth extractors (RequireStaff/Chief/Admin/God)
   config.rs        # Environment/config parsing
-  database.rs      # All SQL queries (~3000 lines)
+  database.rs      # SQL queries and backup/restore
+  database/        # Transactional imports, account changes, planning, and DB tests
   dicton.rs        # Daily AI-generated "dicton du jour" (weather + HF API)
   helloasso.rs     # HelloAsso API client
   mailchimp.rs     # Mailchimp API client
   models.rs        # Data models (Staff, Atelier, Equipment, NewsRow, etc.)
   news.rs          # RSS feed sync, image download, XML entity decoding
+  personal_email.rs # Shared typed mail delivery
+  public_http.rs   # Public-only, size-limited RSS downloads
+  qualifications.rs # Qualification date validation and checked expiry
+  rate_limit.rs    # Bounded mail request limits
+  http_tests.rs    # Regression tests against the assembled router
   routes/          # Axum route handlers
   templates/       # Maud HTML templates
 static/
   powpow.css       # Styles (embedded at compile time)
   powpow.js        # Client-side JS (embedded at compile time)
-migrations/        # SQLx PostgreSQL migrations (001-031)
+migrations/        # SQLx PostgreSQL migrations
 ```
