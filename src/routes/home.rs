@@ -15,7 +15,7 @@ use crate::{
 /// Resolve the caller from the session cookie, if any.
 async fn resolve_caller(jar: &SignedCookieJar, state: &AppState) -> Option<crate::models::Staff> {
     let session_id = jar
-        .get("aghil_session")?
+        .get(crate::auth::SESSION_COOKIE)?
         .value()
         .parse::<uuid::Uuid>()
         .ok()?;

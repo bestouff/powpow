@@ -303,16 +303,16 @@ pub async fn content_save(
             .await;
 
             // Refresh the navbar logo cache if the navbar block was updated
-            if slug == "navbar" {
-                let block = database::get_content(&state.db, "navbar")
+            if slug == templates::NAVBAR_SLUG {
+                let block = database::get_content(&state.db, templates::NAVBAR_SLUG)
                     .await
                     .ok()
                     .flatten();
                 templates::set_navbar_block(block);
             }
             // Refresh the favicon cache if the favicon block was updated
-            if slug == "favicon" {
-                let block = database::get_content(&state.db, "favicon")
+            if slug == templates::FAVICON_SLUG {
+                let block = database::get_content(&state.db, templates::FAVICON_SLUG)
                     .await
                     .ok()
                     .flatten();
@@ -320,11 +320,8 @@ pub async fn content_save(
             }
             // Refresh the footer blocks cache if a footer slug was updated
             if templates::is_footer_slug(&slug)
-                && let Ok(footer_map) = database::get_contents_by_slugs(
-                    &state.db,
-                    &["footer-contact", "footer-calendar", "footer-summer"],
-                )
-                .await
+                && let Ok(footer_map) =
+                    database::get_contents_by_slugs(&state.db, templates::FOOTER_SLUGS).await
             {
                 templates::set_footer_blocks(ContentMap::new(footer_map));
             }

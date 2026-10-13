@@ -73,7 +73,7 @@ async fn member(state: &AppState, email: &str) -> anyhow::Result<(models::Staff,
         .await?;
     let session = database::create_session(&state.db, person.id, None, None).await?;
     let jar = SignedCookieJar::new(state.cookie_key.clone()).add(
-        axum_extra::extract::cookie::Cookie::new("aghil_session", session.to_string()),
+        axum_extra::extract::cookie::Cookie::new(auth::SESSION_COOKIE, session.to_string()),
     );
     let cookie = jar.into_response().headers()["set-cookie"]
         .to_str()?

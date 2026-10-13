@@ -178,7 +178,7 @@ pub(crate) async fn resolve_staff_if_admin(
     state: &AppState,
 ) -> Option<models::Staff> {
     let session_id = jar
-        .get("aghil_session")
+        .get(auth::SESSION_COOKIE)
         .and_then(|c| c.value().parse::<uuid::Uuid>().ok())?;
     let staff = database::get_session_staff(&state.db, session_id)
         .await
@@ -195,7 +195,7 @@ pub(crate) async fn resolve_staff_if_god(
     state: &AppState,
 ) -> Option<models::Staff> {
     let session_id = jar
-        .get("aghil_session")
+        .get(auth::SESSION_COOKIE)
         .and_then(|c| c.value().parse::<uuid::Uuid>().ok())?;
     let staff = database::get_session_staff(&state.db, session_id)
         .await
@@ -388,21 +388,18 @@ async fn main() -> anyhow::Result<()> {
     let state_for_preload = app_state.clone();
 
     // Pre-load the navbar content block so all pages show the logo
-    if let Ok(Some(block)) = database::get_content(&app_state.db, "navbar").await {
+    if let Ok(Some(block)) = database::get_content(&app_state.db, templates::NAVBAR_SLUG).await {
         templates::set_navbar_block(Some(block));
     }
 
     // Pre-load the favicon content block so all pages show the favicon
-    if let Ok(Some(block)) = database::get_content(&app_state.db, "favicon").await {
+    if let Ok(Some(block)) = database::get_content(&app_state.db, templates::FAVICON_SLUG).await {
         templates::set_favicon_block(Some(block));
     }
 
     // Pre-load footer content blocks so all pages show footer info
-    if let Ok(footer_map) = database::get_contents_by_slugs(
-        &app_state.db,
-        &["footer-contact", "footer-calendar", "footer-summer"],
-    )
-    .await
+    if let Ok(footer_map) =
+        database::get_contents_by_slugs(&app_state.db, templates::FOOTER_SLUGS).await
     {
         templates::set_footer_blocks(models::ContentMap::new(footer_map));
     }

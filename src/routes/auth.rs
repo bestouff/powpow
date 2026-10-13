@@ -8,6 +8,7 @@ use axum_extra::extract::cookie::SignedCookieJar;
 use serde::Deserialize;
 use tracing::{error, warn};
 
+use crate::auth::SESSION_COOKIE;
 use crate::{AppState, database, get_prefix, templates};
 
 #[derive(Debug, Deserialize)]
@@ -51,7 +52,7 @@ pub async fn login_link_page(
         }
         Ok(None) => {
             if let Some(session) = jar
-                .get("aghil_session")
+                .get(SESSION_COOKIE)
                 .and_then(|cookie| cookie.value().parse::<uuid::Uuid>().ok())
                 && let Ok(Some(viewer)) = database::get_session_staff(&state.db, session).await
                 && viewer.id == staff_id
@@ -152,12 +153,12 @@ pub async fn confirm_login(
     };
     if !has_membership && !staff.is_admin && !staff.is_god {
         if let Some(session) = jar
-            .get("aghil_session")
+            .get(SESSION_COOKIE)
             .and_then(|cookie| cookie.value().parse::<uuid::Uuid>().ok())
         {
             let _ = database::delete_session(&state.db, session).await;
         }
-        let mut cookie = axum_extra::extract::cookie::Cookie::new("aghil_session", "");
+        let mut cookie = axum_extra::extract::cookie::Cookie::new(SESSION_COOKIE, "");
         cookie.set_path("/");
         return private_login_response((
             jar.remove(cookie),
@@ -177,7 +178,7 @@ pub async fn confirm_login(
             return private_login_response(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
-    let mut cookie = axum_extra::extract::cookie::Cookie::new("aghil_session", session.to_string());
+    let mut cookie = axum_extra::extract::cookie::Cookie::new(SESSION_COOKIE, session.to_string());
     cookie.set_path("/");
     cookie.set_http_only(true);
     cookie.set_same_site(axum_extra::extract::cookie::SameSite::Lax);
@@ -329,7 +330,7 @@ pub async fn api_send_login_email(
 }
 
 pub async fn api_me(State(state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
-    let session_id = match jar.get("aghil_session") {
+    let session_id = match jar.get(SESSION_COOKIE) {
         Some(cookie) => match cookie.value().parse::<uuid::Uuid>() {
             Ok(id) => id,
             Err(_) => {
@@ -401,14 +402,14 @@ pub async fn logout(
     let prefix = get_prefix(&headers);
 
     // Revoke the server-side session if we have one.
-    if let Some(cookie) = jar.get("aghil_session")
+    if let Some(cookie) = jar.get(SESSION_COOKIE)
         && let Ok(session_id) = cookie.value().parse::<uuid::Uuid>()
         && let Err(e) = database::delete_session(&state.db, session_id).await
     {
         error!("Error deleting session {}: {}", session_id, e);
     }
 
-    let mut cookie = axum_extra::extract::cookie::Cookie::new("aghil_session", "");
+    let mut cookie = axum_extra::extract::cookie::Cookie::new(SESSION_COOKIE, "");
     cookie.set_path("/");
     cookie.set_http_only(true);
     cookie.set_same_site(axum_extra::extract::cookie::SameSite::Lax);

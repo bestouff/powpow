@@ -126,7 +126,7 @@ pub async fn view_person(
 
     // Require a valid session (Staff level) for viewing person pages
     let Some(viewer_id) = jar
-        .get("aghil_session")
+        .get(crate::auth::SESSION_COOKIE)
         .and_then(|c| c.value().parse::<uuid::Uuid>().ok())
     else {
         return Redirect::to(&format!("{}/login", prefix)).into_response();
@@ -1485,7 +1485,7 @@ pub async fn api_delete_session(
     // Prevent killing your own current session (that is what /logout is for).
     if me.id == staff_id {
         let current = jar
-            .get("aghil_session")
+            .get(crate::auth::SESSION_COOKIE)
             .and_then(|c| c.value().parse::<uuid::Uuid>().ok());
         if current == Some(session_id) {
             return (

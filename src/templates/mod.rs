@@ -82,7 +82,9 @@ static FAVICON_BLOCK: std::sync::RwLock<Option<ContentBlock>> = std::sync::RwLoc
 static FOOTER_BLOCKS: std::sync::RwLock<Option<ContentMap>> = std::sync::RwLock::new(None);
 
 /// Footer content block slugs that trigger a cache refresh when saved.
-const FOOTER_SLUGS: &[&str] = &["footer-contact", "footer-calendar", "footer-summer"];
+pub(crate) const NAVBAR_SLUG: &str = "navbar";
+pub(crate) const FAVICON_SLUG: &str = "favicon";
+pub(crate) const FOOTER_SLUGS: &[&str] = &["footer-contact", "footer-calendar", "footer-summer"];
 
 /// Update the cached navbar content block (call at startup and when CMS content is saved).
 pub fn set_navbar_block(block: Option<ContentBlock>) {

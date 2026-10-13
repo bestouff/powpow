@@ -9,6 +9,8 @@ use tracing::error;
 
 use crate::{AppState, database, models::Staff};
 
+pub const SESSION_COOKIE: &str = "aghil_session";
+
 pub fn membership_redirect(prefix: &str, is_admin: bool) -> String {
     if is_admin {
         format!("{prefix}/admin?membership_required=true")
@@ -74,7 +76,7 @@ pub async fn membership_gate(
         return next.run(request).await;
     }
     let Some(session_id) = jar
-        .get("aghil_session")
+        .get(SESSION_COOKIE)
         .and_then(|cookie| cookie.value().parse::<uuid::Uuid>().ok())
     else {
         return next.run(request).await;
@@ -169,19 +171,7 @@ impl IntoResponse for AuthError {
 // ---------------------------------------------------------------------------
 
 fn get_prefix(parts: &Parts) -> String {
-    parts
-        .headers
-        .get("X-Forwarded-Prefix")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.trim_end_matches('/'))
-        .filter(|s| {
-            !s.is_empty()
-                && s.bytes().all(|b| {
-                    b.is_ascii_alphanumeric() || b == b'/' || b == b'_' || b == b'-' || b == b'.'
-                })
-        })
-        .map(String::from)
-        .unwrap_or_default()
+    crate::get_prefix(&parts.headers)
 }
 
 fn is_api_path(parts: &Parts) -> bool {
@@ -197,7 +187,7 @@ async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<Staff, Auth
         .await
         .expect("SignedCookieJar extraction is infallible");
 
-    let session_id = match jar.get("aghil_session") {
+    let session_id = match jar.get(SESSION_COOKIE) {
         Some(cookie) => match cookie.value().parse::<uuid::Uuid>() {
             Ok(id) => id,
             Err(_) => {

@@ -402,7 +402,7 @@ pub async fn calendar_landing(
 
     // Check if logged-in user is a chief/admin — if so, show the editor
     let staff = if let Some(id) = jar
-        .get("aghil_session")
+        .get(crate::auth::SESSION_COOKIE)
         .and_then(|c| c.value().parse::<uuid::Uuid>().ok())
         && let Ok(Some(s)) = database::get_session_staff(&state.db, id).await
     {
