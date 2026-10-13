@@ -227,7 +227,7 @@ pub async fn contact_submit(
         );
     }
 
-    if !email.contains('@') || !email.contains('.') {
+    if !crate::auto_import::valid_email(email) {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": "Adresse email invalide"})),
@@ -237,20 +237,7 @@ pub async fn contact_submit(
     // Build the HTML email body
     let entity = &state.config.entity_name;
     let sig = email_signature(entity);
-    let html_body = format!(
-        "<h3>Message via le formulaire de contact</h3>\
-         <p><strong>De :</strong> {name} &lt;{email}&gt;</p>\
-         <p><strong>Objet :</strong> {subject}</p>\
-         <hr>\
-         <div>{message_html}</div>\
-         <hr>\
-         {sig}",
-        name = name,
-        email = email,
-        subject = subject,
-        message_html = message.replace('\n', "<br>"),
-        sig = sig,
-    );
+    let html_body = contact_body(name, email, subject, message, &sig);
 
     let full_subject = format!("[Contact {}] {}", entity, subject);
 
@@ -270,6 +257,33 @@ pub async fn contact_submit(
     .await;
 
     (StatusCode::OK, Json(serde_json::json!({"ok": true})))
+}
+
+fn contact_body(name: &str, email: &str, subject: &str, message: &str, signature: &str) -> String {
+    maud::html! {
+        h3 { "Message via le formulaire de contact" }
+        p { strong { "De : " } (name) " <" (email) ">" }
+        p { strong { "Objet : " } (subject) }
+        hr;
+        div { @for line in message.lines() { (line) br; } }
+        hr;
+        (maud::PreEscaped(signature))
+    }
+    .into_string()
+}
+
+#[cfg(test)]
+mod contact_tests {
+    #[test]
+    fn contact_inputs_cannot_inject_headers_or_html() {
+        assert!(!crate::auto_import::valid_email(
+            "a@b.org\r\nBcc: other@example.org"
+        ));
+        let attack = "<img src=x onerror=alert(1)>";
+        let body = super::contact_body(attack, "a@b.org", attack, attack, "");
+        assert!(!body.contains("<img"));
+        assert!(body.contains("&lt;img"));
+    }
 }
 
 /// Send an email with `From` display-name set to `sender_name` and `Reply-To`

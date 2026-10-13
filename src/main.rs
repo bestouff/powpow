@@ -202,10 +202,9 @@ pub(crate) async fn resolve_staff_if_god(
 
 /// Standard HTML signature block for outgoing emails.
 pub(crate) fn email_signature(entity: &str) -> String {
-    format!(
-        "<p><em>— PowPow v{version} pour {entity} — le gestionnaire de station qui ne dort jamais</em></p>",
-        version = env!("CARGO_PKG_VERSION"),
-    )
+    maud::html! { p { em { "— PowPow v" (env!("CARGO_PKG_VERSION")) " pour " (entity)
+    " — le gestionnaire de station qui ne dort jamais" } } }
+    .into_string()
 }
 
 pub(crate) async fn send_notification_email(
