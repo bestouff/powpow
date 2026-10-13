@@ -11,7 +11,7 @@ RUST_IMAGE := rust:1.97-trixie
 
 deb: $(DEB)
 
-$(DEB): target/release-trixie/powpow $(shell find pkg -type f)
+$(DEB): target/release-trixie/powpow .env.example Makefile $(shell find pkg -type f)
 	rm -rf _deb
 	mkdir -p _deb/DEBIAN _deb/usr/sbin _deb/etc _deb/lib/systemd/system
 	sed 's/@@PKG@@/$(PKG)/;s/@@VERSION@@/$(VERSION)/;s/@@ARCH@@/$(ARCH)/' pkg/control.in > _deb/DEBIAN/control
@@ -28,13 +28,13 @@ $(DEB): target/release-trixie/powpow $(shell find pkg -type f)
 	rm -rf _deb
 	@echo "Built $(DEB)"
 
-target/release-trixie/powpow: Cargo.toml Cargo.lock $(shell find src -type f) $(shell find migrations -type f)
+target/release-trixie/powpow: Cargo.toml Cargo.lock Makefile $(shell find src static migrations -type f)
 	mkdir -p target/release-trixie
 	docker run --rm \
 		-v "$(CURDIR)":/build \
 		-w /build \
 		$(RUST_IMAGE) \
-		sh -c 'apt-get update && apt-get install -y cmake && cargo build --release && cp target/release/powpow target/release-trixie/powpow'
+		sh -c 'apt-get update && apt-get install -y cmake && cargo build --release --locked && cp target/release/powpow target/release-trixie/powpow'
 
 clean:
 	rm -rf _deb target/release-trixie $(PKG)_*.deb
