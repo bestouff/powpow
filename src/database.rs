@@ -9,6 +9,7 @@ use sqlx::Row;
 use tracing::info;
 
 pub mod auto_import;
+pub mod calendar_feed;
 pub mod email_change;
 pub mod manual_import;
 pub mod planning;
@@ -2566,6 +2567,7 @@ pub async fn has_upcoming_presence(pool: &PgPool, staff_id: uuid::Uuid) -> Resul
 const TABLES_PARENT_FIRST: &[&str] = &[
     "users",
     "staff",
+    "calendar_subscriptions",
     "cash",
     "ateliers",
     "equipments",
@@ -2588,6 +2590,7 @@ const TABLES_PARENT_FIRST: &[&str] = &[
 
 /// Tables in reverse dependency order (children first). Used for TRUNCATE.
 const TABLES_CHILD_FIRST: &[&str] = &[
+    "calendar_subscriptions",
     "mailchimp_retired_emails",
     "news",
     "auto_import_reviews",

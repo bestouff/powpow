@@ -40,6 +40,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initSearchFilter();
   initStaffFilters();
   initPersonDetail(prefix);
+  initCalendarSubscription(prefix);
   initCalendarView(prefix);
   initCalendarEditor(prefix);
   scrollCalendarToToday();
@@ -49,6 +50,57 @@ document.addEventListener("DOMContentLoaded", function () {
   initPhotoPage(prefix);
   initManualImport();
 });
+
+function initCalendarSubscription(prefix) {
+  const box = document.getElementById("calendar-subscription");
+  if (!box) return;
+  const url = document.getElementById("calendar-subscription-url");
+  const links = document.getElementById("calendar-subscription-links");
+  const create = document.getElementById("calendar-create-link");
+  const regenerate = document.getElementById("calendar-regenerate-link");
+  const message = document.getElementById("calendar-subscription-message");
+  const endpoint = prefix + "/api/person/" + box.dataset.staffId + "/calendar-subscription";
+
+  async function load(options) {
+    create.disabled = true;
+    regenerate.disabled = true;
+    message.textContent = "";
+    try {
+      const response = await fetch(endpoint, options);
+      if (!response.ok) throw new Error("Impossible de charger l'abonnement au calendrier.");
+      const data = await response.json();
+      const subscription = data.subscription;
+      links.classList.toggle("d-none", !subscription);
+      create.classList.toggle("d-none", !!subscription);
+      regenerate.classList.toggle("d-none", !subscription);
+      url.value = subscription ? subscription.url : "";
+      if (subscription) document.getElementById("calendar-subscribe-link").href = subscription.webcal_url;
+      if (options) message.textContent = "Lien prêt. Utilisez « S'abonner au calendrier » ou copiez l'URL dans votre agenda.";
+    } catch (error) {
+      message.textContent = error.message;
+    } finally {
+      create.disabled = false;
+      regenerate.disabled = false;
+    }
+  }
+
+  function save(regenerate) {
+    return load({method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({regenerate})});
+  }
+  create.addEventListener("click", function () { save(false); });
+  regenerate.addEventListener("click", function () { save(true); });
+  document.getElementById("calendar-copy-link").addEventListener("click", async function () {
+    try {
+      await navigator.clipboard.writeText(url.value);
+      message.textContent = "URL copiée.";
+    } catch (_) {
+      url.focus();
+      url.select();
+      message.textContent = "Copiez l'adresse sélectionnée.";
+    }
+  });
+  load();
+}
 
 function initStaffFilters() {
   const table = document.getElementById("staff-list-table");

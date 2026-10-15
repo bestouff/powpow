@@ -21,6 +21,7 @@ use tracing::{error, info, warn};
 mod auth;
 mod auto_import;
 mod auto_import_replay;
+mod calendar_feed;
 mod config;
 mod database;
 mod dicton;
@@ -429,6 +430,12 @@ fn build_router(app_state: AppState) -> Router {
         .route("/online/{id}", get(routes::membership::get_user))
         .route("/staff", get(routes::staff::list_staff))
         .route("/person/{id}", get(routes::staff::view_person))
+        .route(
+            "/api/person/{id}/calendar-subscription",
+            get(routes::calendar_feed::subscription)
+                .post(routes::calendar_feed::create_subscription),
+        )
+        .route(calendar_feed::FEED_ROUTE, get(routes::calendar_feed::feed))
         .route("/api/person/{id}/role", post(routes::staff::toggle_role))
         .route(
             "/api/person/{id}/comment",

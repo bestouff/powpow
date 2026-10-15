@@ -36,6 +36,26 @@ The station's work is organized into _ateliers_ (workshops/activity groups). Vol
 - The system computes **deficits** (days where not enough volunteers have signed up)
 - A **weekly Monday morning email** is sent to admins summarizing unimported memberships and upcoming staffing shortfalls
 
+#### Personal calendar subscriptions
+
+On your profile, open **Abonnement au calendrier** and create a subscription link.
+Use **S'abonner au calendrier** with Apple Calendar or another compatible app,
+or copy the URL into Google Calendar's **From URL** option on the Web, then enable
+that calendar on Android. Members sharing an email can also manage each other's
+subscription links.
+
+The feed contains past and upcoming registered presences, with one all-day event
+per atelier and date. Titles indicate the selected periods, such as
+“Buvette — matin et après-midi” or “Damage — soirée et nuit”. Night shifts use
+their planning date. Attendance changes update the same event; unregistering
+removes it on the next refresh. Changes are made in PowPow, and calendar providers
+choose their refresh interval, which can be several hours.
+
+Each URL is private, read-only, and remains valid across logouts and restarts.
+**Régénérer le lien** disables the previous URL; update your calendar subscriptions
+after regenerating it. Subscription links are preserved in database backups.
+Links use the configured `PUBLIC_BASE_URL`, including its deployment path prefix.
+
 ### Ski slopes and tows
 
 Real-time status management for ski slopes and ski tows, displayed on the public frontpage. Each piece of equipment has a three-state status (open / partial / closed) that admins can toggle with one click. Slopes also carry a difficulty level (green, blue, red, black).

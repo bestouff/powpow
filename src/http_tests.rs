@@ -5,6 +5,277 @@ use axum::{
 };
 use tower::ServiceExt;
 
+async fn response_text(response: Response) -> anyhow::Result<String> {
+    Ok(String::from_utf8(
+        to_bytes(response.into_body(), 1_000_000).await?.to_vec(),
+    )?)
+}
+
+async fn subscription_url(
+    app: &Router,
+    person: uuid::Uuid,
+    cookie: &str,
+    regenerate: bool,
+) -> anyhow::Result<String> {
+    let response = request(
+        app,
+        "POST",
+        &format!("/api/person/{person}/calendar-subscription"),
+        Some(cookie),
+        serde_json::json!({"regenerate": regenerate}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "private, no-store");
+    let data: serde_json::Value = serde_json::from_str(&response_text(response).await?)?;
+    Ok(data["subscription"]["url"].as_str().unwrap().to_string())
+}
+
+fn subscription_path(url: &str) -> String {
+    reqwest::Url::parse(url)
+        .unwrap()
+        .path()
+        .strip_prefix("/powpow")
+        .unwrap()
+        .to_string()
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn calendar_subscription_access_and_rotation(pool: PgPool) -> anyhow::Result<()> {
+    let state = state(pool);
+    let (owner, cookie) = member(&state, "family@example.org").await?;
+    let (_, household) = member(&state, "family@example.org").await?;
+    let (outsider, other_cookie) = member(&state, "other@example.org").await?;
+    sqlx::query("UPDATE staff SET is_admin = true WHERE id = $1")
+        .bind(outsider.id)
+        .execute(&state.db)
+        .await?;
+    let app = build_router(state.clone());
+    let endpoint = format!("/api/person/{}/calendar-subscription", owner.id);
+    for method in ["GET", "POST"] {
+        assert_eq!(
+            request(&app, method, &endpoint, None, serde_json::json!({}))
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            request(
+                &app,
+                method,
+                &endpoint,
+                Some(&other_cookie),
+                serde_json::json!({})
+            )
+            .await
+            .status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+    let empty = request(
+        &app,
+        "GET",
+        &endpoint,
+        Some(&cookie),
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(empty.status(), StatusCode::OK);
+    assert!(
+        serde_json::from_str::<serde_json::Value>(&response_text(empty).await?)?["subscription"]
+            .is_null()
+    );
+    assert!(
+        database::calendar_feed::token(&state.db, owner.id)
+            .await?
+            .is_none()
+    );
+
+    let url = subscription_url(&app, owner.id, &cookie, false).await?;
+    assert!(url.starts_with("https://station.example/powpow/calendar/feed/"));
+    assert_eq!(
+        subscription_url(&app, owner.id, &household, false).await?,
+        url
+    );
+    let feed_path = subscription_path(&url);
+    // Subscriptions work without a browser session, including on an unpaid
+    // member's browser. Calendar tokens do not grant a normal API session.
+    sqlx::query("DELETE FROM payments WHERE staff = $1")
+        .bind(outsider.id)
+        .execute(&state.db)
+        .await?;
+    for session in [None, Some(other_cookie.as_str())] {
+        let response = request(&app, "GET", &feed_path, session, serde_json::Value::Null).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()["content-type"],
+            "text/calendar; charset=utf-8"
+        );
+        assert!(!response.headers().contains_key("set-cookie"));
+        let body = response_text(response).await?;
+        assert!(body.contains("BEGIN:VCALENDAR\r\n"));
+        assert!(!body.contains("BEGIN:VEVENT"));
+    }
+    let response = request(&app, "HEAD", &feed_path, None, serde_json::Value::Null).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response_text(response).await?, "");
+    let denied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(&endpoint)
+                .header("cookie", &cookie)
+                .header("origin", "https://attacker.example")
+                .header("content-type", "application/json")
+                .body(Body::from("{\"regenerate\":true}"))?,
+        )
+        .await?;
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+    assert_eq!(subscription_url(&app, owner.id, &cookie, false).await?, url);
+    let new_url = subscription_url(&app, owner.id, &cookie, true).await?;
+    assert_ne!(url, new_url);
+    assert_eq!(
+        request(&app, "GET", &feed_path, None, serde_json::Value::Null)
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            &subscription_path(&new_url),
+            None,
+            serde_json::Value::Null
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            "/calendar/feed/invalid.ics",
+            None,
+            serde_json::Value::Null
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    let token = database::calendar_feed::token(&state.db, owner.id)
+        .await?
+        .unwrap();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/me")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn calendar_feed_tracks_attendance_with_stable_events(pool: PgPool) -> anyhow::Result<()> {
+    let state = state(pool);
+    let (owner, cookie) = member(&state, "owner@example.org").await?;
+    let (other, _) = member(&state, "other@example.org").await?;
+    let atelier: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation) VALUES ('Buvette', 'feed-test', false) RETURNING id").fetch_one(&state.db).await?;
+    let mut needs = vec![];
+    for (day, nightly) in [
+        ("2026-03-29", false),
+        ("2026-10-25", true),
+        ("2026-12-31", false),
+    ] {
+        let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, atelier, quantity, nightly) VALUES ($1::text::date, $2, 2, $3) RETURNING id")
+            .bind(day).bind(atelier).bind(nightly).fetch_one(&state.db).await?;
+        needs.push(id);
+    }
+    // Historical attendance must survive missing current roles.
+    database::upsert_presence(&state.db, needs[0], owner.id, true, false).await?;
+    database::upsert_presence(&state.db, needs[1], owner.id, true, true).await?;
+    database::upsert_presence(&state.db, needs[2], other.id, true, true).await?;
+    let app = build_router(state.clone());
+    let url = subscription_url(&app, owner.id, &cookie, false).await?;
+    let path = subscription_path(&url);
+    let response = request(&app, "GET", &path, None, serde_json::Value::Null).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let etag = response.headers()["etag"].clone();
+    let body = response_text(response).await?;
+    assert_eq!(body.matches("BEGIN:VEVENT").count(), 2);
+    assert!(body.contains("SUMMARY:Buvette — matin\r\n"));
+    assert!(body.contains("SUMMARY:Buvette — soirée et nuit\r\n"));
+    assert!(body.contains("DTSTART;VALUE=DATE:20260329\r\nDTEND;VALUE=DATE:20260330\r\n"));
+    assert!(body.contains("DTSTART;VALUE=DATE:20261025\r\nDTEND;VALUE=DATE:20261026\r\n"));
+    assert!(!body.contains("20261231"));
+    assert!(!body.contains("owner@example.org"));
+    let uid = format!("{}-{}@powpow", owner.id, needs[0]);
+    assert!(
+        body.replace("\r\n ", "")
+            .contains(&format!("UID:{uid}\r\n"))
+    );
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(&path)
+                .header("if-none-match", &etag)
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(response_text(response).await?, "");
+    let repeat = request(&app, "GET", &path, None, serde_json::Value::Null).await;
+    assert_eq!(response_text(repeat).await?, body);
+
+    database::upsert_presence(&state.db, needs[0], owner.id, true, true).await?;
+    let changed = request(&app, "GET", &path, None, serde_json::Value::Null).await;
+    assert_ne!(changed.headers()["etag"], etag);
+    let body = response_text(changed).await?.replace("\r\n ", "");
+    assert!(body.contains(&format!("UID:{uid}\r\n")));
+    assert!(body.contains("SUMMARY:Buvette — matin et après-midi\r\n"));
+    assert_eq!(body.matches("BEGIN:VEVENT").count(), 2);
+    sqlx::query("UPDATE ateliers SET name = 'Accueil' WHERE id = $1")
+        .bind(atelier)
+        .execute(&state.db)
+        .await?;
+    let renamed = request(&app, "GET", &path, None, serde_json::Value::Null).await;
+    assert!(
+        response_text(renamed)
+            .await?
+            .contains("SUMMARY:Accueil — matin et après-midi")
+    );
+    database::upsert_presence(&state.db, needs[0], owner.id, false, false).await?;
+    let removed = response_text(request(&app, "GET", &path, None, serde_json::Value::Null).await)
+        .await?
+        .replace("\r\n ", "");
+    assert!(!removed.contains(&uid));
+    assert_eq!(removed.matches("BEGIN:VEVENT").count(), 1);
+
+    database::upsert_presence(&state.db, needs[2], owner.id, false, true).await?;
+    let year_end =
+        response_text(request(&app, "GET", &path, None, serde_json::Value::Null).await).await?;
+    assert!(year_end.contains("DTSTART;VALUE=DATE:20261231\r\nDTEND;VALUE=DATE:20270101\r\n"));
+    let backup = database::backup_all_tables(&state.db).await?;
+    let old_token = database::calendar_feed::token(&state.db, owner.id).await?;
+    database::calendar_feed::create(&state.db, owner.id, true).await?;
+    database::restore_from_sql(&state.db, &backup).await?;
+    assert_eq!(
+        database::calendar_feed::token(&state.db, owner.id).await?,
+        old_token
+    );
+    let restored = request(&app, "GET", &path, None, serde_json::Value::Null).await;
+    assert_eq!(response_text(restored).await?, year_end);
+    Ok(())
+}
+
 #[test]
 fn proxy_prefix_cannot_be_an_external_or_parent_relative_url() {
     let mut headers = HeaderMap::new();

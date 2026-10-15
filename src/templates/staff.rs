@@ -817,6 +817,33 @@ pub fn person_detail(
                             }
                         }
 
+                        @if can_manage_profile {
+                            div .box #calendar-subscription data-staff-id=(staff.id) {
+                                h2 .title.is-4 {
+                                    span .icon { i .fa-solid.fa-calendar-plus {} }
+                                    "\u{00a0}Abonnement au calendrier"
+                                }
+                                p .mb-3 { "Retrouvez vos présences dans l'agenda de votre téléphone ou ordinateur. Les événements occupent la journée et indiquent les périodes choisies." }
+                                div #calendar-subscription-links .d-none {
+                                    div .field {
+                                        label .label for="calendar-subscription-url" { "Adresse privée du calendrier" }
+                                        div .control {
+                                            input .input #calendar-subscription-url type="url" readonly;
+                                        }
+                                    }
+                                    div .buttons {
+                                        a .button.is-link #calendar-subscribe-link { "S'abonner au calendrier" }
+                                        button .button.is-light #calendar-copy-link type="button" { "Copier l'URL" }
+                                    }
+                                    p .help.mb-3 { "Pour Google Calendar / Android : ajoutez cette URL dans Google Calendar sur le Web, avec « À partir de l'URL ». Les mises à jour dépendent de votre agenda et peuvent prendre plusieurs heures." }
+                                }
+                                button .button.is-small.is-light #calendar-create-link type="button" disabled { "Créer le lien d'abonnement" }
+                                button .button.is-small.is-light.d-none #calendar-regenerate-link type="button" { "Régénérer le lien" }
+                                p .help.mt-2 { "Ce lien donne accès uniquement à ce calendrier. Le régénérer désactive l'ancien lien : il faudra remplacer l'abonnement dans vos agendas." }
+                                p #calendar-subscription-message .help.mt-2 role="status" aria-live="polite" {}
+                            }
+                        }
+
                         // Personal calendar widget
                         @if !person_calendar.is_empty() {
                             div .box {
