@@ -2486,7 +2486,7 @@ pub async fn get_pending_validations(
     let rows = if let Some(atelier_ids) = chief_of_ateliers {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed, a.whatsapp_group_url AS a_whatsapp_group_url
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -2500,7 +2500,7 @@ pub async fn get_pending_validations(
     } else {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed, a.whatsapp_group_url AS a_whatsapp_group_url
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -2537,6 +2537,7 @@ pub async fn get_pending_validations(
             default_nightly: row.try_get("a_default_nightly")?,
             icon: row.try_get("a_icon")?,
             opening_day_typical_needed: row.try_get("a_opening_day_typical_needed")?,
+            whatsapp_group_url: row.try_get("a_whatsapp_group_url")?,
         };
         result.push((staff, atelier));
     }
@@ -3196,6 +3197,7 @@ pub async fn get_news_image(pool: &PgPool, id: uuid::Uuid) -> Result<Option<(Vec
 }
 
 /// Create a new atelier.
+#[allow(clippy::too_many_arguments)]
 pub async fn create_atelier(
     pool: &PgPool,
     name: &str,
@@ -3204,10 +3206,11 @@ pub async fn create_atelier(
     needs_validation: bool,
     default_nightly: bool,
     opening_day_typical_needed: i16,
+    whatsapp_group_url: Option<&str>,
 ) -> Result<Atelier> {
     let atelier = sqlx::query_as::<_, Atelier>(
-        r"INSERT INTO ateliers (id, name, slug, icon, needs_validation, default_nightly, opening_day_typical_needed)
-          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+        r"INSERT INTO ateliers (id, name, slug, icon, needs_validation, default_nightly, opening_day_typical_needed, whatsapp_group_url)
+          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
           RETURNING *",
     )
     .bind(name)
@@ -3216,6 +3219,7 @@ pub async fn create_atelier(
     .bind(needs_validation)
     .bind(default_nightly)
     .bind(opening_day_typical_needed)
+    .bind(whatsapp_group_url)
     .fetch_one(pool)
     .await?;
 
@@ -3233,11 +3237,12 @@ pub async fn update_atelier(
     needs_validation: bool,
     default_nightly: bool,
     opening_day_typical_needed: i16,
+    whatsapp_group_url: Option<&str>,
 ) -> Result<Atelier> {
     let atelier = sqlx::query_as::<_, Atelier>(
         r"UPDATE ateliers
           SET name = $2, slug = $3, icon = $4, needs_validation = $5,
-              default_nightly = $6, opening_day_typical_needed = $7
+              default_nightly = $6, opening_day_typical_needed = $7, whatsapp_group_url = $8
           WHERE id = $1
           RETURNING *",
     )
@@ -3248,6 +3253,7 @@ pub async fn update_atelier(
     .bind(needs_validation)
     .bind(default_nightly)
     .bind(opening_day_typical_needed)
+    .bind(whatsapp_group_url)
     .fetch_one(pool)
     .await?;
 

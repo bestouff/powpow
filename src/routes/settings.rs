@@ -29,6 +29,30 @@ pub struct CreateAtelierRequest {
     needs_validation: bool,
     default_nightly: bool,
     opening_day_typical_needed: i16,
+    whatsapp_group_url: Option<String>,
+}
+
+/// Keep only the invite URL, without optional sharing parameters.
+fn normalize_whatsapp_group_url(value: Option<&str>) -> Result<Option<String>, &'static str> {
+    const ERROR: &str = "Utilisez un lien d'invitation WhatsApp de la forme https://chat.whatsapp.com/… ou laissez le champ vide.";
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let url = reqwest::Url::parse(value).map_err(|_| ERROR)?;
+    let path = url.path().strip_prefix('/').ok_or(ERROR)?;
+    let code = path.strip_suffix('/').unwrap_or(path);
+    if value.chars().any(char::is_control)
+        || url.scheme() != "https"
+        || url.host_str() != Some("chat.whatsapp.com")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+        || code.len() != 22
+        || !code.bytes().all(|byte| byte.is_ascii_alphanumeric())
+    {
+        return Err(ERROR);
+    }
+    Ok(Some(format!("https://chat.whatsapp.com/{code}")))
 }
 
 pub async fn api_create_atelier(
@@ -45,6 +69,17 @@ pub async fn api_create_atelier(
         );
     }
 
+    let whatsapp_group_url =
+        match normalize_whatsapp_group_url(payload.whatsapp_group_url.as_deref()) {
+            Ok(url) => url,
+            Err(error) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": error})),
+                );
+            }
+        };
+
     match database::create_atelier(
         &state.db,
         name,
@@ -53,6 +88,7 @@ pub async fn api_create_atelier(
         payload.needs_validation,
         payload.default_nightly,
         payload.opening_day_typical_needed,
+        whatsapp_group_url.as_deref(),
     )
     .await
     {
@@ -95,6 +131,17 @@ pub async fn api_update_atelier(
         );
     }
 
+    let whatsapp_group_url =
+        match normalize_whatsapp_group_url(payload.whatsapp_group_url.as_deref()) {
+            Ok(url) => url,
+            Err(error) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": error})),
+                );
+            }
+        };
+
     match database::update_atelier(
         &state.db,
         id,
@@ -104,6 +151,7 @@ pub async fn api_update_atelier(
         payload.needs_validation,
         payload.default_nightly,
         payload.opening_day_typical_needed,
+        whatsapp_group_url.as_deref(),
     )
     .await
     {
@@ -114,7 +162,7 @@ pub async fn api_update_atelier(
                 &format!("{} {}", admin.first_name, admin.last_name),
                 "Modification atelier",
                 &format!(
-                    "id={} name={} slug={} icon={} validation={} nightly={} needed={}",
+                    "id={} name={} slug={} icon={} validation={} nightly={} needed={} whatsapp={}",
                     atelier.id,
                     atelier.name,
                     atelier.slug,
@@ -122,6 +170,7 @@ pub async fn api_update_atelier(
                     atelier.needs_validation,
                     atelier.default_nightly,
                     atelier.opening_day_typical_needed,
+                    atelier.whatsapp_group_url.is_some(),
                 ),
             )
             .await;
@@ -170,6 +219,47 @@ pub async fn api_delete_atelier(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": e.to_string()})),
             )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_whatsapp_group_url;
+
+    #[test]
+    fn whatsapp_links_allow_invites_and_reject_other_destinations() {
+        assert_eq!(normalize_whatsapp_group_url(None), Ok(None));
+        assert_eq!(normalize_whatsapp_group_url(Some("  ")), Ok(None));
+        assert_eq!(
+            normalize_whatsapp_group_url(Some(
+                " https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv/?mode=ems_copy_t "
+            )),
+            Ok(Some(
+                "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv".into()
+            ))
+        );
+        for invalid in [
+            "group-id",
+            "javascript:alert(1)",
+            "http://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv",
+            "https://example.org/AbCdEfGhIjKlMnOpQrStUv",
+            "https://chat.whatsapp.com.evil.example/AbCdEfGhIjKlMnOpQrStUv",
+            "https://chat.whatsapp.com@evil.example/AbCdEfGhIjKlMnOpQrStUv",
+            "https://user:password@chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv",
+            "https://chat.whatsapp.com:8443/AbCdEfGhIjKlMnOpQrStUv",
+            "https://chat.whatsapp.com/",
+            "https://chat.whatsapp.com/TooShort",
+            "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUvW",
+            "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStU_",
+            "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv/extra",
+            "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv%22",
+            "https://chat.whats\napp.com/AbCdEfGhIjKlMnOpQrStUv",
+        ] {
+            assert!(
+                normalize_whatsapp_group_url(Some(invalid)).is_err(),
+                "{invalid}"
+            );
         }
     }
 }

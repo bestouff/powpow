@@ -112,6 +112,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                                     th { "Icône" }
                                     th { "Nom" }
                                     th { "Slug" }
+                                    th { "Groupe WhatsApp" }
                                     th .has-text-centered { "Validation" }
                                     th .has-text-centered { "Nocturne" }
                                     th .has-text-centered { "Besoin / jour" }
@@ -124,13 +125,17 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                                 }
                                 @if ateliers.is_empty() {
                                     tr .empty-row {
-                                        td colspan="7" .has-text-centered.has-text-grey-light.py-5 {
+                                        td colspan="8" .has-text-centered.has-text-grey-light.py-5 {
                                             "Aucun atelier défini"
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+
+                    p .help.mt-2 {
+                        "Dans WhatsApp, ouvrez les infos du groupe, puis « Inviter via un lien ». Copiez le lien d'invitation ici. Laissez le champ vide si l'atelier n'a pas de groupe."
                     }
 
                     // Add new atelier form
@@ -165,6 +170,14 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                                         span { "Choisir..." }
                                     }
                                     input type="hidden" #new-atelier-icon value="question";
+                                }
+                            }
+                        }
+                        div .column.is-3 {
+                            div .field {
+                                label .label for="new-atelier-whatsapp" { "Groupe WhatsApp" }
+                                div .control {
+                                    input .input #new-atelier-whatsapp type="url" placeholder="https://chat.whatsapp.com/…";
                                 }
                             }
                         }
@@ -256,18 +269,20 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
     var PREFIX = "{p}";
 
     // ── Helper: save a single field for an atelier row ──────────
-    async function saveField(row) {{
+    async function saveField(row, changes) {{
         var id = row.dataset.id;
         var body = {{
             name: row.dataset.name,
             slug: row.dataset.slug,
             icon: row.dataset.icon,
+            whatsapp_group_url: row.dataset.whatsappGroupUrl,
             needs_validation: row.querySelector('[data-field="needs_validation"]').checked,
             default_nightly: row.querySelector('[data-field="default_nightly"]').checked,
             opening_day_typical_needed: parseInt(
                 row.querySelector('[data-field="opening_day_typical_needed"]').value || "0", 10
             )
         }};
+        Object.assign(body, changes || {{}});
         var res = await fetch(PREFIX + "/api/ateliers/" + id, {{
             method: "POST",
             headers: {{ "Content-Type": "application/json" }},
@@ -277,6 +292,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
             var e = await res.json();
             alert(e.error || "Erreur");
         }}
+        return res.ok;
     }}
 
     // ── Direct-edit: checkboxes & number input auto-save ────────
@@ -295,7 +311,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
             }});
         }});
 
-    // ── Pen button: inline edit name / slug ─────────────────────
+    // ── Pen button: inline edit name / slug / WhatsApp ──────────
     document.querySelectorAll(".atelier-edit-btn").forEach(function(btn) {{
         btn.addEventListener("click", function() {{
             var row = btn.closest("tr");
@@ -328,11 +344,12 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                 alert("Nom et slug requis");
                 return;
             }}
-            // Update data attributes so saveField uses them
-            row.dataset.name = nameVal;
-            row.dataset.slug = slugVal;
-            await saveField(row);
-            location.reload();
+            var saved = await saveField(row, {{
+                name: nameVal,
+                slug: slugVal,
+                whatsapp_group_url: row.querySelector('[data-field="whatsapp_group_url"]').value.trim()
+            }});
+            if (saved) location.reload();
         }});
     }});
 
@@ -372,6 +389,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                 name: name,
                 slug: slug,
                 icon: document.getElementById("new-atelier-icon").value || "question",
+                whatsapp_group_url: document.getElementById("new-atelier-whatsapp").value.trim(),
                 needs_validation: document.getElementById("new-atelier-validation").checked,
                 default_nightly: document.getElementById("new-atelier-nightly").checked,
                 opening_day_typical_needed: parseInt(
@@ -477,7 +495,8 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
 
 fn atelier_row(_prefix: &str, a: &Atelier) -> Markup {
     html! {
-        tr data-id=(a.id) data-name=(a.name) data-slug=(a.slug) data-icon=(a.icon) {
+        tr data-id=(a.id) data-name=(a.name) data-slug=(a.slug) data-icon=(a.icon)
+            data-whatsapp-group-url=(a.whatsapp_group_url.as_deref().unwrap_or("")) {
             // Icon column: display + change button
             td {
                 span .atelier-icon-display {
@@ -498,6 +517,19 @@ fn atelier_row(_prefix: &str, a: &Atelier) -> Markup {
                 span .atelier-display { code { (a.slug) } }
                 input .input.is-small.atelier-edit.d-none type="text" value=(a.slug) data-field="slug";
             }
+            td {
+                span .atelier-display {
+                    @if let Some(url) = &a.whatsapp_group_url {
+                        a href=(url) target="_blank" rel="noopener noreferrer" { "Ouvrir le groupe" }
+                    } @else {
+                        "—"
+                    }
+                }
+                input .input.is-small.atelier-edit.d-none type="url"
+                    value=(a.whatsapp_group_url.as_deref().unwrap_or(""))
+                    data-field="whatsapp_group_url" aria-label="Lien d'invitation WhatsApp"
+                    placeholder="https://chat.whatsapp.com/…";
+            }
             // Validation: always a live checkbox
             td .has-text-centered {
                 input type="checkbox" data-field="needs_validation"
@@ -514,11 +546,11 @@ fn atelier_row(_prefix: &str, a: &Atelier) -> Markup {
                     value=(a.opening_day_typical_needed) data-field="opening_day_typical_needed"
                     style="width:5em;text-align:center";
             }
-            // Actions: edit name/slug, delete
+            // Actions: edit name/slug/WhatsApp, delete
             td {
                 div .buttons.are-small {
                     button .button.is-info.is-outlined.atelier-edit-btn
-                        title="Modifier nom / slug" {
+                        title="Modifier nom / slug / groupe WhatsApp" {
                         span .icon { i .fa-solid.fa-pen {} }
                     }
                     button .button.is-success.atelier-save-btn.d-none {

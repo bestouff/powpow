@@ -283,6 +283,7 @@ pub struct Atelier {
     pub default_nightly: bool,
     pub icon: String,
     pub opening_day_typical_needed: i16,
+    pub whatsapp_group_url: Option<String>,
 }
 
 impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
@@ -295,6 +296,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
             default_nightly: row.try_get("default_nightly")?,
             icon: row.try_get("icon")?,
             opening_day_typical_needed: row.try_get("opening_day_typical_needed")?,
+            whatsapp_group_url: row.try_get("whatsapp_group_url")?,
         })
     }
 }

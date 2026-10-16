@@ -289,6 +289,245 @@ fn proxy_prefix_cannot_be_an_external_or_parent_relative_url() {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn whatsapp_group_settings_require_admin_and_validate_links(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let state = state(pool);
+    let (admin, admin_cookie) = member(&state, "admin@example.org").await?;
+    let (_, volunteer_cookie) = member(&state, "volunteer@example.org").await?;
+    sqlx::query("UPDATE staff SET is_admin = true WHERE id = $1")
+        .bind(admin.id)
+        .execute(&state.db)
+        .await?;
+    let app = build_router(state.clone());
+    let mut payload = serde_json::json!({
+        "name": "Buvette", "slug": "buvette", "icon": "mug-hot",
+        "needs_validation": false, "default_nightly": false, "opening_day_typical_needed": 2,
+        "whatsapp_group_url": " https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv?mode=ems_copy_t "
+    });
+    for (cookie, status) in [
+        (None, StatusCode::UNAUTHORIZED),
+        (Some(volunteer_cookie.as_str()), StatusCode::FORBIDDEN),
+    ] {
+        assert_eq!(
+            request(&app, "POST", "/api/ateliers", cookie, payload.clone())
+                .await
+                .status(),
+            status
+        );
+    }
+    let response = request(
+        &app,
+        "POST",
+        "/api/ateliers",
+        Some(&admin_cookie),
+        payload.clone(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let atelier = database::get_atelier_by_slug(&state.db, "buvette")
+        .await?
+        .unwrap();
+    assert_eq!(
+        atelier.whatsapp_group_url.as_deref(),
+        Some("https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv")
+    );
+    let endpoint = format!("/api/ateliers/{}", atelier.id);
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            &endpoint,
+            Some(&volunteer_cookie),
+            payload.clone()
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+
+    payload["whatsapp_group_url"] = serde_json::json!("javascript:alert(1)");
+    for endpoint in ["/api/ateliers", endpoint.as_str()] {
+        let response = request(&app, "POST", endpoint, Some(&admin_cookie), payload.clone()).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(
+            response_text(response)
+                .await?
+                .contains("lien d'invitation WhatsApp")
+        );
+    }
+    assert_eq!(
+        database::get_atelier_by_id(&state.db, atelier.id)
+            .await?
+            .unwrap()
+            .whatsapp_group_url,
+        atelier.whatsapp_group_url
+    );
+
+    payload["whatsapp_group_url"] =
+        serde_json::json!("https://chat.whatsapp.com/ZyXwVuTsRqPoNmLkJiHgFe");
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            &endpoint,
+            Some(&admin_cookie),
+            payload.clone()
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    payload["default_nightly"] = serde_json::json!(true);
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            &endpoint,
+            Some(&admin_cookie),
+            payload.clone()
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let updated = database::get_atelier_by_id(&state.db, atelier.id)
+        .await?
+        .unwrap();
+    assert!(updated.default_nightly);
+    assert_eq!(
+        updated.whatsapp_group_url.as_deref(),
+        Some("https://chat.whatsapp.com/ZyXwVuTsRqPoNmLkJiHgFe")
+    );
+    let backup = database::backup_all_tables(&state.db).await?;
+    payload["whatsapp_group_url"] = serde_json::json!("  ");
+    assert_eq!(
+        request(&app, "POST", &endpoint, Some(&admin_cookie), payload)
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert!(
+        database::get_atelier_by_id(&state.db, atelier.id)
+            .await?
+            .unwrap()
+            .whatsapp_group_url
+            .is_none()
+    );
+    database::restore_from_sql(&state.db, &backup).await?;
+    assert_eq!(
+        database::get_atelier_by_id(&state.db, atelier.id)
+            .await?
+            .unwrap()
+            .whatsapp_group_url,
+        updated.whatsapp_group_url
+    );
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> anyhow::Result<()> {
+    let state = state(pool);
+    let (owner, owner_cookie) = member(&state, "family@example.org").await?;
+    let (_, household_cookie) = member(&state, "family@example.org").await?;
+    let (_, outsider_cookie) = member(&state, "other@example.org").await?;
+    let (admin, admin_cookie) = member(&state, "admin@example.org").await?;
+    sqlx::query("UPDATE staff SET is_admin = true WHERE id = $1")
+        .bind(admin.id)
+        .execute(&state.db)
+        .await?;
+    let subscribed = database::create_atelier(
+        &state.db,
+        "Buvette & accueil",
+        "buvette",
+        "mug-hot",
+        true,
+        false,
+        0,
+        Some("https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv"),
+    )
+    .await?;
+    database::create_atelier(
+        &state.db,
+        "Pistes",
+        "pistes",
+        "snowflake",
+        false,
+        false,
+        0,
+        Some("https://chat.whatsapp.com/ZyXwVuTsRqPoNmLkJiHgFe"),
+    )
+    .await?;
+    let no_group = database::create_atelier(
+        &state.db,
+        "Location",
+        "location",
+        "person-skiing",
+        false,
+        false,
+        0,
+        None,
+    )
+    .await?;
+    // Interest in an atelier is enough, including roles awaiting validation.
+    database::add_role(&state.db, owner.id, subscribed.id, false).await?;
+    database::add_role(&state.db, owner.id, no_group.id, true).await?;
+    assert!(
+        database::get_pending_validations(&state.db, None)
+            .await?
+            .iter()
+            .any(|(_, a)| a.whatsapp_group_url == subscribed.whatsapp_group_url)
+    );
+    let app = build_router(state);
+    let profile = format!("/person/{}", owner.id);
+    for cookie in [&owner_cookie, &household_cookie, &admin_cookie] {
+        let response = request(&app, "GET", &profile, Some(cookie), serde_json::Value::Null).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_text(response).await?;
+        assert!(body.contains("id=\"whatsapp-groups\""));
+        assert!(body.contains("href=\"https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv\""));
+        assert!(!body.contains("ZyXwVuTsRqPoNmLkJiHgFe"));
+    }
+    let other_view = response_text(
+        request(
+            &app,
+            "GET",
+            &profile,
+            Some(&outsider_cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(!other_view.contains("chat.whatsapp.com"));
+    let response = request(
+        &app,
+        "POST",
+        &format!("/api/person/{}/role", owner.id),
+        Some(&owner_cookie),
+        serde_json::json!({"atelier_id": subscribed.id, "add": false}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let left = response_text(
+        request(
+            &app,
+            "GET",
+            &profile,
+            Some(&owner_cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(!left.contains("id=\"whatsapp-groups\""));
+    assert!(!left.contains("chat.whatsapp.com"));
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn atelier_names_are_escaped_in_reminders_and_calendar_data(
     pool: PgPool,
 ) -> anyhow::Result<()> {

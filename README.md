@@ -28,6 +28,17 @@ Five privilege tiers:
 
 The station's work is organized into _ateliers_ (workshops/activity groups). Volunteers can register interest in ateliers, and atelier chiefs can approve or reject requests. Each atelier can optionally require validation before a volunteer is confirmed.
 
+### Atelier WhatsApp groups
+
+Admins can set an optional **Groupe WhatsApp** invitation link for each atelier
+under **Administration → Paramètres**. In WhatsApp, copy the group's **Invite via
+link** URL (`https://chat.whatsapp.com/…`). Clear the field to remove the link.
+
+A volunteer's profile, accessible from **Staff**, shows the groups for their
+selected ateliers, including pending registrations. The links are visible to the
+volunteer, members sharing their email, and admins. Joining or leaving an atelier
+updates this list; joining the WhatsApp group itself requires following its link.
+
 ### Calendar and planning
 
 - Define **opening days** for the station

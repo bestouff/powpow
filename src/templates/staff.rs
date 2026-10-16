@@ -665,6 +665,28 @@ pub fn person_detail(
                             }
                         }
 
+                        @let has_whatsapp_groups = ateliers.iter().any(|a| a.whatsapp_group_url.is_some() && roles.iter().any(|r| r.atelier == a.id));
+                        @if (can_manage_profile || is_admin) && has_whatsapp_groups {
+                            div .box #whatsapp-groups {
+                                h2 .title.is-4 {
+                                    span .icon { i .fa-solid.fa-comments {} }
+                                    "\u{00a0}Groupes WhatsApp"
+                                }
+                                div .buttons {
+                                    @for atelier in ateliers {
+                                        @if roles.iter().any(|r| r.atelier == atelier.id) {
+                                            @if let Some(url) = &atelier.whatsapp_group_url {
+                                                a .button.is-success.is-outlined href=(url) target="_blank" rel="noopener noreferrer" {
+                                                    span .icon { i class=(format!("fa-solid fa-{}", atelier.icon)) {} }
+                                                    span { (atelier.name) }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Plannings box
                         @let has_plannings = ateliers.iter().any(|a| roles.iter().any(|r| r.atelier == a.id) && !a.slug.is_empty());
                         @if has_plannings {
