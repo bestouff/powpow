@@ -470,9 +470,21 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         None,
     )
     .await?;
+    let shared_group = database::create_atelier(
+        &state.db,
+        "Renfort buvette",
+        "renfort-buvette",
+        "mug-hot",
+        false,
+        false,
+        0,
+        subscribed.whatsapp_group_url.as_deref(),
+    )
+    .await?;
     // Interest in an atelier is enough, including roles awaiting validation.
     database::add_role(&state.db, owner.id, subscribed.id, false).await?;
     database::add_role(&state.db, owner.id, no_group.id, true).await?;
+    database::add_role(&state.db, owner.id, shared_group.id, true).await?;
     assert!(
         database::get_pending_validations(&state.db, None)
             .await?
@@ -486,7 +498,12 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         assert_eq!(response.status(), StatusCode::OK);
         let body = response_text(response).await?;
         assert!(body.contains("id=\"whatsapp-groups\""));
-        assert!(body.contains("href=\"https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv\""));
+        assert_eq!(
+            body.matches("href=\"https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv\"")
+                .count(),
+            1
+        );
+        assert!(body.contains("Buvette &amp; accueil / Renfort buvette"));
         assert!(!body.contains("ZyXwVuTsRqPoNmLkJiHgFe"));
     }
     let other_view = response_text(
@@ -507,6 +524,28 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         &format!("/api/person/{}/role", owner.id),
         Some(&owner_cookie),
         serde_json::json!({"atelier_id": subscribed.id, "add": false}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let left = response_text(
+        request(
+            &app,
+            "GET",
+            &profile,
+            Some(&owner_cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(left.contains("href=\"https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv\""));
+    assert!(!left.contains("Buvette &amp; accueil / Renfort buvette"));
+    let response = request(
+        &app,
+        "POST",
+        &format!("/api/person/{}/role", owner.id),
+        Some(&owner_cookie),
+        serde_json::json!({"atelier_id": shared_group.id, "add": false}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);

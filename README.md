@@ -38,6 +38,8 @@ A volunteer's profile, accessible from **Staff**, shows the groups for their
 selected ateliers, including pending registrations. The links are visible to the
 volunteer, members sharing their email, and admins. Joining or leaving an atelier
 updates this list; joining the WhatsApp group itself requires following its link.
+Several ateliers can share the same link. The profile shows each group once,
+labelled with the person's corresponding ateliers.
 
 ### Calendar and planning
 
