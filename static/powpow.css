@@ -866,6 +866,24 @@
 .staff-table tbody tr:nth-child(even) .sticky-col {
   background: var(--bulma-scheme-main-bis);
 }
+.staff-table .table tbody tr[data-current-member="false"] {
+  --staff-row-background: color-mix(in srgb, var(--bulma-scheme-main), var(--bulma-text) 8%);
+  --staff-row-color: color-mix(in srgb, var(--bulma-text) 85%, var(--bulma-scheme-main));
+}
+.staff-table .table tbody tr[data-current-member="false"]:hover {
+  --staff-row-background: color-mix(in srgb, var(--bulma-scheme-main), var(--bulma-text) 12%);
+}
+.staff-table .table tbody tr[data-current-member="false"] > td {
+  background-color: var(--staff-row-background);
+  color: var(--staff-row-color);
+}
+.staff-table .table tbody tr[data-current-member="false"] > td:not(.staff-season) {
+  filter: grayscale(1);
+}
+.staff-table tr[data-current-member="false"] .sticky-col strong,
+.staff-table tr[data-current-member="false"] .staff-contact a {
+  color: var(--staff-row-color);
+}
 .staff-table .sticky-col a {
   display: flex;
   align-items: center;
