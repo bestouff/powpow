@@ -702,6 +702,110 @@ pub fn person_detail(
                             }
                         }
 
+                        // Personal planning table
+                        @if !person_calendar.is_empty() {
+                            div .box #person-calendar {
+                                h2 .title.is-4 {
+                                    span .icon { i .fa-solid.fa-calendar-days {} }
+                                    @if is_self {
+                                        "\u{00a0}Mes plannings"
+                                    } @else {
+                                        "\u{00a0}Plannings de " (staff.first_name)
+                                    }
+                                }
+                                div .pcal-scroll tabindex="0" role="region" aria-label="Plannings personnels" {
+                                    table .pcal-table.table.is-bordered.is-narrow.is-hoverable {
+                                        thead {
+                                            tr {
+                                                th .pcal-atelier-col { "Atelier" }
+                                                @for day in &days {
+                                                    @let day_abbrev = day.format("%a").to_string();
+                                                    @let day_name = match day_abbrev.as_str() {
+                                                        "Mon" => "lun.",
+                                                        "Tue" => "mar.",
+                                                        "Wed" => "mer.",
+                                                        "Thu" => "jeu.",
+                                                        "Fri" => "ven.",
+                                                        "Sat" => "sam.",
+                                                        "Sun" => "dim.",
+                                                        _ => &day_abbrev,
+                                                    };
+                                                    @let day_date = day.format("%d/%m").to_string();
+                                                    @let is_sunday = day.weekday() == chrono::Weekday::Sun;
+                                                    th .pcal-day-col.has-text-centered.pcal-sunday[is_sunday] {
+                                                        div .pcal-day-name { (day_name) }
+                                                        div .pcal-day-date { (day_date) }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        tbody {
+                                            @for (atelier_id, atelier_name, atelier_slug, atelier_icon) in &atelier_order {
+                                                tr {
+                                                    td .pcal-atelier-col {
+                                                        a href={(p) "/calendar/" (atelier_slug)} {
+                                                            span .icon { i class={"fa-solid fa-" (atelier_icon)} {} }
+                                                            "\u{00a0}" (atelier_name)
+                                                        }
+                                                    }
+                                                    @for day in &days {
+                                                        @let entry = person_calendar.iter().find(|(n, _, _, _, _, _)| n.atelier == *atelier_id && n.day == *day);
+                                                        @if let Some((need, _, _, _, first_half, second_half)) = entry {
+                                                            @let (first_label, second_label) = if need.nightly { ("soir", "nuit") } else { ("matin", "a-m") };
+                                                            @let is_active = *first_half || *second_half;
+                                                            @let is_sunday = day.weekday() == chrono::Weekday::Sun;
+                                                            @let first_title = if need.nightly { "Soirée" } else { "Matin" };
+                                                            @let second_title = if need.nightly { "Nuit" } else { "Après-midi" };
+                                                            td .pcal-cell.has-text-centered.pcal-active[is_active].pcal-sunday[is_sunday] {
+                                                                @if can_manage_profile || is_admin || chief_atelier_ids.contains(atelier_id) {
+                                                                    label .pcal-check title=(first_title) {
+                                                                        input .pcal-presence-cb type="checkbox"
+                                                                            data-need=(need.id)
+                                                                            data-staff=(staff.id)
+                                                                            data-half="first"
+                                                                            checked[*first_half];
+                                                                        span { (first_label) }
+                                                                    }
+                                                                    label .pcal-check title=(second_title) {
+                                                                        input .pcal-presence-cb type="checkbox"
+                                                                            data-need=(need.id)
+                                                                            data-staff=(staff.id)
+                                                                            data-half="second"
+                                                                            checked[*second_half];
+                                                                        span { (second_label) }
+                                                                    }
+                                                                } @else {
+                                                                    span .pcal-check title=(first_title) {
+                                                                        @if *first_half {
+                                                                            span .icon.has-text-success { i .fa-solid.fa-check {} }
+                                                                        } @else {
+                                                                            span .icon.has-text-grey-lighter { i .fa-solid.fa-xmark {} }
+                                                                        }
+                                                                        " " span { (first_label) }
+                                                                    }
+                                                                    span .pcal-check title=(second_title) {
+                                                                        @if *second_half {
+                                                                            span .icon.has-text-success { i .fa-solid.fa-check {} }
+                                                                        } @else {
+                                                                            span .icon.has-text-grey-lighter { i .fa-solid.fa-xmark {} }
+                                                                        }
+                                                                        " " span { (second_label) }
+                                                                    }
+                                                                }
+                                                            }
+                                                        } @else {
+                                                            @let is_sunday = day.weekday() == chrono::Weekday::Sun;
+                                                            td .pcal-cell.has-text-centered.has-text-grey-lighter.pcal-sunday[is_sunday] { "\u{2014}" }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Formations box
                         @if can_manage_qualifs || !person_qualifications.is_empty() {
                             div .box {
@@ -856,125 +960,6 @@ pub fn person_detail(
                                 button .button.is-small.is-light.d-none #calendar-regenerate-link type="button" { "Régénérer le lien" }
                                 p .help.mt-2 { "Ce lien donne accès uniquement à ce calendrier. Le régénérer désactive l'ancien lien : il faudra remplacer l'abonnement dans vos agendas." }
                                 p #calendar-subscription-message .help.mt-2 role="status" aria-live="polite" {}
-                            }
-                        }
-
-                        // Personal calendar and atelier planning links
-                        @let has_plannings = ateliers.iter().any(|a| roles.iter().any(|r| r.atelier == a.id) && !a.slug.is_empty());
-                        @if has_plannings || !person_calendar.is_empty() {
-                            div .box #person-calendar {
-                                h2 .title.is-4 {
-                                    span .icon { i .fa-solid.fa-calendar-days {} }
-                                    @if is_self {
-                                        "\u{00a0}Mon calendrier"
-                                    } @else {
-                                        "\u{00a0}Calendrier de " (staff.first_name)
-                                    }
-                                }
-                                @if has_plannings {
-                                    div .buttons {
-                                        @for atelier in ateliers {
-                                            @if roles.iter().any(|r| r.atelier == atelier.id) && !atelier.slug.is_empty() {
-                                                a .button.is-link.is-outlined href={(p) "/calendar/" (atelier.slug)} {
-                                                    span .icon { i class={"fa-solid fa-" (atelier.icon)} {} }
-                                                    span { (atelier.name) }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                @if !person_calendar.is_empty() {
-                                    div .pcal-scroll tabindex="0" role="region" aria-label="Calendrier personnel" {
-                                        table .pcal-table.table.is-bordered.is-narrow.is-hoverable {
-                                            thead {
-                                                tr {
-                                                    th .pcal-atelier-col { "Atelier" }
-                                                    @for day in &days {
-                                                        @let day_abbrev = day.format("%a").to_string();
-                                                        @let day_name = match day_abbrev.as_str() {
-                                                            "Mon" => "lun.",
-                                                            "Tue" => "mar.",
-                                                            "Wed" => "mer.",
-                                                            "Thu" => "jeu.",
-                                                            "Fri" => "ven.",
-                                                            "Sat" => "sam.",
-                                                            "Sun" => "dim.",
-                                                            _ => &day_abbrev,
-                                                        };
-                                                        @let day_date = day.format("%d/%m").to_string();
-                                                        @let is_sunday = day.weekday() == chrono::Weekday::Sun;
-                                                        th .pcal-day-col.has-text-centered.pcal-sunday[is_sunday] {
-                                                            div .pcal-day-name { (day_name) }
-                                                            div .pcal-day-date { (day_date) }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            tbody {
-                                                @for (atelier_id, atelier_name, atelier_slug, atelier_icon) in &atelier_order {
-                                                    tr {
-                                                        td .pcal-atelier-col {
-                                                            a href={(p) "/calendar/" (atelier_slug)} {
-                                                                span .icon { i class={"fa-solid fa-" (atelier_icon)} {} }
-                                                                "\u{00a0}" (atelier_name)
-                                                            }
-                                                        }
-                                                        @for day in &days {
-                                                            @let entry = person_calendar.iter().find(|(n, _, _, _, _, _)| n.atelier == *atelier_id && n.day == *day);
-                                                            @if let Some((need, _, _, _, first_half, second_half)) = entry {
-                                                                @let (first_label, second_label) = if need.nightly { ("soir", "nuit") } else { ("matin", "a-m") };
-                                                                @let is_active = *first_half || *second_half;
-                                                                @let is_sunday = day.weekday() == chrono::Weekday::Sun;
-                                                                @let first_title = if need.nightly { "Soirée" } else { "Matin" };
-                                                                @let second_title = if need.nightly { "Nuit" } else { "Après-midi" };
-                                                                td .pcal-cell.has-text-centered.pcal-active[is_active].pcal-sunday[is_sunday] {
-                                                                    @if can_manage_profile || is_admin || chief_atelier_ids.contains(atelier_id) {
-                                                                        label .pcal-check title=(first_title) {
-                                                                            input .pcal-presence-cb type="checkbox"
-                                                                                data-need=(need.id)
-                                                                                data-staff=(staff.id)
-                                                                                data-half="first"
-                                                                                checked[*first_half];
-                                                                            span { (first_label) }
-                                                                        }
-                                                                        label .pcal-check title=(second_title) {
-                                                                            input .pcal-presence-cb type="checkbox"
-                                                                                data-need=(need.id)
-                                                                                data-staff=(staff.id)
-                                                                                data-half="second"
-                                                                                checked[*second_half];
-                                                                            span { (second_label) }
-                                                                        }
-                                                                    } @else {
-                                                                        span .pcal-check title=(first_title) {
-                                                                            @if *first_half {
-                                                                                span .icon.has-text-success { i .fa-solid.fa-check {} }
-                                                                            } @else {
-                                                                                span .icon.has-text-grey-lighter { i .fa-solid.fa-xmark {} }
-                                                                            }
-                                                                            " " span { (first_label) }
-                                                                        }
-                                                                        span .pcal-check title=(second_title) {
-                                                                            @if *second_half {
-                                                                                span .icon.has-text-success { i .fa-solid.fa-check {} }
-                                                                            } @else {
-                                                                                span .icon.has-text-grey-lighter { i .fa-solid.fa-xmark {} }
-                                                                            }
-                                                                            " " span { (second_label) }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            } @else {
-                                                                @let is_sunday = day.weekday() == chrono::Weekday::Sun;
-                                                                td .pcal-cell.has-text-centered.has-text-grey-lighter.pcal-sunday[is_sunday] { "\u{2014}" }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
