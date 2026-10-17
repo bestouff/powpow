@@ -1235,7 +1235,29 @@
   }
 }
 
-/* === Personal calendar (from person_detail()) === */
+/* === Profile atelier choices === */
+.ateliers-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem 1.5rem;
+}
+.atelier-option {
+  min-width: 0;
+}
+.atelier-choice {
+  display: grid;
+  grid-template-columns: 1.25rem 1.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  min-height: 2rem;
+}
+.atelier-name {
+  overflow-wrap: anywhere;
+}
+.atelier-validation {
+  grid-column: 3;
+  justify-self: start;
+}
 .atelier-checkbox {
   width: 1.25rem;
   height: 1.25rem;

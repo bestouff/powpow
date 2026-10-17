@@ -626,17 +626,16 @@ pub fn person_detail(
                             div .ateliers-list {
                                 @for atelier in ateliers {
                                     @let role = roles.iter().find(|r| r.atelier == atelier.id);
-                                    div .field.mb-4 {
-                                        div .is-flex.is-align-items-center {
-                                            label .checkbox.is-flex.is-align-items-center {
-                                                input .atelier-checkbox.mr-2 type="checkbox"
-                                                    data-atelier-id=(atelier.id)
-                                                    checked[role.is_some()]
-                                                    disabled[!can_edit_ateliers];
-                                                span .is-size-5 { (atelier.name) }
-                                                @if atelier.needs_validation {
-                                                    span .tag.is-warning.is-light.ml-2 { "Validation requise" }
-                                                }
+                                    div .atelier-option {
+                                        label .checkbox.atelier-choice {
+                                            input .atelier-checkbox type="checkbox"
+                                                data-atelier-id=(atelier.id)
+                                                checked[role.is_some()]
+                                                disabled[!can_edit_ateliers];
+                                            span .icon aria-hidden="true" { i class={"fa-solid fa-" (atelier.icon)} {} }
+                                            span .atelier-name.is-size-5 { (atelier.name) }
+                                            @if atelier.needs_validation {
+                                                span .tag.is-warning.is-light.atelier-validation { "Validation requise" }
                                             }
                                         }
                                         // Role options
