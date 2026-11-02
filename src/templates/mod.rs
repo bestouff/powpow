@@ -12,6 +12,7 @@ mod membership;
 mod photos;
 mod settings;
 mod staff;
+mod webcam;
 
 pub use admin::{
     admin_page, audit_page, qualifications_page, restore_page, restore_result, validation_page,
@@ -29,6 +30,7 @@ pub use membership::{import_result, membership_list_with_filters, user_detail};
 pub use photos::photo_page;
 pub use settings::settings_page;
 pub use staff::{person_detail, staff_list};
+pub use webcam::webcam_page;
 
 use crate::models::{ContentBlock, ContentMap};
 use maud::{DOCTYPE, Markup, html};
@@ -235,6 +237,10 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBloc
                 }
                 div #main-navbar .navbar-menu {
                     div .navbar-end {
+                        a .navbar-item .is-active[active == "webcam"] href={(p) "/webcam"} {
+                            span .icon.mr-1 { i .fa-solid.fa-camera {} }
+                            "Webcam"
+                        }
                         a .navbar-item .is-active[active == "calendar"]
                           href={(p) "/calendar"}
                           style=[admin_hide.then_some("display:none")] {

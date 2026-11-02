@@ -1235,6 +1235,73 @@
   }
 }
 
+/* === Public webcam and archive === */
+.webcam-view {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: #14232b;
+}
+.webcam-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.webcam-logo {
+  position: absolute;
+  top: 3%;
+  right: 3%;
+  width: clamp(3rem, 15%, 8rem);
+  max-height: 30%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px #0008);
+}
+.webcam-caption {
+  position: absolute;
+  bottom: 0;
+  inset-inline: 0;
+  padding: clamp(0.5rem, 2vw, 1rem);
+  color: white;
+  background: linear-gradient(transparent, #000c);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  font-size: clamp(0.7rem, 1.3vw, 0.95rem);
+}
+.webcam-caption strong {
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.webcam-navigation,
+.webcam-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.webcam-times {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+  gap: 0.35rem;
+}
+.webcam-time {
+  padding: 0.4rem;
+  text-align: center;
+  border-radius: 0.25rem;
+  background: var(--bulma-background);
+  font-variant-numeric: tabular-nums;
+}
+.webcam-time.is-selected {
+  background: var(--bulma-link);
+  color: white;
+}
+.webcam-history input {
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* === Profile atelier choices === */
 .ateliers-list {
   display: grid;

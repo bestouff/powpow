@@ -5,6 +5,7 @@ const DEFAULT_ADDRESS: &str = "127.0.0.1:3000";
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
+    pub webcam: crate::webcam::config::WebcamConfig,
     pub public_base_url: reqwest::Url,
     pub listen_address: String,
     pub database_url: String,
@@ -44,6 +45,7 @@ impl AppConfig {
             env::var("DATABASE_URL").map_err(|_| anyhow::anyhow!("DATABASE_URL must be set"))?;
 
         Ok(Self {
+            webcam: crate::webcam::config::WebcamConfig::from_env()?,
             public_base_url: parse_public_url(
                 &env::var("PUBLIC_BASE_URL").unwrap_or_else(|_| "http://localhost:3000".into()),
             )?,

@@ -39,7 +39,10 @@ fn membership_management_path(path: &str) -> bool {
 
 fn public_path(path: &str, method: &axum::http::Method) -> bool {
     if matches!(*method, axum::http::Method::GET | axum::http::Method::HEAD)
-        && path.starts_with(crate::calendar_feed::FEED_PREFIX)
+        && (path.starts_with(crate::calendar_feed::FEED_PREFIX)
+            || path == "/webcam"
+            || path.starts_with("/webcam/images/")
+            || path == "/api/webcam/latest")
     {
         return true;
     }

@@ -95,6 +95,76 @@ Real-time status management for ski slopes and ski tows, displayed on the public
 
 An AI-generated daily paragraph displayed on the homepage, inspired by the current weather at the station. Every day, the application fetches weather data from the [Open-Meteo](https://open-meteo.com/) API and sends a prompt to a language model (DeepSeek V3 Turbo via the [Hugging Face](https://huggingface.co/) Inference API) asking for a whimsical French "dicton" about the mountains. The result is cached for the day and rendered as styled HTML on the frontpage. The feature is opt-in: it activates only when a `HUGGINGFACE_TOKEN` is configured.
 
+### Webcam
+
+The public `/webcam` page displays the latest camera image, the configured title,
+and the site's navbar logo as an HTML/CSS overlay. Visitors can choose a UTC date
+and time, browse older/newer images, and return to the latest image. The latest
+view checks for updates every minute; archive views stay on the selected image.
+The original image files retain their original pixels.
+
+PowPow embeds [ThirtyFTP](https://crates.io/crates/thirtyftp) for explicit FTPS
+uploads. Configure one camera account in `/etc/powpow.conf`:
+
+```dotenv
+FTPS_TITLE="Vue sur les pistes"
+FTPS_USERNAME=station
+FTPS_PASSWORD=replace-with-a-random-password
+FTPS_TLS_CERT=/etc/powpow-tls/fullchain.pem
+FTPS_TLS_KEY=/etc/powpow-tls/privkey.pem
+FTPS_LISTEN_ADDRESS=0.0.0.0:2121
+FTPS_PASSIVE_PORTS=50000-50009
+WEBCAM_DIRECTORY=/var/lib/powpow/webcam
+# Set this only if the address seen by the server differs from its public address:
+# FTPS_PASSIVE_HOST=webcam.example.com
+```
+
+`FTPS_TITLE` defaults to `Webcam`. Leaving both credentials empty disables the
+upload listener; existing archives remain accessible. Incomplete credentials or
+TLS settings fail startup with a configuration error. Both control and data
+connections require TLS; active FTP and SFTP are unsupported.
+
+The certificate must cover the hostname configured on the camera. Give the
+`powpow` service read access to the certificate chain and private key, for example
+by installing copies in `/etc/powpow-tls` with owner `root:powpow`, directory mode
+`0750`, and file mode `0640`. When renewing the certificate, update those copies
+and restart `powpow` to reload them.
+
+For the defaults above, allow TCP port `2121` and TCP ports `50000:50009` through
+the VPS firewall (including any provider firewall), then restart the service:
+
+```sh
+sudo ufw allow 2121/tcp
+sudo ufw allow 50000:50009/tcp
+sudo systemctl restart powpow
+```
+
+The Debian service creates `/var/lib/powpow` as its writable state directory.
+For a custom directory outside that tree, also grant the service access with a
+systemd `ReadWritePaths=` override and filesystem permissions for `powpow`.
+Ports above 1023 work with the service's unprivileged account.
+
+On the Reolink camera, select **FTPS Only**, port **2121**, passive transport,
+file type **Picture**, and a **Timer** schedule with the desired interval.
+Use **No overwrite**; PowPow assigns every upload a new archive filename.
+Camera-created subdirectories are accepted as virtual folders and flattened.
+Each completed upload becomes, for example:
+
+```text
+2026-11-02T14:30:00.123456789Z_station.jpg
+```
+
+The timestamp is the VPS reception time in UTC, with nanoseconds to distinguish
+uploads. Supported image types are JPEG (`.jpg` or `.jpeg`), PNG, and WebP,
+up to 20 MiB and 8192 × 8192 pixels. Images are decoded before publication;
+failed transfers and invalid images do not replace the latest image. Files are
+published atomically, and uploads cannot retrieve or delete archive files.
+
+Archives survive restarts and are retained without automatic pruning. Include
+`WEBCAM_DIRECTORY` in filesystem backups: the application's PostgreSQL backup
+does not contain these images. After restoring or externally modifying the
+archive directory, restart PowPow to rebuild its in-memory index.
+
 ### News feed
 
 The homepage displays the latest posts from the association's Facebook page, fetched via an RSS bridge feed. A background task syncs the feed every 15 minutes, downloading post text and images into PostgreSQL. Images are stored as BYTEA and served from the database, avoiding any external CDN dependency at render time. The feature is opt-in: it activates only when an `RSS_NEWS_FEED` URL is configured.
@@ -141,7 +211,7 @@ All CSS and JS are embedded in the binary via `include_str!()` and served from m
 
 ### Prerequisites
 
-- Rust 1.94+ (edition 2024)
+- Rust 1.96+ (edition 2024)
 - PostgreSQL 15+
 - A HelloAsso API account
 
@@ -168,6 +238,10 @@ Key variables:
 | `PUBLIC_BASE_URL`             | Public URL including any path prefix (e.g. `https://station.example/powpow`); defaults to `http://localhost:3000` |
 | `HUGGINGFACE_TOKEN`           | Optional HF Inference API token (enables dicton du jour) |
 | `RSS_NEWS_FEED`               | Optional RSS feed URL (enables news section)             |
+| `FTPS_TITLE`                 | Public webcam title (defaults to `Webcam`)               |
+| `FTPS_USERNAME` / `FTPS_PASSWORD` | Optional webcam upload account (enables embedded FTPS) |
+| `FTPS_TLS_CERT` / `FTPS_TLS_KEY` | PEM certificate chain and private key for FTPS          |
+| `WEBCAM_DIRECTORY`           | Image archive directory (defaults to `/var/lib/powpow/webcam`) |
 | `SYNC_TOKEN` / `BACKUP_TOKEN` | Optional tokens for headless API access                  |
 
 See `.env.example` for the full list including SMTP/Gmail and Mailchimp settings.

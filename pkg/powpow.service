@@ -13,6 +13,8 @@ Restart=on-failure
 RestartSec=5
 WorkingDirectory=/
 UMask=0077
+StateDirectory=powpow
+StateDirectoryMode=0750
 
 # Hardening
 NoNewPrivileges=true

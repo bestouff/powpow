@@ -40,6 +40,7 @@ mod qualifications;
 mod rate_limit;
 mod routes;
 mod templates;
+mod webcam;
 
 use config::AppConfig;
 use helloasso::HelloAssoClient;
@@ -107,6 +108,7 @@ async fn security_headers(
 
 #[derive(Clone)]
 pub struct AppState {
+    pub webcam: webcam::Store,
     pub mail_limits: std::sync::Arc<rate_limit::MailLimits>,
     pub db: PgPool,
     pub helloasso_client: HelloAssoClient,
@@ -369,8 +371,18 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let listen_address = app_config.listen_address.clone();
+    let webcam = webcam::Store::open(
+        app_config.webcam.directory.clone(),
+        app_config.webcam.ftps.is_some(),
+    )
+    .await?;
+    let ftps = match &app_config.webcam.ftps {
+        Some(settings) => Some(webcam::ftps::Server::bind(settings, webcam.clone()).await?),
+        None => None,
+    };
 
     let app_state = AppState {
+        webcam,
         mail_limits: std::sync::Arc::default(),
         db,
         helloasso_client,
@@ -418,13 +430,24 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(routes::background::daily_preload_loop(state_for_preload));
     let listener = tokio::net::TcpListener::bind(&listen_address).await?;
     info!("Server running on {listen_address}");
-    axum::serve(listener, app).await?;
+    tokio::select! {
+        result = axum::serve(listener, app).into_future() => result?,
+        result = async {
+            match ftps {
+                Some(server) => server.run().await,
+                None => std::future::pending::<anyhow::Result<()>>().await,
+            }
+        } => result?,
+    }
     Ok(())
 }
 
 fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/", get(routes::home::index))
+        .route("/webcam", get(routes::webcam::page))
+        .route("/webcam/images/{filename}", get(routes::webcam::image))
+        .route("/api/webcam/latest", get(routes::webcam::latest))
         .route("/admin", get(routes::admin::admin_page_handler))
         .route("/online", get(routes::membership::list_users))
         .route("/online/{id}", get(routes::membership::get_user))

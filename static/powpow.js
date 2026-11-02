@@ -49,7 +49,28 @@ document.addEventListener("DOMContentLoaded", function () {
   initValidationPage(prefix);
   initPhotoPage(prefix);
   initManualImport();
+  initWebcam(prefix);
 });
+
+function initWebcam(prefix) {
+  const page = document.getElementById("webcam-page");
+  if (!page || page.dataset.followLatest !== "true") return;
+  async function refresh() {
+    if (document.hidden || document.activeElement?.closest(".webcam-history")) return;
+    try {
+      const response = await fetch(prefix + "/api/webcam/latest", {cache: "no-store"});
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.image && data.image.filename !== page.dataset.image) window.location.reload();
+    } catch (_) {
+      // Keep the last image visible through a temporary network outage.
+    }
+  }
+  window.setInterval(refresh, 60000);
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) refresh();
+  });
+}
 
 function initCalendarSubscription(prefix) {
   const box = document.getElementById("calendar-subscription");

@@ -11,6 +11,128 @@ async fn response_text(response: Response) -> anyhow::Result<String> {
     )?)
 }
 
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn webcam_is_public_with_immutable_images_and_uncached_latest(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let mut state = state(pool);
+    let directory = tempfile::tempdir()?;
+    state.webcam = webcam::Store::open(directory.path().into(), true).await?;
+    state.config.webcam.title = "Pistes <nord>".into();
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(4, 3).write_to(&mut bytes, image::ImageFormat::Png)?;
+    let bytes = bytes.into_inner();
+    let frame = state
+        .webcam
+        .save(bytes.clone(), "station".into(), "png".into())
+        .await?;
+    let (person, cookie) = member(&state, "unpaid-webcam@example.org").await?;
+    sqlx::query("DELETE FROM payments WHERE staff = $1")
+        .bind(person.id)
+        .execute(&state.db)
+        .await?;
+    let app = build_router(state);
+    for session in [None, Some(cookie.as_str())] {
+        let response = request(&app, "GET", "/webcam", session, serde_json::Value::Null).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        let body = response_text(response).await?;
+        assert!(body.contains("Pistes &lt;nord&gt;"));
+        assert!(body.contains(&frame.filename));
+        let response = request(
+            &app,
+            "GET",
+            "/api/webcam/latest",
+            session,
+            serde_json::Value::Null,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response_text(response).await?)?["image"]["filename"],
+            frame.filename
+        );
+    }
+    let image_path = format!("/webcam/images/{}", frame.filename);
+    let response = request(
+        &app,
+        "GET",
+        &image_path,
+        Some(&cookie),
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "image/png");
+    assert!(
+        response.headers()["cache-control"]
+            .to_str()?
+            .contains("immutable")
+    );
+    let etag = response.headers()["etag"].clone();
+    assert_eq!(to_bytes(response.into_body(), 1000).await?.as_ref(), bytes);
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(&image_path)
+                .header("if-none-match", etag)
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/webcam")
+                .header("x-forwarded-prefix", "/powpow")
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert!(
+        response_text(response)
+            .await?
+            .contains("/powpow/webcam/images/")
+    );
+    for path in [
+        "/webcam?image=missing.jpg",
+        "/webcam/images/.upload-secret",
+        "/webcam/images/..%2Fsecret.jpg",
+    ] {
+        assert_eq!(
+            request(&app, "GET", path, None, serde_json::Value::Null)
+                .await
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+    }
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            "/webcam?date=bad",
+            None,
+            serde_json::Value::Null
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let response = request(
+        &app,
+        "GET",
+        "/webcam?date=2000-01-01",
+        None,
+        serde_json::Value::Null,
+    )
+    .await;
+    assert!(response_text(response).await?.contains("Aucune image"));
+    Ok(())
+}
+
 async fn subscription_url(
     app: &Router,
     person: uuid::Uuid,
@@ -594,6 +716,11 @@ async fn atelier_names_are_escaped_in_reminders_and_calendar_data(
 
 fn state(db: PgPool) -> AppState {
     let config = AppConfig {
+        webcam: webcam::config::WebcamConfig {
+            title: "Vue sur les pistes".into(),
+            directory: "/tmp/opencode/powpow-test-webcam".into(),
+            ftps: None,
+        },
         public_base_url: "https://station.example/powpow/".parse().unwrap(),
         listen_address: String::new(),
         database_url: String::new(),
@@ -627,6 +754,7 @@ fn state(db: PgPool) -> AppState {
         entity_email: "contact@example.org".into(),
     };
     AppState {
+        webcam: webcam::Store::new(config.webcam.directory.clone()),
         db,
         config,
         cookie_key: Key::generate(),
