@@ -1,6 +1,6 @@
 [package]
 name = "powpow"
-version = "1.21.4"
+version = "1.22.0"
 edition = "2024"
 
 [dependencies]
@@ -49,8 +49,16 @@ rss = "2.1.2"
 unicode-normalization = "0.1.25"
 ring = "0.17.14"
 thirtyftp = "0.1.1"
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
-image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+rustls = { version = "0.23", default-features = false, features = [
+  "aws_lc_rs",
+  "std",
+  "tls12",
+] }
+image = { version = "0.25.10", default-features = false, features = [
+  "jpeg",
+  "png",
+  "webp",
+] }
 tempfile = "3"
 tokio-util = { version = "0.7", features = ["io"] }
 subtle = "2.6"
