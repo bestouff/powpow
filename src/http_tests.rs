@@ -133,6 +133,125 @@ async fn webcam_is_public_with_immutable_images_and_uncached_latest(
     Ok(())
 }
 
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn webcam_weather_tracks_live_updates_and_historical_image_times(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use chrono::{SecondsFormat, TimeDelta, Utc};
+
+    let mut state = state(pool.clone());
+    state.config.meteo = meteo::Config::parse(|key| match key {
+        "METEO_FRANCE_STATION_ID" => "38395004".into(),
+        "METEO_FRANCE_TOKEN" => "test-token".into(),
+        _ => String::new(),
+    })?;
+    let directory = tempfile::tempdir()?;
+    let now = Utc::now();
+    let image_time = now - TimeDelta::hours(1);
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(4, 3).write_to(&mut bytes, image::ImageFormat::Png)?;
+    let mut filenames = Vec::new();
+    for time in [image_time, image_time - TimeDelta::hours(1)] {
+        let filename = format!(
+            "{}_station.png",
+            time.to_rfc3339_opts(SecondsFormat::Nanos, true)
+        );
+        tokio::fs::write(directory.path().join(&filename), bytes.get_ref()).await?;
+        filenames.push(filename);
+    }
+    state.webcam = webcam::Store::open(directory.path().into(), false).await?;
+    for (station, time, temperature) in [
+        ("38395004", image_time - TimeDelta::minutes(6), 1.5),
+        ("38395004", image_time + TimeDelta::seconds(1), 2.5),
+        ("38395004", now - TimeDelta::minutes(6), 4.6),
+        ("38395403", now - TimeDelta::minutes(1), 99.0),
+        ("38395004", now + TimeDelta::hours(1), 98.0),
+    ] {
+        sqlx::query("INSERT INTO meteo (station_id, observed_at, reference_time, insert_time, latitude, longitude, temperature_c, rainfall_mm, raw_data)
+            VALUES ($1, $2, $2, $2, 45.315, 5.884833, $3, 0, '{}')")
+            .bind(station).bind(time).bind(temperature).execute(&pool).await?;
+    }
+    sqlx::query(
+        "UPDATE meteo SET wind_speed_m_s = 1.5, wind_direction_deg = 180,
+        gust_speed_m_s = 3, gust_direction_deg = 190, humidity_percent = 82,
+        snow_depth_m = 0.12, pressure_pa = 90000 WHERE observed_at = $1",
+    )
+    .bind(now - TimeDelta::minutes(6))
+    .execute(&pool)
+    .await?;
+    let app = build_router(state);
+    let body =
+        response_text(request(&app, "GET", "/webcam", None, serde_json::Value::Null).await).await?;
+    for text in [
+        "4,6 °C",
+        "0,0 mm",
+        "5,4 km/h",
+        "10,8 km/h",
+        "180°",
+        "190°",
+        "82,0 %",
+        "12,0 cm",
+        "900,0 hPa",
+        "Météo-France · relevé du",
+    ] {
+        assert!(body.contains(text), "{text}");
+    }
+    assert!(!body.contains("Point de rosée"));
+    assert!(!body.contains("99,0 °C"));
+    assert!(!body.contains("98,0 °C"));
+    let response = request(
+        &app,
+        "GET",
+        "/api/webcam/latest",
+        None,
+        serde_json::Value::Null,
+    )
+    .await;
+    let before: serde_json::Value = serde_json::from_str(&response_text(response).await?)?;
+    assert!(body.contains(before["weather_revision"].as_str().unwrap()));
+    sqlx::query("UPDATE meteo SET temperature_c = 5.8, fetched_at = fetched_at + interval '1 second' WHERE observed_at = $1")
+        .bind(now - TimeDelta::minutes(6)).execute(&pool).await?;
+    let response = request(
+        &app,
+        "GET",
+        "/api/webcam/latest",
+        None,
+        serde_json::Value::Null,
+    )
+    .await;
+    let after: serde_json::Value = serde_json::from_str(&response_text(response).await?)?;
+    assert_eq!(before["image"], after["image"]);
+    assert_ne!(before["weather_revision"], after["weather_revision"]);
+    let body =
+        response_text(request(&app, "GET", "/webcam", None, serde_json::Value::Null).await).await?;
+    assert!(body.contains("5,8 °C"));
+
+    let path = format!("/webcam?image={}", filenames[0]);
+    let body =
+        response_text(request(&app, "GET", &path, None, serde_json::Value::Null).await).await?;
+    assert!(body.contains("data-follow-latest=\"false\""));
+    assert!(body.contains("1,5 °C"));
+    assert!(!body.contains("2,5 °C"));
+    assert!(!body.contains("5,8 °C"));
+    let path = format!("/webcam?image={}", filenames[1]);
+    let body =
+        response_text(request(&app, "GET", &path, None, serde_json::Value::Null).await).await?;
+    assert!(!body.contains("class=\"webcam-weather\""));
+    sqlx::query("DELETE FROM meteo WHERE observed_at <= $1")
+        .bind(image_time)
+        .execute(&pool)
+        .await?;
+    sqlx::query("INSERT INTO meteo (station_id, observed_at, reference_time, insert_time, latitude, longitude, temperature_c, raw_data)
+        VALUES ('38395004', $1, $1, $1, 45.315, 5.884833, -10, '{}')")
+        .bind(image_time - TimeDelta::minutes(31)).execute(&pool).await?;
+    let path = format!("/webcam?image={}", filenames[0]);
+    let body =
+        response_text(request(&app, "GET", &path, None, serde_json::Value::Null).await).await?;
+    assert!(!body.contains("class=\"webcam-weather\""));
+    Ok(())
+}
+
 async fn subscription_url(
     app: &Router,
     person: uuid::Uuid,
@@ -890,6 +1009,7 @@ async fn atelier_names_are_escaped_in_reminders_and_calendar_data(
 
 fn state(db: PgPool) -> AppState {
     let config = AppConfig {
+        meteo: None,
         webcam: webcam::config::WebcamConfig {
             title: "Vue sur les pistes".into(),
             directory: "/tmp/opencode/powpow-test-webcam".into(),

@@ -95,12 +95,57 @@ Real-time status management for ski slopes and ski tows, displayed on the public
 
 An AI-generated daily paragraph displayed on the homepage, inspired by the current weather at the station. Every day, the application fetches weather data from the [Open-Meteo](https://open-meteo.com/) API and sends a prompt to a language model (DeepSeek V3 Turbo via the [Hugging Face](https://huggingface.co/) Inference API) asking for a whimsical French "dicton" about the mountains. The result is cached for the day and rendered as styled HTML on the frontpage. The feature is opt-in: it activates only when a `HUGGINGFACE_TOKEN` is configured.
 
+### Météo-France observation archive
+
+PowPow polls Météo-France's [observation API](https://confluence-meteofrance.atlassian.net/wiki/spaces/OpenDataMeteoFrance/pages/853639294/API+Cibl+e+Donn+es+d+Observation)
+at startup and every **six minutes**, storing observations in the PostgreSQL
+`meteo` table. Configure `.env` for local development or `/etc/powpow.conf` for
+the Debian service:
+
+```dotenv
+METEO_FRANCE_STATION_ID=38395004
+METEO_FRANCE_APPLICATION_ID=your_application_credential
+```
+
+Station **38395004 — SAINT-HILAIRE_SAPC** is at **45.315000, 5.884833, 990 m**,
+according to Météo-France's station catalogue. The nearby **ST HILAIRE-NIVOSE**
+station (38395403) is at 1,756 m.
+
+To obtain the application credential, sign in to [the Météo-France API portal](https://portail-api.meteofrance.fr),
+open the account menu → **Mes API**, select the observation API, then choose
+**Générer Token**. Copy the value after `Authorization: Basic` in the token
+generation cURL command into `METEO_FRANCE_APPLICATION_ID`. PowPow exchanges it
+for access tokens using OAuth2 client credentials and renews them automatically.
+This credential takes precedence over `METEO_FRANCE_TOKEN`, which can instead
+hold a temporary bearer token. A standalone bearer token must be replaced,
+followed by an application restart, when it expires. Leaving both credentials
+empty disables collection.
+
+The importer calls `/public/DPObs/v2/station/infrahoraire-6m` for the latest
+observation. Each row is keyed by station and sensor measurement time
+(`observed_at`, from `validity_time`), so repeated polls do not create duplicates.
+Newer provider corrections update existing rows. Temperatures are stored in °C,
+rainfall over six minutes in mm, snow depth in m, wind speeds in m/s, directions
+in degrees, humidity in percent, and pressures in Pa. Unavailable measurements
+remain `NULL`; `raw_data` preserves the complete observation in the provider's
+original units, including fields without a dedicated column. All timestamps use
+`TIMESTAMPTZ`. The `meteo` table is included in database backups and restores.
+
+Failed requests are logged and retried next cycle. Collection archives future
+observations while PowPow runs; it does not backfill downtime. To apply migrations
+and import once without starting the web server, run `powpow --sync-meteo`.
+
 ### Webcam
 
 The public `/webcam` page displays the latest camera image, the configured title,
-and the site's navbar logo as an HTML/CSS overlay. Visitors can choose a UTC date
+the site's navbar logo, and available Météo-France measurements as an HTML/CSS
+overlay. Weather includes its observation time; missing measurements are omitted.
+Wind is displayed in km/h, snow depth in cm, and pressure in hPa.
+Visitors can choose a UTC date
 and time, browse older/newer images, and return to the latest image. The latest
-view checks for updates every minute; archive views stay on the selected image.
+view checks for image and weather updates every minute. Archive views stay on the
+selected image and show the most recent reading at or before its reception time,
+within 30 minutes; older or missing readings are omitted.
 The original image files retain their original pixels.
 
 PowPow embeds [ThirtyFTP](https://crates.io/crates/thirtyftp) for explicit FTPS

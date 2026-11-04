@@ -1,16 +1,23 @@
 use maud::{Markup, html};
 
 use super::{NavKind, get_navbar_block, page};
-use crate::webcam::Gallery;
+use crate::{models::MeteoReading, webcam::Gallery};
 
-pub fn webcam_page(prefix: &str, title: &str, gallery: &Gallery, follow_latest: bool) -> Markup {
+pub fn webcam_page(
+    prefix: &str,
+    title: &str,
+    gallery: &Gallery,
+    follow_latest: bool,
+    weather: Option<&MeteoReading>,
+) -> Markup {
     let logo = get_navbar_block().and_then(|block| block.image_id);
     let selected_name = gallery
         .selected
         .as_ref()
         .map_or("", |frame| frame.filename.as_str());
     let content = html! {
-        section .section #webcam-page data-follow-latest=(follow_latest) data-image=(selected_name) {
+        section .section #webcam-page data-follow-latest=(follow_latest) data-image=(selected_name)
+          data-weather-revision=(weather.map(MeteoReading::revision).unwrap_or_default()) {
             div .container {
                 div .level {
                     div .level-left {
@@ -35,9 +42,14 @@ pub fn webcam_page(prefix: &str, title: &str, gallery: &Gallery, follow_latest: 
                                     img .webcam-logo src={(prefix) "/content-images/" (id)} alt="Logo de la station";
                                 }
                                 figcaption .webcam-caption {
-                                    strong { (title) }
-                                    time datetime=(frame.received_at.to_rfc3339()) {
-                                        (frame.received_at.format("%d/%m/%Y à %H:%M:%S UTC"))
+                                    div .webcam-caption-heading {
+                                        strong { (title) }
+                                        time datetime=(frame.received_at.to_rfc3339()) {
+                                            (frame.received_at.format("%d/%m/%Y à %H:%M:%S UTC"))
+                                        }
+                                    }
+                                    @if let Some(reading) = weather {
+                                        (weather_overlay(reading))
                                     }
                                 }
                             }
@@ -66,7 +78,7 @@ pub fn webcam_page(prefix: &str, title: &str, gallery: &Gallery, follow_latest: 
                             }
                         }
                         @if follow_latest {
-                            p .help { "Cette page se met à jour automatiquement à l'arrivée d'une nouvelle image." }
+                            p .help { "Cette page se met à jour automatiquement à l'arrivée d'une nouvelle image ou d'un nouveau relevé météo." }
                         }
                     }
                     aside .column {
@@ -119,4 +131,70 @@ pub fn webcam_page(prefix: &str, title: &str, gallery: &Gallery, follow_latest: 
         content,
         html! {},
     )
+}
+
+fn weather_overlay(reading: &MeteoReading) -> Markup {
+    let measurements = [
+        ("Température", reading.temperature_c, "°C", None),
+        ("Pluie (6 min)", reading.rainfall_mm, "mm", None),
+        (
+            "Vent",
+            reading.wind_speed_m_s.map(|speed| speed * 3.6),
+            "km/h",
+            reading.wind_direction_deg,
+        ),
+        (
+            "Rafales",
+            reading.gust_speed_m_s.map(|speed| speed * 3.6),
+            "km/h",
+            reading.gust_direction_deg,
+        ),
+        (
+            "Humidité",
+            reading.humidity_percent.map(f64::from),
+            "%",
+            None,
+        ),
+        (
+            "Neige",
+            reading.snow_depth_m.map(|depth| depth * 100.0),
+            "cm",
+            None,
+        ),
+        (
+            "Pression",
+            reading.pressure_pa.map(|pressure| pressure / 100.0),
+            "hPa",
+            None,
+        ),
+        (
+            "Pression mer",
+            reading
+                .sea_level_pressure_pa
+                .map(|pressure| pressure / 100.0),
+            "hPa",
+            None,
+        ),
+        ("Point de rosée", reading.dew_point_c, "°C", None),
+    ];
+    html! {
+        div .webcam-weather aria-label="Observations météo" {
+            div .webcam-weather-values {
+                @for (label, value, unit, direction) in measurements {
+                    @if let Some(value) = value {
+                        span .webcam-weather-measurement {
+                            (label) " " strong { (format!("{value:.1}").replace('.', ",")) " " (unit) }
+                            @if let Some(direction) = direction { " · " (direction) "°" }
+                        }
+                    }
+                }
+            }
+            div .webcam-weather-source {
+                "Météo-France · relevé du "
+                time datetime=(reading.observed_at.to_rfc3339()) {
+                    (reading.observed_at.format("%d/%m/%Y à %H:%M UTC"))
+                }
+            }
+        }
+    }
 }

@@ -131,12 +131,18 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_internal_dns_and_chunked_oversize_bodies() -> Result<()> {
-        use tokio::io::AsyncWriteExt;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
         assert!(PublicDns.resolve("localhost".parse()?).await.is_err());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
         let address = listener.local_addr()?;
         let server = tokio::spawn(async move {
             let (mut stream, _) = listener.accept().await?;
+            // Wait for the request before replying; an early response can cancel
+            // the client's send before the body-size check is reached.
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                request.push(stream.read_u8().await?);
+            }
             stream.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n8\r\n12345678\r\n8\r\n12345678\r\n0\r\n\r\n").await
         });
         let response = Client::new()

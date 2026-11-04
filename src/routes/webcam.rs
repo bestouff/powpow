@@ -5,10 +5,24 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use tokio_util::io::ReaderStream;
 
-use crate::{AppState, get_prefix, templates, webcam};
+use crate::{AppState, database, get_prefix, models::MeteoReading, templates, webcam};
+
+async fn weather(state: &AppState, image_time: Option<DateTime<Utc>>) -> Option<MeteoReading> {
+    let config = state.config.meteo.as_ref()?;
+    let at = image_time.unwrap_or_else(Utc::now);
+    match database::meteo::at_or_before(&state.db, &config.station_id, at).await {
+        Ok(reading) => reading.filter(|reading| {
+            image_time.is_none() || at - reading.observed_at <= TimeDelta::minutes(30)
+        }),
+        Err(error) => {
+            tracing::warn!(%error, "Cannot load webcam weather");
+            None
+        }
+    }
+}
 
 #[derive(Default, serde::Deserialize)]
 pub struct GalleryQuery {
@@ -34,6 +48,13 @@ pub async fn page(
         .webcam
         .gallery(query.date, query.image.as_deref(), query.page);
     let follow_latest = query.date.is_none() && query.image.is_none() && query.page == 0;
+    let reading = if follow_latest {
+        weather(&state, None).await
+    } else if let Some(frame) = &gallery.selected {
+        weather(&state, Some(frame.received_at)).await
+    } else {
+        None
+    };
     (
         [(header::CACHE_CONTROL, "no-store")],
         templates::webcam_page(
@@ -41,15 +62,20 @@ pub async fn page(
             &state.config.webcam.title,
             &gallery,
             follow_latest,
+            reading.as_ref(),
         ),
     )
         .into_response()
 }
 
 pub async fn latest(State(state): State<AppState>) -> impl IntoResponse {
+    let reading = weather(&state, None).await;
     (
         [(header::CACHE_CONTROL, "no-store")],
-        Json(serde_json::json!({ "image": state.webcam.latest() })),
+        Json(serde_json::json!({
+            "image": state.webcam.latest(),
+            "weather_revision": reading.as_ref().map(MeteoReading::revision).unwrap_or_default(),
+        })),
     )
 }
 

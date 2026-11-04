@@ -2,6 +2,36 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 
+#[derive(Debug, FromRow)]
+pub struct MeteoReading {
+    pub station_id: String,
+    pub observed_at: DateTime<Utc>,
+    pub fetched_at: DateTime<Utc>,
+    pub temperature_c: Option<f64>,
+    pub dew_point_c: Option<f64>,
+    pub humidity_percent: Option<i32>,
+    pub wind_direction_deg: Option<i32>,
+    pub wind_speed_m_s: Option<f64>,
+    pub gust_direction_deg: Option<i32>,
+    pub gust_speed_m_s: Option<f64>,
+    pub rainfall_mm: Option<f64>,
+    pub snow_depth_m: Option<f64>,
+    pub pressure_pa: Option<f64>,
+    pub sea_level_pressure_pa: Option<f64>,
+}
+
+impl MeteoReading {
+    /// Changes when a different observation or a provider correction is stored.
+    pub fn revision(&self) -> String {
+        format!(
+            "{}:{}:{}",
+            self.station_id,
+            self.observed_at.to_rfc3339(),
+            self.fetched_at.to_rfc3339()
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::struct_field_names)]
 pub struct Photo {

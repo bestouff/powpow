@@ -1262,16 +1262,37 @@
   inset-inline: 0;
   padding: clamp(0.5rem, 2vw, 1rem);
   color: white;
-  background: linear-gradient(transparent, #000c);
+  background: linear-gradient(#0002, #000d);
+  font-size: clamp(0.7rem, 1.3vw, 0.95rem);
+  text-shadow: 0 1px 2px #000;
+}
+.webcam-caption-heading {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0.25rem 1rem;
-  font-size: clamp(0.7rem, 1.3vw, 0.95rem);
 }
 .webcam-caption strong {
   color: inherit;
   overflow-wrap: anywhere;
+}
+.webcam-weather {
+  margin-top: 0.5rem;
+  border-top: 1px solid #ffffff40;
+  padding-top: 0.4rem;
+}
+.webcam-weather-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+}
+.webcam-weather-measurement {
+  font-variant-numeric: tabular-nums;
+}
+.webcam-weather-source {
+  margin-top: 0.25rem;
+  font-size: 0.85em;
+  opacity: 0.85;
 }
 .webcam-navigation,
 .webcam-pagination {

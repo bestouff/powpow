@@ -32,6 +32,7 @@ mod helloasso;
 mod http_tests;
 mod mailchimp;
 mod manual_import;
+mod meteo;
 mod models;
 mod news;
 mod personal_email;
@@ -261,7 +262,7 @@ async fn main() -> anyhow::Result<()> {
     }
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
-            "powpow {version}\n\nUSAGE:\n    powpow [OPTIONS]\n\nOPTIONS:\n    -h, --help     Print help information\n    -V, --version  Print version information\n    --replay-auto-imports  Read-only replay of historical imports (no migrations, emails or imports)\n    --replay-auto-imports-stdin  Replay a JSON snapshot from stdin without accessing the database"
+            "powpow {version}\n\nUSAGE:\n    powpow [OPTIONS]\n\nOPTIONS:\n    -h, --help     Print help information\n    -V, --version  Print version information\n    --sync-meteo   Apply migrations, import the latest weather observation, and exit\n    --replay-auto-imports  Read-only replay of historical imports (no migrations, emails or imports)\n    --replay-auto-imports-stdin  Replay a JSON snapshot from stdin without accessing the database"
         );
         return Ok(());
     }
@@ -288,6 +289,16 @@ async fn main() -> anyhow::Result<()> {
         return auto_import_replay::run(&db).await;
     }
     let migrations_applied = database::run_migrations(&db).await?;
+
+    let meteo_client = config.meteo.clone().map(meteo::Client::new).transpose()?;
+    if args.iter().any(|arg| arg == "--sync-meteo") {
+        let mut client = meteo_client.ok_or_else(|| anyhow::anyhow!(
+            "Configure METEO_FRANCE_STATION_ID and METEO_FRANCE_APPLICATION_ID or METEO_FRANCE_TOKEN before importing weather"
+        ))?;
+        let rows = meteo::sync(&db, &mut client).await?;
+        info!(station_id = %client.station_id(), rows, "Météo-France observations imported");
+        return Ok(());
+    }
 
     // Audit: log application startup with version
     let _ = database::insert_audit(
@@ -422,6 +433,10 @@ async fn main() -> anyhow::Result<()> {
     // Set entity name for footer and email signatures
     templates::set_entity_name(app_state.config.entity_name.clone());
 
+    if let Some(client) = meteo_client {
+        info!(station_id = %client.station_id(), "Météo-France polling enabled (every six minutes)");
+        tokio::spawn(meteo::poll(app_state.db.clone(), client));
+    }
     // Build router
     let app = build_router(app_state);
     tokio::spawn(routes::background::weekly_morning_email_loop(

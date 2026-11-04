@@ -12,6 +12,7 @@ pub mod auto_import;
 pub mod calendar_feed;
 pub mod email_change;
 pub mod manual_import;
+pub mod meteo;
 pub mod planning;
 #[cfg(test)]
 mod regression_tests;
@@ -2595,10 +2596,12 @@ const TABLES_PARENT_FIRST: &[&str] = &[
     "staff_qualif",
     "news",
     "mailchimp_retired_emails",
+    "meteo",
 ];
 
 /// Tables in reverse dependency order (children first). Used for TRUNCATE.
 const TABLES_CHILD_FIRST: &[&str] = &[
+    "meteo",
     "calendar_subscriptions",
     "mailchimp_retired_emails",
     "news",

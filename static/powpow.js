@@ -61,7 +61,9 @@ function initWebcam(prefix) {
       const response = await fetch(prefix + "/api/webcam/latest", {cache: "no-store"});
       if (!response.ok) return;
       const data = await response.json();
-      if (data.image && data.image.filename !== page.dataset.image) window.location.reload();
+      const imageChanged = data.image && data.image.filename !== page.dataset.image;
+      const weatherChanged = data.weather_revision !== page.dataset.weatherRevision;
+      if (imageChanged || weatherChanged) window.location.reload();
     } catch (_) {
       // Keep the last image visible through a temporary network outage.
     }
