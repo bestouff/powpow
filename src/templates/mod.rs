@@ -208,6 +208,8 @@ enum NavKind {
     StaffOnly, // Only Staff-related items
 }
 
+const SHOW_WEBCAM_LINK: bool = false;
+
 fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBlock>) -> Markup {
     let admin_hide = matches!(kind, NavKind::LoginOnly);
     let p = prefix;
@@ -237,9 +239,11 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBloc
                 }
                 div #main-navbar .navbar-menu {
                     div .navbar-end {
-                        a .navbar-item .is-active[active == "webcam"] href={(p) "/webcam"} {
-                            span .icon.mr-1 { i .fa-solid.fa-camera {} }
-                            "Webcam"
+                        @if SHOW_WEBCAM_LINK {
+                            a .navbar-item .is-active[active == "webcam"] href={(p) "/webcam"} {
+                                span .icon.mr-1 { i .fa-solid.fa-camera {} }
+                                "Webcam"
+                            }
                         }
                         a .navbar-item .is-active[active == "calendar"]
                           href={(p) "/calendar"}
