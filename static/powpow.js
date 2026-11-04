@@ -1106,8 +1106,8 @@ function initCalendarView(prefix) {
           if (countEl) {
             var spans = countEl.querySelectorAll("span");
             if (spans.length === 2) {
-              var qtyMatch = spans[0].textContent.match(/\/(\d+)/);
-              var qty = qtyMatch ? parseInt(qtyMatch[1]) : 0;
+              var qty = Number(th.dataset.quantity);
+              var minimal = Number(th.dataset.minimalQuantity);
               var firstLabel = spans[0].textContent
                 .replace(/\d+\/\d+/, "")
                 .trim();
@@ -1117,15 +1117,23 @@ function initCalendarView(prefix) {
               spans[0].textContent = firstLabel + " " + filledFirst + "/" + qty;
               spans[1].textContent =
                 secondLabel + " " + filledSecond + "/" + qty;
-              spans[0].className =
-                filledFirst >= qty ? "has-text-success" : "has-text-danger";
-              spans[1].className =
-                filledSecond >= qty ? "has-text-success" : "has-text-danger";
+              function countClass(filled) {
+                if (filled >= qty) return "has-text-success";
+                return filled >= minimal ? "has-text-warning-dark" : "has-text-danger";
+              }
+              spans[0].className = countClass(filledFirst);
+              spans[1].className = countClass(filledSecond);
               var isComplete = filledFirst >= qty && filledSecond >= qty;
-              th.classList.toggle("cal-complete", isComplete);
+              var isMinimal = filledFirst >= minimal && filledSecond >= minimal;
+              function updateColumnClass(element) {
+                element.classList.toggle("cal-complete", isComplete);
+                element.classList.toggle("cal-warning", isMinimal && !isComplete);
+                element.classList.toggle("cal-danger", !isMinimal);
+              }
+              updateColumnClass(th);
               table.querySelectorAll("tbody tr").forEach(function (row) {
                 var c = row.cells[colIndex];
-                if (c) c.classList.toggle("cal-complete", isComplete);
+                if (c) updateColumnClass(c);
               });
             }
           }
@@ -1140,6 +1148,17 @@ function initCalendarView(prefix) {
 }
 
 // --- Block 13: Calendar editor ---
+function validateStaffingInputs(comfortable, minimal) {
+  comfortable.setCustomValidity("");
+  if (!comfortable.reportValidity() || !minimal.reportValidity()) return false;
+  if (Number(comfortable.value) < Number(minimal.value)) {
+    comfortable.setCustomValidity("Le besoin confortable doit être supérieur ou égal au besoin minimal.");
+    comfortable.reportValidity();
+    return false;
+  }
+  return true;
+}
+
 function initCalendarEditor(prefix) {
   var dayModal = document.getElementById("day-modal");
   if (!dayModal) return;
@@ -1195,6 +1214,7 @@ function initCalendarEditor(prefix) {
       var existing = dayNeedsMap[atelier.id] || null;
       var hasNeed = !!existing;
       var qty = existing ? existing.quantity : 0;
+      var minimal = existing ? existing.minimal_quantity : 0;
       var nightly = existing ? existing.nightly : atelier.default_nightly;
 
       var canEdit = editableAteliers.has(atelier.id);
@@ -1205,10 +1225,13 @@ function initCalendarEditor(prefix) {
       if (canEdit) {
         card.innerHTML =
           '<div class="card-title"></div>' +
-          '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
-          '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' +
+          '<div class="field"><label class="label is-small">Besoin confortable</label>' +
+          '<div class="control"><input aria-label="Besoin confortable" class="input is-small card-qty" type="number" min="1" max="32767" step="1" required value="' +
           qty +
           '"></div></div>' +
+          '<div class="field"><label class="label is-small">Besoin minimal</label>' +
+          '<div class="control"><input aria-label="Besoin minimal" class="input is-small card-minimal" type="number" min="0" max="32767" step="1" required value="' +
+          minimal + '"></div></div>' +
           '<div class="field"><div class="nightly-switch">' +
           '<span class="side-label' +
           (nightly ? "" : " is-active") +
@@ -1231,10 +1254,13 @@ function initCalendarEditor(prefix) {
       } else {
         card.innerHTML =
           '<div class="card-title"></div>' +
-          '<div class="field"><label class="label is-small">Bénévoles nécessaires</label>' +
+          '<div class="field"><label class="label is-small">Besoin confortable</label>' +
           '<div class="control"><input class="input is-small card-qty" type="number" min="0" value="' +
           qty +
           '" disabled></div></div>' +
+          '<div class="field"><label class="label is-small">Besoin minimal</label>' +
+          '<div class="control"><input class="input is-small card-minimal" type="number" value="' +
+          minimal + '" disabled></div></div>' +
           '<div class="field"><div class="nightly-switch">' +
           '<span class="side-label' +
           (nightly ? "" : " is-active") +
@@ -1271,12 +1297,11 @@ function initCalendarEditor(prefix) {
           card
             .querySelector(".btn-card-save")
             .addEventListener("click", async function () {
-              var q = parseInt(card.querySelector(".card-qty").value);
+              var comfortable = card.querySelector(".card-qty");
+              var minimal = card.querySelector(".card-minimal");
+              if (!validateStaffingInputs(comfortable, minimal)) return;
+              var q = Number(comfortable.value);
               var n = cb.checked;
-              if (!q || q < 1) {
-                showNotification("Quantité invalide", "warning");
-                return;
-              }
               try {
                 var resp = await fetch(prefix + "/api/calendar/needs", {
                   method: "POST",
@@ -1285,6 +1310,7 @@ function initCalendarEditor(prefix) {
                     atelier_id: atelier.id,
                     day: targetDay,
                     quantity: q,
+                    minimal_quantity: Number(minimal.value),
                     nightly: n,
                   }),
                 });
@@ -1602,10 +1628,12 @@ function initCalendarEditor(prefix) {
       var cards = document.querySelectorAll("#opening-day-needs .atelier-card");
       for (var i = 0; i < cards.length; i++) {
         var quantityInput = cards[i].querySelector(".opening-qty");
-        if (!quantityInput.reportValidity()) return;
+        var minimalInput = cards[i].querySelector(".opening-minimal");
+        if (!validateStaffingInputs(quantityInput, minimalInput)) return;
         needs.push({
           atelier_id: cards[i].dataset.atelierId,
           quantity: Number(quantityInput.value),
+          minimal_quantity: Number(minimalInput.value),
           nightly: cards[i].querySelector(".opening-nightly").checked,
         });
       }

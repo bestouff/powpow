@@ -29,6 +29,7 @@ pub struct CreateAtelierRequest {
     needs_validation: bool,
     default_nightly: bool,
     opening_day_typical_needed: i16,
+    opening_day_minimal_needed: i16,
     whatsapp_group_url: Option<String>,
 }
 
@@ -62,6 +63,15 @@ pub async fn api_create_atelier(
 ) -> impl IntoResponse {
     let name = payload.name.trim();
     let slug = payload.slug.trim();
+    if let Err(error) = crate::models::validate_staffing_thresholds(
+        payload.opening_day_typical_needed,
+        payload.opening_day_minimal_needed,
+    ) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": error})),
+        );
+    }
     if name.is_empty() || slug.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
@@ -88,6 +98,7 @@ pub async fn api_create_atelier(
         payload.needs_validation,
         payload.default_nightly,
         payload.opening_day_typical_needed,
+        payload.opening_day_minimal_needed,
         whatsapp_group_url.as_deref(),
     )
     .await
@@ -124,6 +135,15 @@ pub async fn api_update_atelier(
 ) -> impl IntoResponse {
     let name = payload.name.trim();
     let slug = payload.slug.trim();
+    if let Err(error) = crate::models::validate_staffing_thresholds(
+        payload.opening_day_typical_needed,
+        payload.opening_day_minimal_needed,
+    ) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": error})),
+        );
+    }
     if name.is_empty() || slug.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
@@ -151,6 +171,7 @@ pub async fn api_update_atelier(
         payload.needs_validation,
         payload.default_nightly,
         payload.opening_day_typical_needed,
+        payload.opening_day_minimal_needed,
         whatsapp_group_url.as_deref(),
     )
     .await
@@ -162,7 +183,7 @@ pub async fn api_update_atelier(
                 &format!("{} {}", admin.first_name, admin.last_name),
                 "Modification atelier",
                 &format!(
-                    "id={} name={} slug={} icon={} validation={} nightly={} needed={} whatsapp={}",
+                    "id={} name={} slug={} icon={} validation={} nightly={} comfortable={} minimal={} whatsapp={}",
                     atelier.id,
                     atelier.name,
                     atelier.slug,
@@ -170,6 +191,7 @@ pub async fn api_update_atelier(
                     atelier.needs_validation,
                     atelier.default_nightly,
                     atelier.opening_day_typical_needed,
+                    atelier.opening_day_minimal_needed,
                     atelier.whatsapp_group_url.is_some(),
                 ),
             )

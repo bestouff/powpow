@@ -1465,6 +1465,9 @@
 .cal-complete {
   background: var(--bulma-success-light) !important;
 }
+.cal-warning {
+  background: var(--bulma-warning-light) !important;
+}
 .cal-danger {
   background: var(--bulma-danger-light) !important;
 }
@@ -1567,6 +1570,11 @@
   color: var(--bulma-danger-dark);
   font-weight: 600;
   background: var(--bulma-danger-light) !important;
+}
+.cal-table td.cell-warning {
+  color: var(--bulma-warning-dark);
+  font-weight: 600;
+  background: var(--bulma-warning-light) !important;
 }
 .notification.toast {
   position: fixed;

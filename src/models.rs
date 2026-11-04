@@ -282,7 +282,9 @@ pub struct Atelier {
     pub needs_validation: bool,
     pub default_nightly: bool,
     pub icon: String,
+    /// Comfortable daily staffing target.
     pub opening_day_typical_needed: i16,
+    pub opening_day_minimal_needed: i16,
     pub whatsapp_group_url: Option<String>,
 }
 
@@ -296,6 +298,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
             default_nightly: row.try_get("default_nightly")?,
             icon: row.try_get("icon")?,
             opening_day_typical_needed: row.try_get("opening_day_typical_needed")?,
+            opening_day_minimal_needed: row.try_get("opening_day_minimal_needed")?,
             whatsapp_group_url: row.try_get("whatsapp_group_url")?,
         })
     }
@@ -370,7 +373,9 @@ pub struct Need {
     pub id: uuid::Uuid,
     pub day: chrono::NaiveDate,
     pub atelier: uuid::Uuid,
+    /// Comfortable staffing target for each half-day.
     pub quantity: i16,
+    pub minimal_quantity: i16,
     pub nightly: bool,
 }
 
@@ -379,6 +384,7 @@ pub struct Need {
 pub struct OpeningDayNeed {
     pub atelier_id: uuid::Uuid,
     pub quantity: i16,
+    pub minimal_quantity: i16,
     pub nightly: bool,
 }
 
@@ -389,9 +395,20 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Need {
             day: row.try_get("day")?,
             atelier: row.try_get("atelier")?,
             quantity: row.try_get("quantity")?,
+            minimal_quantity: row.try_get("minimal_quantity")?,
             nightly: row.try_get("nightly")?,
         })
     }
+}
+
+pub fn validate_staffing_thresholds(comfortable: i16, minimal: i16) -> Result<(), &'static str> {
+    if minimal < 0 || comfortable < 0 {
+        return Err("Les besoins en bénévoles doivent être positifs ou nuls.");
+    }
+    if comfortable < minimal {
+        return Err("Le besoin confortable doit être supérieur ou égal au besoin minimal.");
+    }
+    Ok(())
 }
 
 // Opening day status

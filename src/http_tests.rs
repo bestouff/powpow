@@ -411,6 +411,175 @@ fn proxy_prefix_cannot_be_an_external_or_parent_relative_url() {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn staffing_thresholds_validate_settings_and_flow_into_calendars(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let state = state(pool);
+    let (admin, cookie) = member(&state, "staffing-admin@example.org").await?;
+    sqlx::query("UPDATE staff SET is_admin = true WHERE id = $1")
+        .bind(admin.id)
+        .execute(&state.db)
+        .await?;
+    let app = build_router(state.clone());
+    let mut payload = serde_json::json!({
+        "name": "Renfort", "slug": "renfort", "icon": "snowflake",
+        "needs_validation": false, "default_nightly": false,
+        "opening_day_typical_needed": 3, "opening_day_minimal_needed": 2
+    });
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/ateliers",
+            Some(&cookie),
+            payload.clone()
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let atelier = database::get_atelier_by_slug(&state.db, "renfort")
+        .await?
+        .unwrap();
+    let endpoint = format!("/api/ateliers/{}", atelier.id);
+    for (comfortable, minimal) in [(1, 2), (-1, 0), (2, -1)] {
+        payload["opening_day_typical_needed"] = comfortable.into();
+        payload["opening_day_minimal_needed"] = minimal.into();
+        for path in ["/api/ateliers", &endpoint] {
+            assert_eq!(
+                request(&app, "POST", path, Some(&cookie), payload.clone())
+                    .await
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+    }
+    for (comfortable, minimal) in [(0, 0), (3, 3), (3, 2)] {
+        payload["opening_day_typical_needed"] = comfortable.into();
+        payload["opening_day_minimal_needed"] = minimal.into();
+        assert_eq!(
+            request(&app, "POST", &endpoint, Some(&cookie), payload.clone())
+                .await
+                .status(),
+            StatusCode::OK
+        );
+    }
+    let settings = response_text(
+        request(
+            &app,
+            "GET",
+            "/settings",
+            Some(&cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(settings.contains("Besoin confortable / jour"));
+    assert!(settings.contains("Besoin minimal / jour"));
+
+    let day = chrono::Utc::now().date_naive() + chrono::Duration::days(7);
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/calendar/opening-day",
+            Some(&cookie),
+            serde_json::json!({"day": day})
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let need = database::get_needs_for_day(&state.db, day)
+        .await?
+        .into_iter()
+        .find(|need| need.atelier == atelier.id)
+        .unwrap();
+    assert_eq!((need.quantity, need.minimal_quantity), (3, 2));
+
+    let mut custom = serde_json::json!({"atelier_id": atelier.id, "day": day, "quantity": 3, "minimal_quantity": 2});
+    for (comfortable, minimal) in [(1, 2), (-1, 0), (2, -1)] {
+        custom["quantity"] = comfortable.into();
+        custom["minimal_quantity"] = minimal.into();
+        assert_eq!(
+            request(
+                &app,
+                "POST",
+                "/api/calendar/needs",
+                Some(&cookie),
+                custom.clone()
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    custom["quantity"] = 4.into();
+    custom["minimal_quantity"] = 2.into();
+    let response = request(&app, "POST", "/api/calendar/needs", Some(&cookie), custom).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let saved: serde_json::Value = serde_json::from_str(&response_text(response).await?)?;
+    assert_eq!(saved["minimal_quantity"], 2);
+    assert_eq!(saved["quantity"], 4);
+    database::upsert_need(&state.db, atelier.id, day, 3, 2, false).await?;
+
+    // First half is exactly minimal, second is exactly comfortable.
+    for index in 0..3 {
+        let (volunteer, _) = member(&state, &format!("staffing-{index}@example.org")).await?;
+        database::add_role(&state.db, volunteer.id, atelier.id, true).await?;
+        database::upsert_presence(&state.db, need.id, volunteer.id, index < 2, true).await?;
+    }
+    let overview = response_text(
+        request(
+            &app,
+            "GET",
+            "/calendar",
+            Some(&cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(overview.contains(&format!("cell-warning day-start\" data-day=\"{day}\" title=\"Besoin minimal : 2 ; confortable : 3\">2/3</td>")));
+    assert!(overview.contains(&format!(
+        "cell-ok\" data-day=\"{day}\" title=\"Besoin minimal : 2 ; confortable : 3\">3/3</td>"
+    )));
+    let detail = response_text(
+        request(
+            &app,
+            "GET",
+            "/calendar/renfort",
+            Some(&cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(detail.contains("has-text-warning-dark\">matin 2/3</span>"));
+    assert!(detail.contains("has-text-success\">après-midi 3/3</span>"));
+    assert!(detail.contains("data-minimal-quantity=\"2\""));
+
+    let backup = database::backup_all_tables(&state.db).await?;
+    database::upsert_need(&state.db, atelier.id, day, 8, 7, true).await?;
+    database::restore_from_sql(&state.db, &backup).await?;
+    let restored = database::get_need_by_id(&state.db, need.id).await?.unwrap();
+    assert_eq!((restored.quantity, restored.minimal_quantity), (3, 2));
+    let restored = database::get_atelier_by_id(&state.db, atelier.id)
+        .await?
+        .unwrap();
+    assert_eq!(
+        (
+            restored.opening_day_typical_needed,
+            restored.opening_day_minimal_needed
+        ),
+        (3, 2)
+    );
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn whatsapp_group_settings_require_admin_and_validate_links(
     pool: PgPool,
 ) -> anyhow::Result<()> {
@@ -425,6 +594,7 @@ async fn whatsapp_group_settings_require_admin_and_validate_links(
     let mut payload = serde_json::json!({
         "name": "Buvette", "slug": "buvette", "icon": "mug-hot",
         "needs_validation": false, "default_nightly": false, "opening_day_typical_needed": 2,
+        "opening_day_minimal_needed": 2,
         "whatsapp_group_url": " https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv?mode=ems_copy_t "
     });
     for (cookie, status) in [
@@ -567,6 +737,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         true,
         false,
         0,
+        0,
         Some("https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv"),
     )
     .await?;
@@ -577,6 +748,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         "snowflake",
         false,
         false,
+        0,
         0,
         Some("https://chat.whatsapp.com/ZyXwVuTsRqPoNmLkJiHgFe"),
     )
@@ -589,6 +761,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         false,
         false,
         0,
+        0,
         None,
     )
     .await?;
@@ -599,6 +772,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         "mug-hot",
         false,
         false,
+        0,
         0,
         subscribed.whatsapp_group_url.as_deref(),
     )

@@ -4,6 +4,34 @@ use chrono::Datelike;
 use maud::{Markup, PreEscaped, html};
 use std::collections::HashMap;
 
+struct StaffingStyle {
+    cell: &'static str,
+    column: &'static str,
+    text: &'static str,
+}
+
+fn staffing_style(need: &Need, filled: i64) -> StaffingStyle {
+    if filled >= i64::from(need.quantity) {
+        StaffingStyle {
+            cell: "cell-ok",
+            column: "cal-complete",
+            text: "has-text-success",
+        }
+    } else if filled >= i64::from(need.minimal_quantity) {
+        StaffingStyle {
+            cell: "cell-warning",
+            column: "cal-warning",
+            text: "has-text-warning-dark",
+        }
+    } else {
+        StaffingStyle {
+            cell: "cell-deficit",
+            column: "cal-danger",
+            text: "has-text-danger",
+        }
+    }
+}
+
 #[derive(serde::Serialize)]
 struct AtelierJs<'a> {
     id: uuid::Uuid,
@@ -33,21 +61,20 @@ pub fn calendar(
 ) -> Markup {
     let p = prefix;
 
-    // Precompute which needs are complete (both halves individually >= quantity)
-    let complete_needs: std::collections::HashSet<uuid::Uuid> = needs
+    // Each half-day has its own staffing level; the column uses the lower one.
+    let counts: HashMap<uuid::Uuid, (i64, i64)> = needs
         .iter()
-        .filter(|need| {
-            let filled_first: i16 = staff_list
+        .map(|need| {
+            let filled_first = staff_list
                 .iter()
                 .filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(f, _)| *f))
-                .count() as i16;
-            let filled_second: i16 = staff_list
+                .count() as i64;
+            let filled_second = staff_list
                 .iter()
                 .filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(_, s)| *s))
-                .count() as i16;
-            filled_first >= need.quantity && filled_second >= need.quantity
+                .count() as i64;
+            (need.id, (filled_first, filled_second))
         })
-        .map(|n| n.id)
         .collect();
 
     // Build a lookup map for opening days
@@ -121,19 +148,20 @@ pub fn calendar(
                                     @let is_sunday = need.day.weekday() == chrono::Weekday::Sun;
                                     @let is_past = need.day < today;
                                     @let is_today = need.day == today;
-                                    @let filled_first: i16 = staff_list.iter().filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(f, _)| *f)).count() as i16;
-                                    @let filled_second: i16 = staff_list.iter().filter(|s| presence.get(&(need.id, s.id)).is_some_and(|(_, se)| *se)).count() as i16;
-                                    @let both_complete = filled_first >= need.quantity && filled_second >= need.quantity;
+                                    @let (filled_first, filled_second) = counts[&need.id];
+                                    @let column_style = staffing_style(need, filled_first.min(filled_second)).column;
                                     @let (first_label_h, second_label_h) = if need.nightly { ("soir", "nuit") } else { ("matin", "après-midi") };
-                                    th .cal-day-col.has-text-centered.cal-sunday[is_sunday].cal-complete[both_complete].cal-danger[!both_complete].cal-past[is_past].cal-today[is_today] {
+                                    th .cal-day-col.has-text-centered.cal-sunday[is_sunday].cal-past[is_past].cal-today[is_today]
+                                        class=(column_style) data-quantity=(need.quantity) data-minimal-quantity=(need.minimal_quantity)
+                                        title={"Besoin minimal : " (need.minimal_quantity) " ; confortable : " (need.quantity)} {
                                         div .cal-day-name { (day_name) }
                                         div .cal-day-date { (day_date) }
                                         div .cal-day-count {
-                                            span .has-text-success[filled_first >= need.quantity].has-text-danger[filled_first < need.quantity] {
+                                            span class=(staffing_style(need, filled_first).text) {
                                                 (first_label_h) " " (filled_first) "/" (need.quantity)
                                             }
                                             " "
-                                            span .has-text-success[filled_second >= need.quantity].has-text-danger[filled_second < need.quantity] {
+                                            span class=(staffing_style(need, filled_second).text) {
                                                 (second_label_h) " " (filled_second) "/" (need.quantity)
                                             }
                                         }
@@ -179,8 +207,9 @@ pub fn calendar(
                                         @let is_active = first_half || second_half;
                                         @let is_sunday = need.day.weekday() == chrono::Weekday::Sun;
                                         @let is_past = need.day < today;
-                                        @let is_complete = complete_needs.contains(&need.id);
-                                        td .cal-cell.has-text-centered.cal-active[is_active].cal-sunday[is_sunday].cal-complete[is_complete].cal-danger[!is_complete].cal-past[is_past] {
+                                        @let (filled_first, filled_second) = counts[&need.id];
+                                        td .cal-cell.has-text-centered.cal-active[is_active].cal-sunday[is_sunday].cal-past[is_past]
+                                            class=(staffing_style(need, filled_first.min(filled_second)).column) {
                                             label .cal-check title=(if need.nightly { "Soirée" } else { "Matin" }) {
                                                 input .presence-cb type="checkbox"
                                                     data-confirm-changes=(!is_self)
@@ -582,17 +611,18 @@ pub fn calendar_editor(
                                                     td class=(&cls) data-day=(&day_str) {}
                                                 }
                                                 // First half cell
-                                                @let style_h1 = if *h1 >= qty { "cell-ok" } else { "cell-deficit" };
+                                                @let style_h1 = staffing_style(need, *h1).cell;
                                                 @let cls_h1 = if pad_before == 0 {
                                                     format!("day-cell has-text-centered {style_h1} day-start{past_cls}")
                                                 } else {
                                                     format!("day-cell has-text-centered {style_h1}{past_cls}")
                                                 };
-                                                td class=(&cls_h1) data-day=(&day_str) { (h1) "/" (qty) }
+                                                @let threshold_title = format!("Besoin minimal : {} ; confortable : {}", need.minimal_quantity, need.quantity);
+                                                td class=(&cls_h1) data-day=(&day_str) title=(&threshold_title) { (h1) "/" (qty) }
                                                 // Second half cell
-                                                @let style_h2 = if *h2 >= qty { "cell-ok" } else { "cell-deficit" };
+                                                @let style_h2 = staffing_style(need, *h2).cell;
                                                 @let cls_h2 = format!("day-cell has-text-centered {style_h2}{past_cls}");
-                                                td class=(&cls_h2) data-day=(&day_str) { (h2) "/" (qty) }
+                                                td class=(&cls_h2) data-day=(&day_str) title=(&threshold_title) { (h2) "/" (qty) }
                                                 // Padding cells after (for day needs in mixed days)
                                                 @for _idx in 0..pad_after {
                                                     @let cls = format!("day-cell{past_cls}");
@@ -673,9 +703,16 @@ pub fn calendar_editor(
                                     div .card-title { (atelier.name) }
                                     div .field {
                                         label .label.is-small {
-                                            "Bénévoles nécessaires"
+                                            "Besoin confortable"
                                             input .input.is-small.opening-qty type="number" min="0" max="32767" step="1" required
                                                 value=(atelier.opening_day_typical_needed);
+                                        }
+                                    }
+                                    div .field {
+                                        label .label.is-small {
+                                            "Besoin minimal"
+                                            input .input.is-small.opening-minimal type="number" min="0" max="32767" step="1" required
+                                                value=(atelier.opening_day_minimal_needed);
                                         }
                                     }
                                     label .checkbox {
@@ -735,4 +772,38 @@ pub fn calendar_editor(
         content,
         extra_scripts,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn staffing_colours_include_the_minimal_boundary_and_exclude_the_comfortable_boundary() {
+        let mut need = Need {
+            id: uuid::Uuid::nil(),
+            day: "2030-01-01".parse().unwrap(),
+            atelier: uuid::Uuid::nil(),
+            quantity: 4,
+            minimal_quantity: 2,
+            nightly: false,
+        };
+        for (count, expected) in [
+            (0, "cell-deficit"),
+            (1, "cell-deficit"),
+            (2, "cell-warning"),
+            (3, "cell-warning"),
+            (4, "cell-ok"),
+            (5, "cell-ok"),
+        ] {
+            assert_eq!(staffing_style(&need, count).cell, expected);
+        }
+        need.minimal_quantity = 4;
+        assert_eq!(staffing_style(&need, 3).cell, "cell-deficit");
+        assert_eq!(staffing_style(&need, 4).cell, "cell-ok");
+        need.minimal_quantity = 0;
+        assert_eq!(staffing_style(&need, 0).cell, "cell-warning");
+        need.quantity = 0;
+        assert_eq!(staffing_style(&need, 0).cell, "cell-ok");
+    }
 }

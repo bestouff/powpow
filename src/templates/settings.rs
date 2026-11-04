@@ -115,7 +115,8 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                                     th { "Groupe WhatsApp" }
                                     th .has-text-centered { "Validation" }
                                     th .has-text-centered { "Nocturne" }
-                                    th .has-text-centered { "Besoin / jour" }
+                                    th .has-text-centered { "Besoin confortable / jour" }
+                                    th .has-text-centered { "Besoin minimal / jour" }
                                     th {}
                                 }
                             }
@@ -205,9 +206,18 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                         }
                         div .column.is-narrow {
                             div .field {
-                                label .label { "Besoin / jour" }
+                                label .label for="new-atelier-needed" { "Besoin confortable / jour" }
                                 div .control {
-                                    input .input #new-atelier-needed type="number" min="0" value="0"
+                                    input .input #new-atelier-needed type="number" min="0" max="32767" step="1" required value="0"
+                                        style="width:5em";
+                                }
+                            }
+                        }
+                        div .column.is-narrow {
+                            div .field {
+                                label .label for="new-atelier-minimal" { "Besoin minimal / jour" }
+                                div .control {
+                                    input .input #new-atelier-minimal type="number" min="0" max="32767" step="1" required value="0"
                                         style="width:5em";
                                 }
                             }
@@ -270,6 +280,9 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
 
     // ── Helper: save a single field for an atelier row ──────────
     async function saveField(row, changes) {{
+        var comfortable = row.querySelector('[data-field="opening_day_typical_needed"]');
+        var minimal = row.querySelector('[data-field="opening_day_minimal_needed"]');
+        if (!validateStaffingInputs(comfortable, minimal)) return false;
         var id = row.dataset.id;
         var body = {{
             name: row.dataset.name,
@@ -278,9 +291,8 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
             whatsapp_group_url: row.dataset.whatsappGroupUrl,
             needs_validation: row.querySelector('[data-field="needs_validation"]').checked,
             default_nightly: row.querySelector('[data-field="default_nightly"]').checked,
-            opening_day_typical_needed: parseInt(
-                row.querySelector('[data-field="opening_day_typical_needed"]').value || "0", 10
-            )
+            opening_day_typical_needed: Number(comfortable.value),
+            opening_day_minimal_needed: Number(minimal.value)
         }};
         Object.assign(body, changes || {{}});
         var res = await fetch(PREFIX + "/api/ateliers/" + id, {{
@@ -302,12 +314,14 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                 saveField(cb.closest("tr"));
             }});
         }});
-    document.querySelectorAll('[data-field="opening_day_typical_needed"]')
-        .forEach(function(inp) {{
+    document.querySelectorAll('tr[data-id]')
+        .forEach(function(row) {{
             var timer;
-            inp.addEventListener("input", function() {{
-                clearTimeout(timer);
-                timer = setTimeout(function() {{ saveField(inp.closest("tr")); }}, 500);
+            row.querySelectorAll('input[type="number"]').forEach(function(inp) {{
+                inp.addEventListener("input", function() {{
+                    clearTimeout(timer);
+                    timer = setTimeout(function() {{ saveField(row); }}, 500);
+                }});
             }});
         }});
 
@@ -385,6 +399,9 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
             var name = document.getElementById("new-atelier-name").value.trim();
             var slug = document.getElementById("new-atelier-slug").value.trim();
             if (!name || !slug) {{ alert("Nom et slug requis"); return; }}
+            var comfortable = document.getElementById("new-atelier-needed");
+            var minimal = document.getElementById("new-atelier-minimal");
+            if (!validateStaffingInputs(comfortable, minimal)) return;
             var body = {{
                 name: name,
                 slug: slug,
@@ -392,9 +409,8 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                 whatsapp_group_url: document.getElementById("new-atelier-whatsapp").value.trim(),
                 needs_validation: document.getElementById("new-atelier-validation").checked,
                 default_nightly: document.getElementById("new-atelier-nightly").checked,
-                opening_day_typical_needed: parseInt(
-                    document.getElementById("new-atelier-needed").value || "0", 10
-                )
+                opening_day_typical_needed: Number(comfortable.value),
+                opening_day_minimal_needed: Number(minimal.value)
             }};
             var res = await fetch(PREFIX + "/api/ateliers", {{
                 method: "POST",
@@ -540,10 +556,17 @@ fn atelier_row(_prefix: &str, a: &Atelier) -> Markup {
                 input type="checkbox" data-field="default_nightly"
                     checked[a.default_nightly];
             }
-            // Besoin / jour: always a live number input
+            // Daily staffing thresholds auto-save together.
             td .has-text-centered {
-                input .input.is-small type="number" min="0"
+                input .input.is-small type="number" min="0" max="32767" step="1" required
+                    aria-label="Besoin confortable / jour"
                     value=(a.opening_day_typical_needed) data-field="opening_day_typical_needed"
+                    style="width:5em;text-align:center";
+            }
+            td .has-text-centered {
+                input .input.is-small type="number" min="0" max="32767" step="1" required
+                    aria-label="Besoin minimal / jour"
+                    value=(a.opening_day_minimal_needed) data-field="opening_day_minimal_needed"
                     style="width:5em;text-align:center";
             }
             // Actions: edit name/slug/WhatsApp, delete

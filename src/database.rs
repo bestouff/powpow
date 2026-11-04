@@ -1510,7 +1510,7 @@ pub async fn get_all_future_needs_with_counts(
 ) -> Result<Vec<(Need, i64, i64)>> {
     let rows = sqlx::query(
         r"
-        SELECT n.id, n.day, n.atelier, n.quantity, n.nightly,
+        SELECT n.id, n.day, n.atelier, n.quantity, n.minimal_quantity, n.nightly,
                COUNT(DISTINCT CASE WHEN p.first_half  THEN p.staff END) AS h1,
                COUNT(DISTINCT CASE WHEN p.second_half THEN p.staff END) AS h2
         FROM needs n
@@ -1531,6 +1531,7 @@ pub async fn get_all_future_needs_with_counts(
             day: row.try_get("day")?,
             atelier: row.try_get("atelier")?,
             quantity: row.try_get("quantity")?,
+            minimal_quantity: row.try_get("minimal_quantity")?,
             nightly: row.try_get("nightly")?,
         };
         result.push((need, row.try_get("h1")?, row.try_get("h2")?));
@@ -1544,14 +1545,16 @@ pub async fn upsert_need(
     atelier_id: uuid::Uuid,
     day: chrono::NaiveDate,
     quantity: i16,
+    minimal_quantity: i16,
     nightly: bool,
 ) -> Result<Need> {
     let need = sqlx::query_as::<_, Need>(
         r"
-        INSERT INTO needs (day, atelier, quantity, nightly)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO needs (day, atelier, quantity, minimal_quantity, nightly)
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (day, atelier) DO UPDATE SET
             quantity = EXCLUDED.quantity,
+            minimal_quantity = EXCLUDED.minimal_quantity,
             nightly = EXCLUDED.nightly
         RETURNING *
         ",
@@ -1559,6 +1562,7 @@ pub async fn upsert_need(
     .bind(day)
     .bind(atelier_id)
     .bind(quantity)
+    .bind(minimal_quantity)
     .bind(nightly)
     .fetch_one(pool)
     .await?;
@@ -1629,7 +1633,8 @@ pub async fn create_opening_days(
     if let Some(needs) = needs {
         let mut seen = std::collections::HashSet::new();
         for need in needs {
-            anyhow::ensure!(need.quantity >= 0, "Quantité invalide");
+            models::validate_staffing_thresholds(need.quantity, need.minimal_quantity)
+                .map_err(anyhow::Error::msg)?;
             anyhow::ensure!(seen.insert(need.atelier_id), "Rôle indiqué plusieurs fois");
             anyhow::ensure!(
                 sqlx::query_scalar::<_, bool>(
@@ -1668,20 +1673,21 @@ pub async fn create_opening_days(
             let mut created = 0;
             for need in needs.iter().filter(|need| need.quantity > 0) {
                 created += sqlx::query(
-                    "INSERT INTO needs (day, atelier, quantity, nightly) VALUES ($1, $2, $3, $4)
-                     ON CONFLICT (day, atelier) DO UPDATE SET quantity = EXCLUDED.quantity, nightly = EXCLUDED.nightly",
+                    "INSERT INTO needs (day, atelier, quantity, minimal_quantity, nightly) VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (day, atelier) DO UPDATE SET quantity = EXCLUDED.quantity,
+                         minimal_quantity = EXCLUDED.minimal_quantity, nightly = EXCLUDED.nightly",
                 )
-                .bind(day).bind(need.atelier_id).bind(need.quantity).bind(need.nightly)
+                .bind(day).bind(need.atelier_id).bind(need.quantity).bind(need.minimal_quantity).bind(need.nightly)
                 .execute(&mut *tx).await?.rows_affected();
             }
             created
         } else {
             sqlx::query(
-                r"INSERT INTO needs (day, atelier, quantity, nightly)
-          SELECT $1, id, opening_day_typical_needed, default_nightly FROM ateliers
+                r"INSERT INTO needs (day, atelier, quantity, minimal_quantity, nightly)
+          SELECT $1, id, opening_day_typical_needed, opening_day_minimal_needed, default_nightly FROM ateliers
           WHERE opening_day_typical_needed > 0
           ON CONFLICT (day, atelier) DO UPDATE SET
-              quantity = EXCLUDED.quantity, nightly = EXCLUDED.nightly",
+              quantity = EXCLUDED.quantity, minimal_quantity = EXCLUDED.minimal_quantity, nightly = EXCLUDED.nightly",
             )
             .bind(day)
             .execute(&mut *tx)
@@ -1845,7 +1851,7 @@ pub async fn get_person_calendar(
     let today = chrono::Utc::now().date_naive();
     let rows = sqlx::query(
         r"
-        SELECT n.id, n.day, n.atelier, n.quantity, n.nightly,
+        SELECT n.id, n.day, n.atelier, n.quantity, n.minimal_quantity, n.nightly,
                a.name AS atelier_name, a.slug AS atelier_slug, a.icon AS atelier_icon,
                COALESCE(p.first_half, false) AS first_half,
                COALESCE(p.second_half, false) AS second_half
@@ -1869,6 +1875,7 @@ pub async fn get_person_calendar(
             day: row.try_get("day")?,
             atelier: row.try_get("atelier")?,
             quantity: row.try_get("quantity")?,
+            minimal_quantity: row.try_get("minimal_quantity")?,
             nightly: row.try_get("nightly")?,
         };
         let atelier_name: String = row.try_get("atelier_name")?;
@@ -2486,7 +2493,7 @@ pub async fn get_pending_validations(
     let rows = if let Some(atelier_ids) = chief_of_ateliers {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed, a.whatsapp_group_url AS a_whatsapp_group_url
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed, a.opening_day_minimal_needed AS a_opening_day_minimal_needed, a.whatsapp_group_url AS a_whatsapp_group_url
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -2500,7 +2507,7 @@ pub async fn get_pending_validations(
     } else {
         sqlx::query(
             r"
-            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed, a.whatsapp_group_url AS a_whatsapp_group_url
+            SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed, a.opening_day_minimal_needed AS a_opening_day_minimal_needed, a.whatsapp_group_url AS a_whatsapp_group_url
             FROM roles r
             JOIN staff s ON s.id = r.staff
             JOIN ateliers a ON a.id = r.atelier
@@ -2537,6 +2544,7 @@ pub async fn get_pending_validations(
             default_nightly: row.try_get("a_default_nightly")?,
             icon: row.try_get("a_icon")?,
             opening_day_typical_needed: row.try_get("a_opening_day_typical_needed")?,
+            opening_day_minimal_needed: row.try_get("a_opening_day_minimal_needed")?,
             whatsapp_group_url: row.try_get("a_whatsapp_group_url")?,
         };
         result.push((staff, atelier));
@@ -2751,6 +2759,24 @@ async fn restore_inner(conn: &mut sqlx::PgConnection, sql: &str) -> Result<()> {
             let mut copy_in = conn.copy_in_raw(copy_header).await?;
             copy_in.read_from(&mut &buf[..]).await?;
             copy_in.finish().await?;
+            // Backups made before the split have one staffing target. Restore
+            // the same value into both thresholds, just as migration 050 does.
+            if copy_header.starts_with("COPY ateliers (")
+                && !copy_header.contains("\"opening_day_minimal_needed\"")
+            {
+                sqlx::query(
+                    "UPDATE ateliers SET opening_day_minimal_needed = opening_day_typical_needed",
+                )
+                .execute(&mut *conn)
+                .await?;
+            }
+            if copy_header.starts_with("COPY needs (")
+                && !copy_header.contains("\"minimal_quantity\"")
+            {
+                sqlx::query("UPDATE needs SET minimal_quantity = quantity")
+                    .execute(&mut *conn)
+                    .await?;
+            }
             continue;
         }
 
@@ -3206,11 +3232,12 @@ pub async fn create_atelier(
     needs_validation: bool,
     default_nightly: bool,
     opening_day_typical_needed: i16,
+    opening_day_minimal_needed: i16,
     whatsapp_group_url: Option<&str>,
 ) -> Result<Atelier> {
     let atelier = sqlx::query_as::<_, Atelier>(
-        r"INSERT INTO ateliers (id, name, slug, icon, needs_validation, default_nightly, opening_day_typical_needed, whatsapp_group_url)
-          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+        r"INSERT INTO ateliers (id, name, slug, icon, needs_validation, default_nightly, opening_day_typical_needed, opening_day_minimal_needed, whatsapp_group_url)
+          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
           RETURNING *",
     )
     .bind(name)
@@ -3219,6 +3246,7 @@ pub async fn create_atelier(
     .bind(needs_validation)
     .bind(default_nightly)
     .bind(opening_day_typical_needed)
+    .bind(opening_day_minimal_needed)
     .bind(whatsapp_group_url)
     .fetch_one(pool)
     .await?;
@@ -3237,12 +3265,13 @@ pub async fn update_atelier(
     needs_validation: bool,
     default_nightly: bool,
     opening_day_typical_needed: i16,
+    opening_day_minimal_needed: i16,
     whatsapp_group_url: Option<&str>,
 ) -> Result<Atelier> {
     let atelier = sqlx::query_as::<_, Atelier>(
         r"UPDATE ateliers
           SET name = $2, slug = $3, icon = $4, needs_validation = $5,
-              default_nightly = $6, opening_day_typical_needed = $7, whatsapp_group_url = $8
+              default_nightly = $6, opening_day_typical_needed = $7, opening_day_minimal_needed = $8, whatsapp_group_url = $9
           WHERE id = $1
           RETURNING *",
     )
@@ -3253,6 +3282,7 @@ pub async fn update_atelier(
     .bind(needs_validation)
     .bind(default_nightly)
     .bind(opening_day_typical_needed)
+    .bind(opening_day_minimal_needed)
     .bind(whatsapp_group_url)
     .fetch_one(pool)
     .await?;
@@ -3439,6 +3469,70 @@ mod chief_permissions_tests {
 
 #[cfg(test)]
 mod opening_day_tests {
+    #[sqlx::test(migrations = false)]
+    #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+    async fn staffing_migration_duplicates_targets_and_enforces_order(
+        pool: sqlx::PgPool,
+    ) -> anyhow::Result<()> {
+        sqlx::raw_sql(
+            "CREATE TABLE ateliers (opening_day_typical_needed smallint NOT NULL DEFAULT 0);
+             CREATE TABLE needs (quantity smallint NOT NULL);
+             INSERT INTO ateliers VALUES (0), (5), (32767);
+             INSERT INTO needs VALUES (0), (3), (32767);",
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::raw_sql(include_str!("../migrations/050_minimal_staffing_needs.sql"))
+            .execute(&pool)
+            .await?;
+        assert_eq!(sqlx::query_as::<_, (i16, i16)>("SELECT opening_day_typical_needed, opening_day_minimal_needed FROM ateliers ORDER BY 1")
+            .fetch_all(&pool).await?, vec![(0, 0), (5, 5), (32767, 32767)]);
+        assert_eq!(
+            sqlx::query_as::<_, (i16, i16)>(
+                "SELECT quantity, minimal_quantity FROM needs ORDER BY 1"
+            )
+            .fetch_all(&pool)
+            .await?,
+            vec![(0, 0), (3, 3), (32767, 32767)]
+        );
+        for statement in [
+            "UPDATE ateliers SET opening_day_minimal_needed = -1",
+            "UPDATE ateliers SET opening_day_typical_needed = 2, opening_day_minimal_needed = 3",
+            "UPDATE needs SET minimal_quantity = -1",
+            "UPDATE needs SET quantity = 2, minimal_quantity = 3",
+        ] {
+            assert!(
+                sqlx::query(sqlx::AssertSqlSafe(statement))
+                    .execute(&pool)
+                    .await
+                    .is_err()
+            );
+        }
+        sqlx::query("UPDATE ateliers SET opening_day_minimal_needed = 0")
+            .execute(&pool)
+            .await?;
+        sqlx::query("UPDATE needs SET minimal_quantity = 0")
+            .execute(&pool)
+            .await?;
+        // Legacy backups still restore with both thresholds equal.
+        super::restore_from_sql(&pool,
+            "TRUNCATE ateliers;\nTRUNCATE needs;\nCOPY ateliers (\"opening_day_typical_needed\") FROM stdin;\n4\n\\.\nCOPY needs (\"quantity\") FROM stdin;\n7\n\\.\n"
+        ).await?;
+        assert_eq!(
+            sqlx::query_scalar::<_, i16>("SELECT opening_day_minimal_needed FROM ateliers")
+                .fetch_one(&pool)
+                .await?,
+            4
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, i16>("SELECT minimal_quantity FROM needs")
+                .fetch_one(&pool)
+                .await?,
+            7
+        );
+        Ok(())
+    }
+
     #[tokio::test]
     #[ignore = "requires DATABASE_URL pointing to a PostgreSQL database"]
     async fn empty_opening_days_are_removed_and_rejected_by_schema() -> anyhow::Result<()> {
@@ -3456,9 +3550,10 @@ mod opening_day_tests {
         let result = async {
             sqlx::raw_sql(
                 "CREATE TABLE opening_days (day date PRIMARY KEY, status text DEFAULT 'reserved');
-                 CREATE TABLE ateliers (id uuid PRIMARY KEY, opening_day_typical_needed smallint, default_nightly bool);
+                 CREATE TABLE ateliers (id uuid PRIMARY KEY, opening_day_typical_needed smallint, default_nightly bool,
+                    opening_day_minimal_needed smallint DEFAULT 0);
                  CREATE TABLE needs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), day date NOT NULL,
-                    atelier uuid NOT NULL, quantity smallint, nightly bool, UNIQUE(day, atelier));
+                    atelier uuid NOT NULL, quantity smallint, nightly bool, minimal_quantity smallint DEFAULT 0, UNIQUE(day, atelier));
                  INSERT INTO opening_days VALUES ('2030-01-01', 'reserved');",
             ).execute(&pool).await?;
             sqlx::raw_sql(include_str!("../migrations/042_remove_empty_opening_days.sql"))
@@ -3470,7 +3565,7 @@ mod opening_day_tests {
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
             let first = uuid::Uuid::new_v4();
             let second = uuid::Uuid::new_v4();
-            sqlx::query("INSERT INTO ateliers VALUES ($1, 2, false), ($2, 1, true)")
+            sqlx::query("INSERT INTO ateliers VALUES ($1, 2, false, 1), ($2, 1, true, 1)")
                 .bind(first).bind(second).execute(&pool).await?;
             assert_eq!(super::create_opening_days(&pool, day, day, None).await?, (1, 2));
             assert_eq!(super::create_opening_days(&pool, day, day, None).await?, (0, 0));
@@ -3501,15 +3596,15 @@ mod opening_day_tests {
             assert!(super::create_opening_days(&pool, end, end + chrono::Duration::days(4), None).await.is_err());
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 5);
             let custom = [
-                crate::models::OpeningDayNeed { atelier_id: first, quantity: 4, nightly: true },
-                crate::models::OpeningDayNeed { atelier_id: second, quantity: 0, nightly: false },
+                crate::models::OpeningDayNeed { atelier_id: first, quantity: 4, minimal_quantity: 2, nightly: true },
+                crate::models::OpeningDayNeed { atelier_id: second, quantity: 0, minimal_quantity: 0, nightly: false },
             ];
             // Custom needs work without defaults and do not modify overlapping days.
             assert_eq!(super::create_opening_days(&pool, end, end + chrono::Duration::days(4), Some(&custom)).await?, (2, 2));
-            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM needs WHERE day > $1 AND quantity = 4 AND nightly AND atelier = $2")
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM needs WHERE day > $1 AND quantity = 4 AND minimal_quantity = 2 AND nightly AND atelier = $2")
                 .bind(end + chrono::Duration::days(2)).bind(first).fetch_one(&pool).await?, 2);
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT sum(quantity)::bigint FROM needs WHERE day = $1").bind(end).fetch_one(&pool).await?, 14);
-            let invalid = [crate::models::OpeningDayNeed { atelier_id: uuid::Uuid::new_v4(), quantity: 1, nightly: false }];
+            let invalid = [crate::models::OpeningDayNeed { atelier_id: uuid::Uuid::new_v4(), quantity: 1, minimal_quantity: 1, nightly: false }];
             assert!(super::create_opening_days(&pool, end, end + chrono::Duration::days(5), Some(&invalid)).await.is_err());
             assert!(super::create_opening_days(&pool, end, end, Some(&[])).await.is_err());
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 7);

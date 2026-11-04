@@ -491,6 +491,7 @@ pub async fn api_get_needs(
                         "day": n.day.format("%Y-%m-%d").to_string(),
                         "atelier": n.atelier,
                         "quantity": n.quantity,
+                        "minimal_quantity": n.minimal_quantity,
                         "nightly": n.nightly,
                     })
                 })
@@ -562,6 +563,7 @@ pub async fn api_get_needs_by_day(
                         "day": n.day.format("%Y-%m-%d").to_string(),
                         "atelier": n.atelier,
                         "quantity": n.quantity,
+                        "minimal_quantity": n.minimal_quantity,
                         "nightly": n.nightly,
                     })
                 })
@@ -584,6 +586,7 @@ pub struct UpsertNeedRequest {
     atelier_id: uuid::Uuid,
     day: String,
     quantity: i16,
+    minimal_quantity: i16,
     #[serde(default)]
     nightly: bool,
 }
@@ -606,6 +609,15 @@ pub async fn api_upsert_need(
         }
     }
 
+    if let Err(error) =
+        models::validate_staffing_thresholds(payload.quantity, payload.minimal_quantity)
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": error})),
+        );
+    }
+
     let day = match chrono::NaiveDate::parse_from_str(&payload.day, "%Y-%m-%d") {
         Ok(d) => d,
         Err(e) => {
@@ -621,6 +633,7 @@ pub async fn api_upsert_need(
         payload.atelier_id,
         day,
         payload.quantity,
+        payload.minimal_quantity,
         payload.nightly,
     )
     .await
@@ -638,8 +651,12 @@ pub async fn api_upsert_need(
                 &format!("{} {}", chief.first_name, chief.last_name),
                 "Création/modification besoin",
                 &format!(
-                    "{} {} qty={} nightly={}",
-                    atelier_name, payload.day, payload.quantity, payload.nightly
+                    "{} {} comfortable={} minimal={} nightly={}",
+                    atelier_name,
+                    payload.day,
+                    payload.quantity,
+                    payload.minimal_quantity,
+                    payload.nightly
                 ),
             )
             .await;
@@ -650,6 +667,7 @@ pub async fn api_upsert_need(
                     "day": need.day.format("%Y-%m-%d").to_string(),
                     "atelier": need.atelier,
                     "quantity": need.quantity,
+                    "minimal_quantity": need.minimal_quantity,
                     "nightly": need.nightly,
                 })),
             )
