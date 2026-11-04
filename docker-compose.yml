@@ -19,6 +19,8 @@ services:
 
   app:
     build: .
+    volumes:
+      - webcam_data:/var/lib/powpow/webcam
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -49,6 +51,11 @@ services:
       METEO_FRANCE_STATION_ID: ${METEO_FRANCE_STATION_ID:-}
       METEO_FRANCE_TOKEN: ${METEO_FRANCE_TOKEN:-}
       METEO_FRANCE_APPLICATION_ID: ${METEO_FRANCE_APPLICATION_ID:-}
+      DIRECT_WEBCAM_URL: ${DIRECT_WEBCAM_URL:-}
+      DIRECT_WEBCAM_PERIOD: ${DIRECT_WEBCAM_PERIOD:-}
+      DIRECT_WEBCAM_NAME: ${DIRECT_WEBCAM_NAME:-}
+      DIRECT_WEBCAM_TITLE: ${DIRECT_WEBCAM_TITLE:-}
+      FTPS_TITLE: ${FTPS_TITLE:-Webcam}
       ENTITY_NAME: ${ENTITY_NAME:-}
       ENTITY_EMAIL: ${ENTITY_EMAIL:-}
       MAILCHIMP_API_KEY: ${MAILCHIMP_API_KEY:-}
@@ -71,3 +78,5 @@ networks:
 volumes:
   postgres_data:
     name: aghil_postgres_data
+  webcam_data:
+    name: aghil_webcam_data

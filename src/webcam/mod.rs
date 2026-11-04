@@ -1,6 +1,7 @@
 //! Filesystem webcam archive. Only complete, decoded images enter the public index.
 
 pub mod config;
+pub mod direct;
 pub mod ftps;
 #[cfg(test)]
 mod tests;

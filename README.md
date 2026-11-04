@@ -148,6 +148,47 @@ selected image and show the most recent reading at or before its reception time,
 within 30 minutes; older or missing readings are omitted.
 The original image files retain their original pixels.
 
+#### Retrieve snapshots from a URL
+
+Set the URL and period in `/etc/powpow.conf` (or `.env` for local development).
+You can also choose a source name and display title:
+
+```dotenv
+DIRECT_WEBCAM_URL=https://camera.example/snapshot.jpg
+DIRECT_WEBCAM_PERIOD=6m
+DIRECT_WEBCAM_NAME=pistes
+DIRECT_WEBCAM_TITLE="Vue sur les pistes"
+```
+
+The period is a positive whole number followed by `s` (seconds), `m` (minutes),
+`h` (hours), or `d` (days), for example `30s`, `6m`, or `1h`. Leaving both
+settings empty disables retrieval; incomplete or invalid settings fail startup.
+Restart PowPow after changing these settings.
+
+`DIRECT_WEBCAM_NAME` identifies the source in archived filenames and defaults to
+`direct`. It accepts 1–64 ASCII letters, digits, hyphens, or underscores.
+`DIRECT_WEBCAM_TITLE` labels this source's images on `/webcam`, including the page
+heading and image overlay. It defaults to `FTPS_TITLE`, or `Webcam` when neither
+title is set. When both sources run, the selected image's source name determines
+which title appears.
+
+PowPow fetches an image immediately at startup and then at the configured period.
+It follows up to five HTTP redirects and requests a fresh response each time.
+The source can be a public URL or a reachable camera on a private network.
+The image format is detected from the downloaded bytes, so URLs without image
+extensions also work. Each snapshot passes through the same decoder, size limits,
+and atomic archive storage as FTPS uploads. Files use the configured source name,
+for example `2026-11-04T12:00:00.000000000Z_pistes.jpg`, and appear on `/webcam`.
+Each successful fetch creates an archive entry, even if the image is unchanged.
+
+Requests time out after 30 seconds. Failed downloads and invalid images are
+logged and retried next cycle; the last valid image stays visible. Retrievals run
+one at a time and skip missed timer ticks. Direct retrieval and FTPS can run
+together or independently, using `WEBCAM_DIRECTORY` for storage. Docker Compose
+persists this directory in the `aghil_webcam_data` volume.
+
+#### Receive snapshots over FTPS
+
 PowPow embeds [ThirtyFTP](https://crates.io/crates/thirtyftp) for explicit FTPS
 uploads. Configure one camera account in `/etc/powpow.conf`:
 
@@ -286,6 +327,9 @@ Key variables:
 | `FTPS_TITLE`                 | Public webcam title (defaults to `Webcam`)               |
 | `FTPS_USERNAME` / `FTPS_PASSWORD` | Optional webcam upload account (enables embedded FTPS) |
 | `FTPS_TLS_CERT` / `FTPS_TLS_KEY` | PEM certificate chain and private key for FTPS          |
+| `DIRECT_WEBCAM_URL` / `DIRECT_WEBCAM_PERIOD` | Optional snapshot URL and interval with units (e.g., `6m`); set both |
+| `DIRECT_WEBCAM_NAME`          | Direct snapshot source name in archive filenames (defaults to `direct`) |
+| `DIRECT_WEBCAM_TITLE`         | Display title for direct snapshots (defaults to `FTPS_TITLE`, or `Webcam`) |
 | `WEBCAM_DIRECTORY`           | Image archive directory (defaults to `/var/lib/powpow/webcam`) |
 | `SYNC_TOKEN` / `BACKUP_TOKEN` | Optional tokens for headless API access                  |
 

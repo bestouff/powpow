@@ -384,13 +384,19 @@ async fn main() -> anyhow::Result<()> {
     let listen_address = app_config.listen_address.clone();
     let webcam = webcam::Store::open(
         app_config.webcam.directory.clone(),
-        app_config.webcam.ftps.is_some(),
+        app_config.webcam.ftps.is_some() || app_config.webcam.direct.is_some(),
     )
     .await?;
     let ftps = match &app_config.webcam.ftps {
         Some(settings) => Some(webcam::ftps::Server::bind(settings, webcam.clone()).await?),
         None => None,
     };
+    let direct_webcam = app_config
+        .webcam
+        .direct
+        .clone()
+        .map(webcam::direct::Fetcher::new)
+        .transpose()?;
 
     let app_state = AppState {
         webcam,
@@ -436,6 +442,9 @@ async fn main() -> anyhow::Result<()> {
     if let Some(client) = meteo_client {
         info!(station_id = %client.station_id(), "Météo-France polling enabled (every six minutes)");
         tokio::spawn(meteo::poll(app_state.db.clone(), client));
+    }
+    if let Some(fetcher) = direct_webcam {
+        tokio::spawn(fetcher.poll(app_state.webcam.clone()));
     }
     // Build router
     let app = build_router(app_state);

@@ -20,6 +20,13 @@ async fn webcam_is_public_with_immutable_images_and_uncached_latest(
     let directory = tempfile::tempdir()?;
     state.webcam = webcam::Store::open(directory.path().into(), true).await?;
     state.config.webcam.title = "Pistes <nord>".into();
+    state.config.webcam.direct = Some(webcam::config::DirectConfig {
+        url: "https://camera.example/snapshot".parse()?,
+        period: std::time::Duration::from_mins(6),
+        name: "pistes_sud".into(),
+        title: Some("Pistes <sud>".into()),
+    });
+    let store = state.webcam.clone();
     let mut bytes = std::io::Cursor::new(Vec::new());
     image::DynamicImage::new_rgb8(4, 3).write_to(&mut bytes, image::ImageFormat::Png)?;
     let bytes = bytes.into_inner();
@@ -130,6 +137,30 @@ async fn webcam_is_public_with_immutable_images_and_uncached_latest(
     )
     .await;
     assert!(response_text(response).await?.contains("Aucune image"));
+    let direct = store.save(bytes, "pistes_sud".into(), "png".into()).await?;
+    for (path, expected_title, other_title) in [
+        (
+            "/webcam".into(),
+            "Pistes &lt;sud&gt;",
+            "Pistes &lt;nord&gt;",
+        ),
+        (
+            format!("/webcam?image={}", direct.filename),
+            "Pistes &lt;sud&gt;",
+            "Pistes &lt;nord&gt;",
+        ),
+        (
+            format!("/webcam?image={}", frame.filename),
+            "Pistes &lt;nord&gt;",
+            "Pistes &lt;sud&gt;",
+        ),
+    ] {
+        let response = request(&app, "GET", &path, None, serde_json::Value::Null).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_text(response).await?;
+        assert!(body.contains(&format!("<strong>{expected_title}</strong>")));
+        assert!(!body.contains(other_title));
+    }
     Ok(())
 }
 
@@ -1014,6 +1045,7 @@ fn state(db: PgPool) -> AppState {
             title: "Vue sur les pistes".into(),
             directory: "/tmp/opencode/powpow-test-webcam".into(),
             ftps: None,
+            direct: None,
         },
         public_base_url: "https://station.example/powpow/".parse().unwrap(),
         listen_address: String::new(),

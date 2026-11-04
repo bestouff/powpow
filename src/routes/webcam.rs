@@ -55,11 +55,24 @@ pub async fn page(
     } else {
         None
     };
+    let title = state
+        .config
+        .webcam
+        .direct
+        .as_ref()
+        .filter(|direct| {
+            gallery
+                .selected
+                .as_ref()
+                .is_none_or(|frame| frame.username == direct.name)
+        })
+        .and_then(|direct| direct.title.as_deref())
+        .unwrap_or(&state.config.webcam.title);
     (
         [(header::CACHE_CONTROL, "no-store")],
         templates::webcam_page(
             &get_prefix(&headers),
-            &state.config.webcam.title,
+            title,
             &gallery,
             follow_latest,
             reading.as_ref(),
