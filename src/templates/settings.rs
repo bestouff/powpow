@@ -104,6 +104,12 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                         "Ateliers"
                     }
 
+                    div .notification.is-info.is-light.mb-4 {
+                        "Les besoins quotidiens et le réglage « Nocturne » servent de valeurs par défaut uniquement pour les nouveaux jours d'ouverture. Les jours déjà créés conservent leurs réglages. Pour les modifier, utilisez le "
+                        a href={(p) "/calendar"} { "planning" }
+                        "."
+                    }
+
                     // Existing ateliers table
                     div .table-container {
                         table .table.is-striped.is-hoverable.is-fullwidth {
