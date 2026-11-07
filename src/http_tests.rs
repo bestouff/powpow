@@ -25,6 +25,7 @@ async fn webcam_is_public_with_immutable_images_and_uncached_latest(
         period: std::time::Duration::from_mins(6),
         name: "pistes_sud".into(),
         title: Some("Pistes <sud>".into()),
+        insecure_tls: false,
     });
     let store = state.webcam.clone();
     let mut bytes = std::io::Cursor::new(Vec::new());

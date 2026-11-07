@@ -25,6 +25,7 @@ impl Fetcher {
             .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::limited(5))
             .referer(false)
+            .tls_danger_accept_invalid_certs(config.insecure_tls)
             .build()?;
         Ok(Self { client, config })
     }
@@ -77,7 +78,7 @@ impl Fetcher {
 
     /// Fetch immediately, then at the configured interval without overlapping requests.
     pub async fn poll(self, store: Store) {
-        info!(period = ?self.config.period, "Direct webcam retrieval enabled");
+        info!(period = ?self.config.period, insecure_tls = self.config.insecure_tls, "Direct webcam retrieval enabled");
         let mut interval = tokio::time::interval(self.config.period);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {

@@ -32,6 +32,7 @@ impl Server {
             period: Duration::from_mins(6),
             name: "pistes_nord-1".into(),
             title: Some("Vue sur les pistes".into()),
+            insecure_tls: false,
         })
     }
 }

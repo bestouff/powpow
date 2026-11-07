@@ -21,6 +21,7 @@ pub struct DirectConfig {
     pub period: Duration,
     pub name: String,
     pub title: Option<String>,
+    pub insecure_tls: bool,
 }
 
 impl std::fmt::Debug for DirectConfig {
@@ -31,12 +32,19 @@ impl std::fmt::Debug for DirectConfig {
             .field("period", &self.period)
             .field("name", &self.name)
             .field("title", &self.title)
+            .field("insecure_tls", &self.insecure_tls)
             .finish_non_exhaustive()
     }
 }
 
 impl DirectConfig {
-    fn parse(url: &str, period: &str, name: &str, title: &str) -> Result<Option<Self>> {
+    fn parse(
+        url: &str,
+        period: &str,
+        name: &str,
+        title: &str,
+        insecure_tls: &str,
+    ) -> Result<Option<Self>> {
         let url = url.trim();
         let period = period.trim();
         if url.is_empty() && period.is_empty() {
@@ -91,11 +99,17 @@ impl DirectConfig {
             "DIRECT_WEBCAM_NAME must contain 1–64 ASCII letters, digits, hyphens, or underscores"
         );
         let title = title.trim();
+        let insecure_tls = match insecure_tls.trim() {
+            "" | "false" => false,
+            "true" => true,
+            _ => anyhow::bail!("DIRECT_WEBCAM_INSECURE_TLS must be true or false"),
+        };
         Ok(Some(Self {
             url,
             period,
             name: name.into(),
             title: (!title.is_empty()).then(|| title.into()),
+            insecure_tls,
         }))
     }
 }
@@ -139,6 +153,7 @@ impl WebcamConfig {
             &value("DIRECT_WEBCAM_PERIOD"),
             &value("DIRECT_WEBCAM_NAME"),
             &value("DIRECT_WEBCAM_TITLE"),
+            &value("DIRECT_WEBCAM_INSECURE_TLS"),
         )?;
         let title = value("FTPS_TITLE");
         let title = if title.trim().is_empty() {
@@ -275,6 +290,7 @@ mod tests {
             assert!(config.ftps.is_none());
             assert_eq!(config.direct.as_ref().unwrap().name, "direct");
             assert!(config.direct.as_ref().unwrap().title.is_none());
+            assert!(!config.direct.as_ref().unwrap().insecure_tls);
             assert_eq!(
                 config.direct.as_ref().unwrap().period,
                 Duration::from_secs(seconds)
@@ -319,6 +335,32 @@ mod tests {
         let direct = WebcamConfig::parse(named_settings)?.direct.unwrap();
         assert_eq!(direct.name, "pistes_nord-1");
         assert_eq!(direct.title.as_deref(), Some("Vue <nord>"));
+        for (value, expected) in [
+            ("", false),
+            ("false", false),
+            ("true", true),
+            (" true ", true),
+        ] {
+            let direct = WebcamConfig::parse(|key| {
+                if key == "DIRECT_WEBCAM_INSECURE_TLS" {
+                    value.into()
+                } else {
+                    named_settings(key)
+                }
+            })?
+            .direct
+            .unwrap();
+            assert_eq!(direct.insecure_tls, expected);
+        }
+        let error = WebcamConfig::parse(|key| {
+            if key == "DIRECT_WEBCAM_INSECURE_TLS" {
+                "treu".into()
+            } else {
+                named_settings(key)
+            }
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("DIRECT_WEBCAM_INSECURE_TLS"));
         for invalid_name in [
             "../pistes",
             "pistes/nord",

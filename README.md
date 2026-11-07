@@ -172,6 +172,11 @@ heading and image overlay. It defaults to `FTPS_TITLE`, or `Webcam` when neither
 title is set. When both sources run, the selected image's source name determines
 which title appears.
 
+For cameras with invalid or self-signed certificates, set
+`DIRECT_WEBCAM_INSECURE_TLS=true` to skip TLS certificate and hostname verification
+for direct snapshots, including redirects. This option defaults to `false` and
+applies only to the direct webcam HTTP client.
+
 PowPow fetches an image immediately at startup and then at the configured period.
 It follows up to five HTTP redirects and requests a fresh response each time.
 The source can be a public URL or a reachable camera on a private network.
@@ -330,6 +335,7 @@ Key variables:
 | `DIRECT_WEBCAM_URL` / `DIRECT_WEBCAM_PERIOD` | Optional snapshot URL and interval with units (e.g., `6m`); set both |
 | `DIRECT_WEBCAM_NAME`          | Direct snapshot source name in archive filenames (defaults to `direct`) |
 | `DIRECT_WEBCAM_TITLE`         | Display title for direct snapshots (defaults to `FTPS_TITLE`, or `Webcam`) |
+| `DIRECT_WEBCAM_INSECURE_TLS`  | Skip TLS certificate verification for direct snapshots (`true` or `false`; defaults to `false`) |
 | `WEBCAM_DIRECTORY`           | Image archive directory (defaults to `/var/lib/powpow/webcam`) |
 | `SYNC_TOKEN` / `BACKUP_TOKEN` | Optional tokens for headless API access                  |
 
