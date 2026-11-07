@@ -1,3 +1,4 @@
+use chrono::Local;
 use maud::{Markup, html};
 
 use super::{NavKind, get_navbar_block, page};
@@ -36,6 +37,7 @@ pub fn webcam_page(
                 div .columns.is-variable.is-5 {
                     div .column.is-three-quarters {
                         @if let Some(frame) = &gallery.selected {
+                            @let received_at = frame.received_at.with_timezone(&Local);
                             figure .webcam-view {
                                 img .webcam-photo src={(prefix) "/webcam/images/" (frame.filename)} alt={"Vue de la webcam : " (title)};
                                 @if let Some(id) = logo {
@@ -44,8 +46,8 @@ pub fn webcam_page(
                                 figcaption .webcam-caption {
                                     div .webcam-caption-heading {
                                         strong { (title) }
-                                        time datetime=(frame.received_at.to_rfc3339()) {
-                                            (frame.received_at.format("%d/%m/%Y à %H:%M:%S UTC"))
+                                        time datetime=(received_at.to_rfc3339()) {
+                                            (received_at.format("%d/%m/%Y à %H:%M:%S"))
                                         }
                                     }
                                     @if let Some(reading) = weather {
@@ -71,7 +73,7 @@ pub fn webcam_page(
                                     button .button disabled { "Suivante" }
                                 }
                             }
-                            p .help.mt-3 { "Heure de réception sur le serveur (UTC)." }
+                            p .help.mt-3 { "Heure locale de réception sur le serveur." }
                         } @else {
                             div .notification.is-light {
                                 "Aucune image disponible pour cette date."
@@ -86,7 +88,7 @@ pub fn webcam_page(
                             h2 .title.is-5 { "Images précédentes" }
                             form method="get" action={(prefix) "/webcam"} {
                                 div .field {
-                                    label .label for="webcam-date" { "Date (UTC)" }
+                                    label .label for="webcam-date" { "Date (heure locale)" }
                                     div .control {
                                         input .input #webcam-date type="date" name="date" value=(gallery.date) required;
                                     }
@@ -100,7 +102,7 @@ pub fn webcam_page(
                                           href={(prefix) "/webcam?image=" (frame.filename)}
                                           aria-current=[(frame.filename == selected_name).then_some("true")]
                                           title=(frame.username) {
-                                            (frame.received_at.format("%H:%M:%S"))
+                                            (frame.received_at.with_timezone(&Local).format("%H:%M:%S"))
                                         }
                                     }
                                 }
@@ -134,6 +136,7 @@ pub fn webcam_page(
 }
 
 fn weather_overlay(reading: &MeteoReading) -> Markup {
+    let observed_at = reading.observed_at.with_timezone(&Local);
     let measurements = [
         ("Température", reading.temperature_c, "°C", None),
         ("Pluie (6 min)", reading.rainfall_mm, "mm", None),
@@ -191,8 +194,8 @@ fn weather_overlay(reading: &MeteoReading) -> Markup {
             }
             div .webcam-weather-source {
                 "Météo-France · relevé du "
-                time datetime=(reading.observed_at.to_rfc3339()) {
-                    (reading.observed_at.format("%d/%m/%Y à %H:%M UTC"))
+                time datetime=(observed_at.to_rfc3339()) {
+                    (observed_at.format("%d/%m/%Y à %H:%M"))
                 }
             }
         }

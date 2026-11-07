@@ -15,7 +15,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
+use chrono::{DateTime, Local, NaiveDate, SecondsFormat, Utc};
 use tokio::sync::Semaphore;
 
 pub const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
@@ -148,29 +148,37 @@ impl Store {
             .and_then(Frame::parse);
         let date = requested
             .as_ref()
-            .map(|frame| frame.received_at.date_naive())
+            .map(|frame| frame.received_at.with_timezone(&Local).date_naive())
             .or(date)
             .or_else(|| {
                 images
                     .last()
                     .and_then(|name| Frame::parse(name))
-                    .map(|frame| frame.received_at.date_naive())
+                    .map(|frame| frame.received_at.with_timezone(&Local).date_naive())
             })
-            .unwrap_or_else(|| Utc::now().date_naive());
-        let day_start = format!("{date}T");
-        let day_end = format!("{date}U");
-        let day: Vec<_> = images.range(day_start..day_end).rev().collect();
+            .unwrap_or_else(|| Local::now().date_naive());
+        // Local days can span neighboring UTC dates, including during DST changes.
+        let day_start = format!("{}T", date.pred_opt().unwrap_or(date));
+        let day_end = format!("{}U", date.succ_opt().unwrap_or(date));
+        let day: Vec<_> = images
+            .range(day_start..day_end)
+            .rev()
+            .filter_map(|name| Frame::parse(name))
+            .filter(|frame| frame.received_at.with_timezone(&Local).date_naive() == date)
+            .collect();
         let pages = day.len().div_ceil(PAGE_SIZE).max(1);
         let page = requested
             .as_ref()
-            .and_then(|frame| day.iter().position(|name| **name == frame.filename))
+            .and_then(|frame| {
+                day.iter()
+                    .position(|image| image.filename == frame.filename)
+            })
             .map_or(page, |position| position / PAGE_SIZE)
             .min(pages - 1);
         let shown: Vec<_> = day
-            .iter()
+            .into_iter()
             .skip(page * PAGE_SIZE)
             .take(PAGE_SIZE)
-            .filter_map(|name| Frame::parse(name))
             .collect();
         let selected = requested.or_else(|| shown.first().cloned());
         let (previous, next) = selected.as_ref().map_or((None, None), |frame| {

@@ -232,6 +232,23 @@ async fn webcam_weather_tracks_live_updates_and_historical_image_times(
     assert!(!body.contains("Point de rosée"));
     assert!(!body.contains("99,0 °C"));
     assert!(!body.contains("98,0 °C"));
+    assert!(!body.contains("UTC"));
+    assert!(
+        body.contains(
+            &image_time
+                .with_timezone(&chrono::Local)
+                .format("%d/%m/%Y à %H:%M:%S")
+                .to_string()
+        )
+    );
+    assert!(
+        body.contains(
+            &(now - TimeDelta::minutes(6))
+                .with_timezone(&chrono::Local)
+                .format("%d/%m/%Y à %H:%M")
+                .to_string()
+        )
+    );
     let response = request(
         &app,
         "GET",

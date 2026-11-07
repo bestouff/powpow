@@ -141,11 +141,14 @@ The public `/webcam` page displays the latest camera image, the configured title
 the site's navbar logo, and available Météo-France measurements as an HTML/CSS
 overlay. Weather includes its observation time; missing measurements are omitted.
 Wind is displayed in km/h, snow depth in cm, and pressure in hPa.
-Visitors can choose a UTC date
+Visitors can choose a local date
 and time, browse older/newer images, and return to the latest image. The latest
 view checks for image and weather updates every minute. Archive views stay on the
 selected image and show the most recent reading at or before its reception time,
 within 30 minutes; older or missing readings are omitted.
+Displayed image and weather times, along with archive dates, use the server's
+local timezone (`TZ`, set to `Europe/Paris` in Docker Compose), including daylight
+saving time changes.
 The original image files retain their original pixels.
 
 #### Retrieve snapshots from a URL
