@@ -46,6 +46,7 @@ labelled with the person's corresponding ateliers.
 - Define **opening days** for the station
 - Set **staffing needs** per atelier per day (number of volunteers needed)
 - Volunteers mark their **presence** for specific days
+- **Infos du jour** (`/today`) shows today's volunteers by atelier and shift, using the server's local date. Access requires staff authentication and current membership.
 - The system computes **deficits** (days where not enough volunteers have signed up)
 - A **weekly Monday morning email** is sent to admins summarizing unimported memberships and upcoming staffing shortfalls
 

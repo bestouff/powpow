@@ -409,6 +409,23 @@ pub struct Need {
     pub nightly: bool,
 }
 
+pub struct PlannedStaff {
+    pub id: uuid::Uuid,
+    pub first_name: String,
+    pub last_name: String,
+    pub first_half: bool,
+    pub second_half: bool,
+}
+
+pub struct AtelierDayPlanning {
+    pub atelier_id: uuid::Uuid,
+    pub atelier_name: String,
+    pub atelier_slug: String,
+    pub atelier_icon: String,
+    pub nightly: bool,
+    pub staff: Vec<PlannedStaff>,
+}
+
 /// Staffing needs shared by every new day in an opening-day range.
 #[derive(Debug, Deserialize)]
 pub struct OpeningDayNeed {

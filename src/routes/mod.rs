@@ -16,4 +16,5 @@ pub mod photos;
 pub mod settings;
 pub mod staff;
 pub mod sync;
+pub mod today;
 pub mod webcam;

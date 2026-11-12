@@ -13,6 +13,199 @@ async fn response_text(response: Response) -> anyhow::Result<String> {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn today_requires_staff_and_shows_only_todays_assignments(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let state = state(pool);
+    let today = chrono::Local::now().date_naive();
+    let (viewer, cookie) = member(&state, "today-viewer@example.org").await?;
+    let app = build_router(state.clone());
+    for session in [None, Some("aghil_session=invalid")] {
+        let response = request(&app, "GET", "/today", session, serde_json::Value::Null).await;
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(response.headers()["location"], "/login");
+    }
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/today")
+                .header("x-forwarded-prefix", "/powpow")
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.headers()["location"], "/powpow/login");
+    let response = request(
+        &app,
+        "GET",
+        "/today",
+        Some(&cookie),
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "private, no-store");
+    assert!(
+        response_text(response)
+            .await?
+            .contains("Aucun atelier prévu aujourd'hui.")
+    );
+
+    let mut staff = Vec::new();
+    for (index, name) in [
+        "Alice <matin>",
+        "Béatrice",
+        "Charlie",
+        "Diane",
+        "Hors-date",
+        "Intéressé",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let (person, _) = member(&state, &format!("today-{index}@example.org")).await?;
+        sqlx::query("UPDATE staff SET first_name = $1, last_name = 'Bénévole' WHERE id = $2")
+            .bind(name)
+            .bind(person.id)
+            .execute(&state.db)
+            .await?;
+        staff.push(person.id);
+    }
+    let mut ateliers = Vec::new();
+    for (name, slug, nightly) in [
+        ("Accueil <pistes>", "today-accueil", false),
+        ("Buvette", "today-buvette", false),
+        ("Nocturne", "today-nocturne", true),
+    ] {
+        let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation, default_nightly, icon) VALUES ($1, $2, false, $3, 'users') RETURNING id")
+            .bind(name).bind(slug).bind(nightly).fetch_one(&state.db).await?;
+        ateliers.push(id);
+        database::upsert_need(&state.db, id, today, 4, 1, nightly).await?;
+    }
+    let needs = database::get_needs_for_day(&state.db, today).await?;
+    let day_need = needs
+        .iter()
+        .find(|need| need.atelier == ateliers[0])
+        .unwrap()
+        .id;
+    let night_need = needs
+        .iter()
+        .find(|need| need.atelier == ateliers[2])
+        .unwrap()
+        .id;
+    for (person, first, second) in [
+        (staff[0], true, false),
+        (staff[1], false, true),
+        (staff[2], true, true),
+    ] {
+        database::upsert_presence(&state.db, day_need, person, first, second).await?;
+    }
+    database::upsert_presence(&state.db, night_need, staff[3], true, true).await?;
+    database::add_role(&state.db, staff[5], ateliers[0], true).await?;
+    for day in [today.pred_opt().unwrap(), today.succ_opt().unwrap()] {
+        database::upsert_need(&state.db, ateliers[0], day, 4, 1, false).await?;
+        let need = database::get_needs_for_day(&state.db, day).await?.remove(0);
+        database::upsert_presence(&state.db, need.id, staff[4], true, true).await?;
+    }
+    sqlx::query("INSERT INTO opening_days (day, status) VALUES ($1, 'validated')")
+        .bind(today)
+        .execute(&state.db)
+        .await?;
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/today")
+                .header("cookie", &cookie)
+                .header("x-forwarded-prefix", "/powpow")
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_text(response).await?;
+    assert!(body.contains("Infos du jour"));
+    assert!(body.contains(&today.format("%d/%m/%Y").to_string()));
+    assert!(body.contains("Ouverture confirmée."));
+    assert!(body.contains("navbar-staff is-active\" href=\"/powpow/today\""));
+    assert!(body.contains("href=\"/powpow/calendar/today-accueil\""));
+    assert!(body.contains(&format!("href=\"/powpow/person/{}\"", staff[0])));
+    assert!(body.contains("Accueil &lt;pistes&gt;"));
+    assert!(body.contains("Alice &lt;matin&gt;"));
+    assert!(!body.contains("<matin>"));
+    for name in ["Hors-date", "Intéressé"] {
+        assert!(!body.contains(name));
+    }
+    let morning = body
+        .split_once(">Matin</h4>")
+        .unwrap()
+        .1
+        .split("</section>")
+        .next()
+        .unwrap();
+    assert!(morning.contains("Alice &lt;matin&gt;"));
+    assert!(morning.contains("Charlie"));
+    assert!(!morning.contains("Béatrice"));
+    let afternoon = body
+        .split_once(">Après-midi</h4>")
+        .unwrap()
+        .1
+        .split("</section>")
+        .next()
+        .unwrap();
+    assert!(afternoon.contains("Béatrice"));
+    assert!(afternoon.contains("Charlie"));
+    assert!(!afternoon.contains("Alice"));
+    for label in ["Soirée", "Nuit"] {
+        let shift = body
+            .split_once(&format!(">{label}</h4>"))
+            .unwrap()
+            .1
+            .split("</section>")
+            .next()
+            .unwrap();
+        assert!(shift.contains("Diane"));
+    }
+    assert_eq!(body.matches("Aucun bénévole inscrit.").count(), 2);
+
+    database::upsert_presence(&state.db, day_need, staff[0], false, false).await?;
+    sqlx::query("UPDATE opening_days SET status = 'canceled' WHERE day = $1")
+        .bind(today)
+        .execute(&state.db)
+        .await?;
+    let body = response_text(
+        request(
+            &app,
+            "GET",
+            "/today",
+            Some(&cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(!body.contains("Alice"));
+    assert!(body.contains("Journée d'ouverture annulée."));
+    assert!(body.contains("Charlie"));
+
+    sqlx::query("DELETE FROM payments WHERE staff = $1")
+        .bind(viewer.id)
+        .execute(&state.db)
+        .await?;
+    let response = request(
+        &app,
+        "GET",
+        "/today",
+        Some(&cookie),
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(response.headers()["location"], "/?membership_required=true");
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn webcam_is_public_with_immutable_images_and_uncached_latest(
     pool: PgPool,
 ) -> anyhow::Result<()> {

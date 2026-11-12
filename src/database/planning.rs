@@ -1,5 +1,57 @@
-use sqlx::PgPool;
+use chrono::NaiveDate;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
+
+use crate::models::{AtelierDayPlanning, PlannedStaff};
+
+/// Load every scheduled atelier and its assigned staff for one local calendar day.
+pub async fn for_day(pool: &PgPool, day: NaiveDate) -> anyhow::Result<Vec<AtelierDayPlanning>> {
+    let rows = sqlx::query(
+        "SELECT a.id AS atelier_id, a.name, a.slug, a.icon, n.nightly,
+                s.id AS staff_id, s.first_name, s.last_name, p.first_half, p.second_half
+         FROM needs n
+         JOIN ateliers a ON a.id = n.atelier
+         LEFT JOIN presence p ON p.needs = n.id AND (p.first_half OR p.second_half)
+         LEFT JOIN staff s ON s.id = p.staff
+         WHERE n.day = $1
+         ORDER BY a.name, a.id, s.last_name, s.first_name, s.id",
+    )
+    .bind(day)
+    .fetch_all(pool)
+    .await?;
+
+    let mut planning: Vec<AtelierDayPlanning> = Vec::new();
+    for row in rows {
+        let atelier_id = row.try_get("atelier_id")?;
+        if planning
+            .last()
+            .is_none_or(|entry| entry.atelier_id != atelier_id)
+        {
+            planning.push(AtelierDayPlanning {
+                atelier_id,
+                atelier_name: row.try_get("name")?,
+                atelier_slug: row.try_get("slug")?,
+                atelier_icon: row.try_get("icon")?,
+                nightly: row.try_get("nightly")?,
+                staff: Vec::new(),
+            });
+        }
+        if let Some(id) = row.try_get::<Option<Uuid>, _>("staff_id")? {
+            planning
+                .last_mut()
+                .expect("atelier was added")
+                .staff
+                .push(PlannedStaff {
+                    id,
+                    first_name: row.try_get("first_name")?,
+                    last_name: row.try_get("last_name")?,
+                    first_half: row.try_get("first_half")?,
+                    second_half: row.try_get("second_half")?,
+                });
+        }
+    }
+    Ok(planning)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

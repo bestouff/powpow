@@ -615,6 +615,11 @@ function initLoginCheck(prefix) {
           el.style.display = "";
         });
       }
+      if (!d.membership_only) {
+        document.querySelectorAll(".navbar-staff").forEach(function (el) {
+          el.style.display = "";
+        });
+      }
     })
     .catch(function () {});
 }

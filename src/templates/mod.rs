@@ -12,6 +12,7 @@ mod membership;
 mod photos;
 mod settings;
 mod staff;
+mod today;
 mod webcam;
 
 pub use admin::{
@@ -30,6 +31,7 @@ pub use membership::{import_result, membership_list_with_filters, user_detail};
 pub use photos::photo_page;
 pub use settings::settings_page;
 pub use staff::{person_detail, staff_list};
+pub use today::today_page;
 pub use webcam::webcam_page;
 
 use crate::models::{ContentBlock, ContentMap};
@@ -244,6 +246,12 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBloc
                                 span .icon.mr-1 { i .fa-solid.fa-camera {} }
                                 "Webcam"
                             }
+                        }
+                        a .navbar-item.navbar-staff .is-active[active == "today"]
+                          href={(p) "/today"}
+                          style=[admin_hide.then_some("display:none")] {
+                            span .icon.mr-1 { i .fa-solid.fa-calendar-day {} }
+                            "Infos du jour"
                         }
                         a .navbar-item .is-active[active == "calendar"]
                           href={(p) "/calendar"}

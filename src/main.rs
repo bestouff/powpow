@@ -469,6 +469,7 @@ async fn main() -> anyhow::Result<()> {
 fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/", get(routes::home::index))
+        .route("/today", get(routes::today::page))
         .route("/webcam", get(routes::webcam::page))
         .route("/webcam/images/{filename}", get(routes::webcam::image))
         .route("/api/webcam/latest", get(routes::webcam::latest))
