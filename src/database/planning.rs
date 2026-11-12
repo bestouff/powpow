@@ -4,6 +4,15 @@ use uuid::Uuid;
 
 use crate::models::{AtelierDayPlanning, PlannedStaff};
 
+pub async fn has_activity(pool: &PgPool, day: NaiveDate) -> anyhow::Result<bool> {
+    Ok(
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM needs WHERE day = $1)")
+            .bind(day)
+            .fetch_one(pool)
+            .await?,
+    )
+}
+
 /// Load every scheduled atelier and its assigned staff for one local calendar day.
 pub async fn for_day(pool: &PgPool, day: NaiveDate) -> anyhow::Result<Vec<AtelierDayPlanning>> {
     let rows = sqlx::query(

@@ -13,6 +13,7 @@ pub mod mailchimp;
 pub mod manual_import;
 pub mod membership;
 pub mod photos;
+pub mod planning_pdf;
 pub mod settings;
 pub mod staff;
 pub mod sync;

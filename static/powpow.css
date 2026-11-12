@@ -1236,6 +1236,11 @@
 }
 
 /* === Daily information === */
+.today-planning-downloads .button {
+  height: auto;
+  min-height: 2.5rem;
+  white-space: normal;
+}
 .today-summary .box {
   height: 100%;
 }

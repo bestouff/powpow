@@ -55,6 +55,153 @@ async fn login_membership_link_survives_missing_cms_content(pool: PgPool) -> any
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn planning_pdf_downloads_select_dates_and_require_membership(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let state = state(pool);
+    let (viewer, cookie) = member(&state, "planning-pdf@example.org").await?;
+    let app = build_router(state.clone());
+    let today = chrono::Local::now().date_naive();
+    let tomorrow = today.succ_opt().unwrap();
+    let historic = today - chrono::Duration::days(7);
+    let path = |day| format!("/planning/pdf/{day}");
+    for session in [None, Some("aghil_session=invalid")] {
+        let response = request(&app, "GET", &path(today), session, serde_json::Value::Null).await;
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(response.headers()["location"], "/login");
+    }
+    let response = request(
+        &app,
+        "GET",
+        &path(today),
+        Some(&cookie),
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    for invalid in ["not-a-date", "2026-02-30"] {
+        assert_eq!(
+            request(
+                &app,
+                "GET",
+                &format!("/planning/pdf/{invalid}"),
+                Some(&cookie),
+                serde_json::Value::Null
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    let atelier: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO ateliers (name, slug, needs_validation) VALUES ('Accueil PDF', 'pdf-accueil', false) RETURNING id",
+    )
+    .fetch_one(&state.db)
+    .await?;
+    for (day, name) in [
+        (tomorrow, "Demain"),
+        (today, "Aujourd’hui"),
+        (historic, "Historique"),
+    ] {
+        let (person, _) = member(&state, &format!("pdf-{day}@example.org")).await?;
+        sqlx::query("UPDATE staff SET first_name = $1 WHERE id = $2")
+            .bind(name)
+            .bind(person.id)
+            .execute(&state.db)
+            .await?;
+        database::upsert_need(&state.db, atelier, day, 2, 1, false).await?;
+        let need = database::get_needs_for_day(&state.db, day).await?.remove(0);
+        database::upsert_presence(&state.db, need.id, person.id, true, false).await?;
+        let page = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/today")
+                    .header("cookie", &cookie)
+                    .header("x-forwarded-prefix", "/powpow")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        let html = response_text(page).await?;
+        assert!(!html.contains("Voir le planning complet"));
+        assert!(html.contains(&format!("href=\"/powpow/planning/pdf/{tomorrow}\"")));
+        assert!(!html.contains("Pas d’activité demain"));
+        if day == tomorrow {
+            assert!(html.contains("disabled>Pas d’activité aujourd’hui</button>"));
+            assert!(!html.contains(&format!("href=\"/powpow/planning/pdf/{today}\"")));
+        } else {
+            assert!(html.contains(&format!("href=\"/powpow/planning/pdf/{today}\"")));
+        }
+        let response = request(
+            &app,
+            "GET",
+            &path(day),
+            Some(&cookie),
+            serde_json::Value::Null,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], "application/pdf");
+        assert_eq!(response.headers()["cache-control"], "private, no-store");
+        assert_eq!(
+            response.headers()["content-disposition"],
+            format!("attachment; filename=\"planning-{day}.pdf\"")
+        );
+        let bytes = to_bytes(response.into_body(), 5_000_000).await?;
+        let text = lopdf::Document::load_mem(&bytes)?
+            .extract_text(&[1])?
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(text.contains(&format!("Planning du {}", day.format("%d/%m/%Y"))));
+        assert!(text.contains(name));
+        for other in ["Demain", "Aujourd’hui", "Historique"]
+            .into_iter()
+            .filter(|other| *other != name)
+        {
+            assert!(!text.contains(other));
+        }
+    }
+    sqlx::query("DELETE FROM presence WHERE needs IN (SELECT id FROM needs WHERE day = $1)")
+        .bind(tomorrow)
+        .execute(&state.db)
+        .await?;
+    sqlx::query("DELETE FROM needs WHERE day = $1")
+        .bind(tomorrow)
+        .execute(&state.db)
+        .await?;
+    let html = response_text(
+        request(
+            &app,
+            "GET",
+            "/today",
+            Some(&cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(html.contains("disabled>Pas d’activité demain</button>"));
+    assert!(html.contains(&format!("href=\"/planning/pdf/{today}\"")));
+    sqlx::query("DELETE FROM payments WHERE staff = $1")
+        .bind(viewer.id)
+        .execute(&state.db)
+        .await?;
+    let response = request(
+        &app,
+        "GET",
+        &path(today),
+        Some(&cookie),
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(response.headers()["location"], "/?membership_required=true");
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn today_requires_staff_and_shows_only_todays_assignments(
     pool: PgPool,
 ) -> anyhow::Result<()> {

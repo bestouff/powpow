@@ -14,6 +14,7 @@ pub fn today_page(
     opening_status: Option<OpeningDayStatus>,
     equipments: &[Equipment],
     forecast: Option<&Forecast>,
+    tomorrow_pdf: Option<NaiveDate>,
 ) -> Markup {
     let content = html! {
         section .section #today-page {
@@ -69,9 +70,9 @@ pub fn today_page(
                         }
                     }
                 }
-                a .button.is-link.is-outlined href={(prefix) "/calendar"} {
-                    span .icon { i .fa-solid.fa-calendar-days {} }
-                    span { "Voir le planning complet" }
+                div .buttons.today-planning-downloads {
+                    (pdf_button(prefix, (!planning.is_empty()).then_some(today), "Planning d’aujourd’hui (PDF)", "Pas d’activité aujourd’hui"))
+                    (pdf_button(prefix, tomorrow_pdf, "Planning de demain (PDF)", "Pas d’activité demain"))
                 }
             }
         }
@@ -85,6 +86,19 @@ pub fn today_page(
         content,
         html! {},
     )
+}
+
+fn pdf_button(prefix: &str, day: Option<NaiveDate>, label: &str, empty_label: &str) -> Markup {
+    html! {
+        @if let Some(day) = day {
+            a .button.is-link.is-outlined href={(prefix) "/planning/pdf/" (day)} download {
+                span .icon { i .fa-solid.fa-file-pdf aria-hidden="true" {} }
+                span { (label) }
+            }
+        } @else {
+            button .button.is-light type="button" disabled { (empty_label) }
+        }
+    }
 }
 
 fn weather(forecast: Option<&Forecast>) -> Markup {

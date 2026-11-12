@@ -37,6 +37,7 @@ mod meteo;
 mod models;
 mod news;
 mod personal_email;
+mod planning_pdf;
 mod public_http;
 mod qualifications;
 mod rate_limit;
@@ -487,6 +488,7 @@ fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/", get(routes::home::index))
         .route("/today", get(routes::today::page))
+        .route("/planning/pdf/{date}", get(routes::planning_pdf::download))
         .route("/webcam", get(routes::webcam::page))
         .route("/webcam/{filename}", get(routes::webcam::asset))
         .route("/webcam/images/{filename}", get(routes::webcam::image))

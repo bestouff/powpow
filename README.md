@@ -47,6 +47,7 @@ labelled with the person's corresponding ateliers.
 - Set **staffing needs** per atelier per day (number of volunteers needed)
 - Volunteers mark their **presence** for specific days
 - **Infos du jour** (`/today`) shows the day's weather forecast, current piste and téléski statuses, and volunteers by atelier and shift, using the server's local date. Access requires staff authentication and current membership. The page refreshes automatically every five minutes while visible, and catches up when returning to an overdue background tab. The Open-Meteo forecast for Saint-Hilaire at 1,200 m refreshes in the background every 15 minutes, independently of the dicton feature; an unavailable forecast does not block the planning.
+- **Planning PDFs** (`/planning/pdf/YYYY-MM-DD`) export any scheduled day with the station logo, atelier shifts, volunteer names, and an export timestamp. The `/today` page offers downloads for today and tomorrow, or disabled buttons when no activity is scheduled. Downloads require the same membership as `/today`. The logo comes from `hero-subtitle`, falling back to `navbar`; fonts are bundled for portable, accented text.
 - The system computes **deficits** (days where not enough volunteers have signed up)
 - A **weekly Monday morning email** is sent to admins summarizing unimported memberships and upcoming staffing shortfalls
 
