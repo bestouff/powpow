@@ -201,7 +201,12 @@ mod tests {
     #[tokio::test]
     async fn uploads_require_credentials_tls_and_a_complete_image() -> Result<()> {
         let directory = tempfile::tempdir()?;
-        let store = Store::open(directory.path().into(), true).await?;
+        let store = Store::open(
+            directory.path().into(),
+            true,
+            super::super::metadata::Settings::default(),
+        )
+        .await?;
         let uploads = Uploads {
             store: store.clone(),
             username: "camera".into(),
@@ -230,6 +235,8 @@ mod tests {
             );
         }
         assert_eq!(store.gallery(None, None, None).images.len(), 2);
+        let frame = store.latest().unwrap();
+        super::super::tests::assert_timestamp(&std::fs::read(store.path(&frame))?, &frame)?;
         let file_count = directory.path().read_dir()?.count();
         assert_eq!(store.latest().unwrap().username, "camera");
         assert!(uploads.read(&(), &path, 0).await.is_err());

@@ -335,7 +335,12 @@ async fn webcam_is_public_with_immutable_images_and_uncached_latest(
 ) -> anyhow::Result<()> {
     let mut state = state(pool);
     let directory = tempfile::tempdir()?;
-    state.webcam = webcam::Store::open(directory.path().into(), true).await?;
+    state.webcam = webcam::Store::open(
+        directory.path().into(),
+        true,
+        webcam::metadata::Settings::default(),
+    )
+    .await?;
     state.config.webcam.title = "Pistes <nord>".into();
     state.config.webcam.direct = Some(webcam::config::DirectConfig {
         url: "https://camera.example/snapshot".parse()?,
@@ -397,7 +402,10 @@ async fn webcam_is_public_with_immutable_images_and_uncached_latest(
             .contains("immutable")
     );
     let etag = response.headers()["etag"].clone();
-    assert_eq!(to_bytes(response.into_body(), 1000).await?.as_ref(), bytes);
+    assert_eq!(
+        to_bytes(response.into_body(), 1_000_000).await?.as_ref(),
+        std::fs::read(store.path(&frame))?
+    );
     let response = app
         .clone()
         .oneshot(
@@ -498,7 +506,12 @@ async fn webcam_previews_and_latest_jpeg_are_public_and_revalidate(
 ) -> anyhow::Result<()> {
     let mut state = state(pool);
     let directory = tempfile::tempdir()?;
-    state.webcam = webcam::Store::open(directory.path().into(), true).await?;
+    state.webcam = webcam::Store::open(
+        directory.path().into(),
+        true,
+        webcam::metadata::Settings::default(),
+    )
+    .await?;
     let store = state.webcam.clone();
     let mut encoded = std::io::Cursor::new(Vec::new());
     image::DynamicImage::new_rgb8(4, 3).write_to(&mut encoded, image::ImageFormat::Png)?;
@@ -757,7 +770,12 @@ async fn webcam_weather_tracks_live_updates_and_historical_image_times(
         tokio::fs::write(directory.path().join(&filename), bytes.get_ref()).await?;
         filenames.push(filename);
     }
-    state.webcam = webcam::Store::open(directory.path().into(), false).await?;
+    state.webcam = webcam::Store::open(
+        directory.path().into(),
+        false,
+        webcam::metadata::Settings::default(),
+    )
+    .await?;
     for (station, time, temperature) in [
         ("38395004", image_time - TimeDelta::minutes(6), 1.5),
         ("38395004", image_time + TimeDelta::seconds(1), 2.5),
@@ -1649,6 +1667,7 @@ fn state(db: PgPool) -> AppState {
     let config = AppConfig {
         meteo: None,
         webcam: webcam::config::WebcamConfig {
+            coordinates: None,
             title: "Vue sur les pistes".into(),
             directory: "/tmp/opencode/powpow-test-webcam".into(),
             ftps: None,
@@ -1688,7 +1707,14 @@ fn state(db: PgPool) -> AppState {
     };
     AppState {
         forecast: forecast::Cache::default(),
-        webcam: webcam::Store::new(config.webcam.directory.clone()),
+        webcam: webcam::Store::new(
+            config.webcam.directory.clone(),
+            webcam::metadata::Settings::new(
+                config.webcam.coordinates,
+                &config.entity_name,
+                &config.entity_email,
+            ),
+        ),
         db,
         config,
         cookie_key: Key::generate(),

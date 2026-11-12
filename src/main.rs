@@ -387,6 +387,11 @@ async fn main() -> anyhow::Result<()> {
     let webcam = webcam::Store::open(
         app_config.webcam.directory.clone(),
         app_config.webcam.ftps.is_some() || app_config.webcam.direct.is_some(),
+        webcam::metadata::Settings::new(
+            app_config.webcam.coordinates,
+            &app_config.entity_name,
+            &app_config.entity_email,
+        ),
     )
     .await?;
     let ftps = match &app_config.webcam.ftps {

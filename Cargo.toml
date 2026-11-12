@@ -59,10 +59,13 @@ image = { version = "0.25.10", default-features = false, features = [
   "png",
   "webp",
 ] }
+img-parts = "0.4.2"
+little_exif = "0.6.23"
 tempfile = "3"
 tokio-util = { version = "0.7", features = ["io"] }
 subtle = "2.6"
 
 [dev-dependencies]
+kamadak-exif = "0.6.2"
 tower = { version = "0.5.3", features = ["util"] }
 tokio-test = "0.4.6"

@@ -3,19 +3,21 @@
 pub mod config;
 pub mod direct;
 pub mod ftps;
+pub mod metadata;
 pub mod previews;
 #[cfg(test)]
 mod tests;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    io::{Cursor, Read, Write},
+    io::{Cursor, Read},
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
 
 use anyhow::{Context, Result, ensure};
 use chrono::{DateTime, Local, NaiveDate, SecondsFormat, TimeDelta, Utc};
+use img_parts::{DynImage, ImageEXIF};
 use tokio::sync::Semaphore;
 
 pub const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
@@ -107,19 +109,25 @@ pub struct Store {
     directory: PathBuf,
     images: Arc<RwLock<BTreeSet<String>>>,
     processors: Arc<Semaphore>,
+    metadata: metadata::Settings,
 }
 
 impl Store {
-    pub fn new(directory: PathBuf) -> Self {
+    pub fn new(directory: PathBuf, metadata: metadata::Settings) -> Self {
         Self {
             directory,
             images: Arc::default(),
             processors: Arc::new(Semaphore::new(2)),
+            metadata,
         }
     }
 
-    pub async fn open(directory: PathBuf, create: bool) -> Result<Self> {
-        let store = Self::new(directory);
+    pub async fn open(
+        directory: PathBuf,
+        create: bool,
+        metadata: metadata::Settings,
+    ) -> Result<Self> {
+        let store = Self::new(directory, metadata);
         let loader = store.clone();
         tokio::task::spawn_blocking(move || loader.load(create)).await??;
         Ok(store)
@@ -158,7 +166,14 @@ impl Store {
                         continue;
                     }
                 };
-                previews::generate(&self.directory, &frame, &image)?;
+                let exif = match DynImage::from_bytes(bytes.into()) {
+                    Ok(image) => image.and_then(|image| image.exif()),
+                    Err(error) => {
+                        tracing::warn!(%name, %error, "Cannot copy webcam EXIF to previews");
+                        None
+                    }
+                };
+                previews::generate(&self.directory, &frame, &image, exif.as_deref())?;
             }
             days.entry((frame.date(), frame.username.clone()))
                 .or_default()
@@ -298,33 +313,44 @@ impl Store {
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
             let image = decode_image(&bytes, &extension)?;
-            store.publish(&bytes, &username, &extension, &image)
+            store.publish(bytes, &username, &extension, &image, Utc::now)
         })
         .await?
     }
 
     fn publish(
         &self,
-        bytes: &[u8],
+        bytes: Vec<u8>,
         username: &str,
         extension: &str,
         image: &image::DynamicImage,
+        mut now: impl FnMut() -> DateTime<Utc>,
     ) -> Result<Frame> {
-        let mut upload = tempfile::Builder::new()
-            .prefix(".upload-")
-            .tempfile_in(&self.directory)?;
-        upload.write_all(bytes)?;
-        upload.as_file().sync_all()?;
+        let bytes = img_parts::Bytes::from(bytes);
         // A fresh name is used even when the camera repeatedly uploads the same filename.
         // No-clobber publication also protects against clock collisions and clock corrections.
         for _ in 0..10 {
-            let received_at = Utc::now();
+            let received_at = now();
             let filename = format!(
                 "{}_{}.{}",
                 received_at.to_rfc3339_opts(SecondsFormat::Nanos, true),
                 username,
                 extension
             );
+            let mut tagged = DynImage::from_bytes(bytes.clone())?
+                .context("Unsupported webcam image container")?;
+            let exif = self.metadata.encode(tagged.exif(), received_at)?;
+            tagged.set_exif(Some(exif.clone().into()));
+            let archived_size = tagged.len();
+            ensure!(
+                archived_size as u64 <= MAX_IMAGE_BYTES,
+                "Webcam image with EXIF exceeds 20 MiB"
+            );
+            let mut upload = tempfile::Builder::new()
+                .prefix(".upload-")
+                .tempfile_in(&self.directory)?;
+            tagged.encoder().write_to(upload.as_file_mut())?;
+            upload.as_file().sync_all()?;
             match upload.persist_noclobber(self.directory.join(&filename)) {
                 Ok(_) => {
                     let frame = Frame {
@@ -332,7 +358,7 @@ impl Store {
                         received_at,
                         username: username.into(),
                     };
-                    previews::generate(&self.directory, &frame, image)?;
+                    previews::generate(&self.directory, &frame, image, Some(&exif))?;
                     // Publish the index and manifest together; concurrent uploads cannot lose entries.
                     let mut images = self.images.write().expect("webcam index lock");
                     let mut day = day_frames(&images, frame.date(), username);
@@ -340,12 +366,10 @@ impl Store {
                     day.sort_by(|a, b| a.filename.cmp(&b.filename));
                     previews::write_list(&self.directory, frame.date(), username, &day)?;
                     images.insert(frame.filename.clone());
-                    tracing::info!(filename = %frame.filename, bytes = bytes.len(), "Webcam image archived");
+                    tracing::info!(filename = %frame.filename, bytes = archived_size, "Webcam image archived");
                     return Ok(frame);
                 }
-                Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    upload = error.file;
-                }
+                Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {}
                 Err(error) => return Err(error.error.into()),
             }
         }

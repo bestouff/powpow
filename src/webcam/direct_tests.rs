@@ -47,7 +47,12 @@ impl Drop for Server {
 async fn snapshots_use_content_detection_and_the_shared_persistent_archive() -> Result<()> {
     let directory = tempfile::tempdir()?;
     let archive = directory.path().join("new/archive");
-    let store = Store::open(archive.clone(), true).await?;
+    let store = Store::open(
+        archive.clone(),
+        true,
+        super::super::metadata::Settings::default(),
+    )
+    .await?;
     for (format, extension) in [
         (image::ImageFormat::Jpeg, "jpg"),
         (image::ImageFormat::Png, "png"),
@@ -85,14 +90,19 @@ async fn snapshots_use_content_detection_and_the_shared_persistent_archive() -> 
                 .filename
                 .ends_with(&format!("_pistes_nord-1.{extension}"))
         );
-        assert_eq!(tokio::fs::read(store.path(&frame)).await?, expected);
+        let archived = tokio::fs::read(store.path(&frame)).await?;
+        assert_eq!(
+            image::load_from_memory(&archived)?,
+            image::load_from_memory(&expected)?
+        );
+        super::super::tests::assert_timestamp(&archived, &frame)?;
         assert_eq!(store.latest().unwrap().filename, frame.filename);
     }
     // FTPS and direct retrieval share the same store and index.
     store
         .save(crate::webcam::tests::png(), "camera".into(), "png".into())
         .await?;
-    let reopened = Store::open(archive, false).await?;
+    let reopened = Store::open(archive, false, super::super::metadata::Settings::default()).await?;
     assert_eq!(
         reopened
             .gallery(None, None, Some("pistes_nord-1"))
@@ -107,7 +117,12 @@ async fn snapshots_use_content_detection_and_the_shared_persistent_archive() -> 
 #[tokio::test]
 async fn invalid_and_failed_downloads_preserve_the_last_image_and_allow_recovery() -> Result<()> {
     let directory = tempfile::tempdir()?;
-    let store = Store::open(directory.path().into(), true).await?;
+    let store = Store::open(
+        directory.path().into(),
+        true,
+        super::super::metadata::Settings::default(),
+    )
+    .await?;
     let original = store
         .save(crate::webcam::tests::png(), "camera".into(), "png".into())
         .await?;
@@ -180,7 +195,12 @@ async fn invalid_and_failed_downloads_preserve_the_last_image_and_allow_recovery
 #[tokio::test]
 async fn size_limits_apply_to_content_length_and_chunked_responses() -> Result<()> {
     let directory = tempfile::tempdir()?;
-    let store = Store::open(directory.path().into(), true).await?;
+    let store = Store::open(
+        directory.path().into(),
+        true,
+        super::super::metadata::Settings::default(),
+    )
+    .await?;
     let app = Router::new()
         .route(
             "/length",

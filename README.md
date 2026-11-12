@@ -161,6 +161,21 @@ local timezone (`TZ`, set to `Europe/Paris` in Docker Compose), including daylig
 saving time changes.
 The original image files retain their original pixels.
 
+Every new HTTP or FTPS capture receives EXIF metadata, also included in its
+thumbnails and JPEG download:
+
+- GPS position from `DIRECT_WEBCAM_COORDINATES=latitude,longitude`, in WGS-84
+  decimal degrees (for example, `45.31,5.85`). Latitude must be between -90 and 90,
+  longitude between -180 and 180; negative values mean south and west. Invalid
+  coordinates fail startup. Leave the setting empty to omit configured GPS.
+- Reception time matching the archived filename exactly, in `DateTimeOriginal`,
+  digitization, and modification dates, with a UTC offset and nanosecond fields.
+- Author as `ENTITY_NAME <ENTITY_EMAIL>` in `Artist` and Unicode `XPAuthor`;
+  either value can be used alone when the other is empty.
+
+Existing archives keep their metadata. Missing previews inherit metadata from
+their original capture when regenerated at startup.
+
 `/webcam/tkecole.jpg` serves that camera's latest image as a JPEG. Other cameras
 use their source name in the same URL. Responses have `ETag`, `Last-Modified`,
 and `Cache-Control: public, max-age=60, must-revalidate`: browsers reuse the image
@@ -186,6 +201,7 @@ DIRECT_WEBCAM_URL=https://camera.example/snapshot.jpg
 DIRECT_WEBCAM_PERIOD=6m
 DIRECT_WEBCAM_NAME=pistes
 DIRECT_WEBCAM_TITLE="Vue sur les pistes"
+DIRECT_WEBCAM_COORDINATES=45.31,5.85
 ```
 
 The period is a positive whole number followed by `s` (seconds), `m` (minutes),

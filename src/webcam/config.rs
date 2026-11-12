@@ -13,6 +13,33 @@ pub struct WebcamConfig {
     pub directory: PathBuf,
     pub ftps: Option<FtpsConfig>,
     pub direct: Option<DirectConfig>,
+    pub coordinates: Option<Coordinates>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Coordinates {
+    pub latitude: f64,
+    pub longitude: f64,
+}
+
+impl Coordinates {
+    fn parse(value: &str) -> Result<Option<Self>> {
+        if value.trim().is_empty() {
+            return Ok(None);
+        }
+        let message = "DIRECT_WEBCAM_COORDINATES must be latitude,longitude in decimal degrees (latitude -90..90, longitude -180..180)";
+        let (latitude, longitude) = value.split_once(',').context(message)?;
+        let latitude = latitude.trim().parse::<f64>().context(message)?;
+        let longitude = longitude.trim().parse::<f64>().context(message)?;
+        ensure!(
+            (-90.0..=90.0).contains(&latitude) && (-180.0..=180.0).contains(&longitude),
+            message
+        );
+        Ok(Some(Self {
+            latitude,
+            longitude,
+        }))
+    }
 }
 
 #[derive(Clone)]
@@ -148,6 +175,7 @@ impl WebcamConfig {
     }
 
     fn parse(value: impl Fn(&str) -> String) -> Result<Self> {
+        let coordinates = Coordinates::parse(&value("DIRECT_WEBCAM_COORDINATES"))?;
         let direct = DirectConfig::parse(
             &value("DIRECT_WEBCAM_URL"),
             &value("DIRECT_WEBCAM_PERIOD"),
@@ -179,6 +207,7 @@ impl WebcamConfig {
                 directory,
                 ftps: None,
                 direct,
+                coordinates,
             });
         }
         ensure!(
@@ -252,6 +281,7 @@ impl WebcamConfig {
             title,
             directory,
             direct,
+            coordinates,
             ftps: Some(FtpsConfig {
                 username,
                 password,
@@ -268,6 +298,53 @@ impl WebcamConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn coordinates_are_optional_and_validated_even_without_direct_retrieval() -> Result<()> {
+        let config = |coordinates: &str| {
+            WebcamConfig::parse(|key| match key {
+                "DIRECT_WEBCAM_COORDINATES" => coordinates.into(),
+                _ => String::new(),
+            })
+        };
+        assert!(config("  ")?.coordinates.is_none());
+        for (value, latitude, longitude) in [
+            (" 45.31, 5.85 ", 45.31, 5.85),
+            ("-33.865143,-151.209900", -33.865_143, -151.2099),
+            ("-90,180", -90.0, 180.0),
+            ("90,-180", 90.0, -180.0),
+            ("0,0", 0.0, 0.0),
+        ] {
+            let settings = config(value)?;
+            assert!(settings.direct.is_none());
+            let coordinates = settings.coordinates.unwrap();
+            assert!((coordinates.latitude - latitude).abs() < 1e-10);
+            assert!((coordinates.longitude - longitude).abs() < 1e-10);
+        }
+        for value in [
+            "45.31",
+            "45 5",
+            "45,5,1200",
+            ",",
+            "45,",
+            "north,east",
+            "NaN,5",
+            "45,NaN",
+            "inf,0",
+            "0,-inf",
+            "90.01,0",
+            "-90.01,0",
+            "0,180.01",
+            "0,-180.01",
+        ] {
+            let error = config(value).unwrap_err();
+            assert!(
+                error.to_string().contains("DIRECT_WEBCAM_COORDINATES"),
+                "{value}"
+            );
+        }
+        Ok(())
+    }
 
     #[test]
     fn direct_configuration_requires_a_url_and_a_positive_period_with_units() -> Result<()> {

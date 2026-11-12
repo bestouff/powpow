@@ -4,7 +4,7 @@ use std::{io::Write, path::Path};
 
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
-use image::{DynamicImage, codecs::jpeg::JpegEncoder};
+use image::{DynamicImage, ImageEncoder, codecs::jpeg::JpegEncoder};
 use serde::Serialize;
 
 use super::Frame;
@@ -45,12 +45,21 @@ pub fn missing(directory: &Path, frame: &Frame) -> bool {
         || !regular_file(&directory.join(frame.jpeg()))
 }
 
-pub fn generate(directory: &Path, frame: &Frame, image: &DynamicImage) -> Result<()> {
+pub fn generate(
+    directory: &Path,
+    frame: &Frame,
+    image: &DynamicImage,
+    exif: Option<&[u8]>,
+) -> Result<()> {
     let thumbnail = directory.join(frame.thumbnail());
     if !regular_file(&thumbnail) {
         let small = image.thumbnail(480, 270).to_rgb8();
         write_atomic(&thumbnail, |file| {
-            JpegEncoder::new_with_quality(file, 75).encode_image(&small)?;
+            let mut encoder = JpegEncoder::new_with_quality(file, 75);
+            if let Some(exif) = exif {
+                encoder.set_exif_metadata(exif.to_vec())?;
+            }
+            encoder.encode_image(&small)?;
             Ok(())
         })?;
     }
@@ -58,7 +67,11 @@ pub fn generate(directory: &Path, frame: &Frame, image: &DynamicImage) -> Result
     let jpeg = directory.join(frame.jpeg());
     if !regular_file(&jpeg) {
         write_atomic(&jpeg, |file| {
-            JpegEncoder::new_with_quality(file, 90).encode_image(&image.to_rgb8())?;
+            let mut encoder = JpegEncoder::new_with_quality(file, 90);
+            if let Some(exif) = exif {
+                encoder.set_exif_metadata(exif.to_vec())?;
+            }
+            encoder.encode_image(&image.to_rgb8())?;
             Ok(())
         })?;
     }

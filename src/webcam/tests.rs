@@ -1,6 +1,51 @@
 use super::*;
 use chrono::{TimeDelta, TimeZone};
 
+pub(super) fn assert_ascii(exif: &exif::Exif, tag: exif::Tag, expected: &str) {
+    let exif::Value::Ascii(values) = &exif.get_field(tag, exif::In::PRIMARY).unwrap().value else {
+        panic!("Expected ASCII for {tag}");
+    };
+    assert_eq!(values, &[expected.as_bytes().to_vec()], "{tag}");
+}
+
+pub(super) fn assert_timestamp(bytes: &[u8], frame: &Frame) -> Result<()> {
+    let exif = exif::Reader::new().read_from_container(&mut Cursor::new(bytes))?;
+    let time = Frame::parse(&frame.filename).unwrap().received_at;
+    assert_eq!(time, frame.received_at);
+    for (tag, expected) in [
+        (
+            exif::Tag::DateTime,
+            time.format("%Y:%m:%d %H:%M:%S").to_string(),
+        ),
+        (
+            exif::Tag::DateTimeOriginal,
+            time.format("%Y:%m:%d %H:%M:%S").to_string(),
+        ),
+        (
+            exif::Tag::DateTimeDigitized,
+            time.format("%Y:%m:%d %H:%M:%S").to_string(),
+        ),
+        (exif::Tag::OffsetTime, "+00:00".into()),
+        (exif::Tag::OffsetTimeOriginal, "+00:00".into()),
+        (exif::Tag::OffsetTimeDigitized, "+00:00".into()),
+        (
+            exif::Tag::SubSecTime,
+            format!("{:09}", time.timestamp_subsec_nanos()),
+        ),
+        (
+            exif::Tag::SubSecTimeOriginal,
+            format!("{:09}", time.timestamp_subsec_nanos()),
+        ),
+        (
+            exif::Tag::SubSecTimeDigitized,
+            format!("{:09}", time.timestamp_subsec_nanos()),
+        ),
+    ] {
+        assert_ascii(&exif, tag, &expected);
+    }
+    Ok(())
+}
+
 pub(super) fn png() -> Vec<u8> {
     let mut data = Cursor::new(Vec::new());
     image::DynamicImage::new_rgb8(4, 3)
@@ -12,7 +57,7 @@ pub(super) fn png() -> Vec<u8> {
 #[tokio::test]
 async fn archive_publishes_complete_images_and_recovers_after_restart() -> Result<()> {
     let directory = tempfile::tempdir()?;
-    let store = Store::open(directory.path().into(), true).await?;
+    let store = Store::open(directory.path().into(), true, metadata::Settings::default()).await?;
     let (first, second) = tokio::join!(
         store.save(png(), "station_nord".into(), "png".into()),
         store.save(png(), "station_nord".into(), "png".into())
@@ -24,8 +69,14 @@ async fn archive_publishes_complete_images_and_recovers_after_restart() -> Resul
         Frame::parse(&first.filename).unwrap().username,
         "station_nord"
     );
-    assert_eq!(std::fs::read(store.path(&first))?, png());
-    assert_eq!(std::fs::read(store.path(&second))?, png());
+    for frame in [&first, &second] {
+        let archived = std::fs::read(store.path(frame))?;
+        assert_eq!(
+            image::load_from_memory(&archived)?,
+            image::load_from_memory(&png())?
+        );
+        assert_timestamp(&archived, frame)?;
+    }
     for frame in [&first, &second] {
         let thumbnail = std::fs::read(directory.path().join(frame.thumbnail()))?;
         assert_eq!(image::guess_format(&thumbnail)?, image::ImageFormat::Jpeg);
@@ -69,7 +120,12 @@ async fn archive_publishes_complete_images_and_recovers_after_restart() -> Resul
 
     std::fs::write(directory.path().join(".upload-unfinished"), png())?;
     std::fs::write(directory.path().join("unrelated.png"), png())?;
-    let restarted = Store::open(directory.path().into(), false).await?;
+    let restarted = Store::open(
+        directory.path().into(),
+        false,
+        metadata::Settings::default(),
+    )
+    .await?;
     assert_eq!(
         restarted.latest().unwrap().filename,
         store.latest().unwrap().filename
@@ -112,7 +168,12 @@ async fn gallery_lists_the_entire_local_day_and_keeps_cameras_separate() -> Resu
             .join(newest.replace("_station", "_station_small")),
         png(),
     )?;
-    let store = Store::open(directory.path().into(), false).await?;
+    let store = Store::open(
+        directory.path().into(),
+        false,
+        metadata::Settings::default(),
+    )
+    .await?;
     let day = "2026-11-01".parse()?;
     let latest = store.gallery(None, None, Some("station"));
     assert_eq!(latest.selected.unwrap().filename, newest);
@@ -176,7 +237,12 @@ async fn gallery_keeps_complete_local_days_across_daylight_saving_changes() -> R
             }
             received_at += step;
         }
-        let store = Store::open(directory.path().into(), false).await?;
+        let store = Store::open(
+            directory.path().into(),
+            false,
+            metadata::Settings::default(),
+        )
+        .await?;
         let gallery = store.gallery(Some(date), None, None);
         let actual: Vec<_> = gallery
             .images
@@ -217,7 +283,12 @@ async fn existing_archives_get_missing_previews_and_time_shortcuts() -> Result<(
             .join("2026-01-01T00:00:00.000000000Z_broken.jpg"),
         b"broken",
     )?;
-    let store = Store::open(directory.path().into(), false).await?;
+    let store = Store::open(
+        directory.path().into(),
+        false,
+        metadata::Settings::default(),
+    )
+    .await?;
     let gallery = store.gallery(None, None, Some("tkecole"));
     for (recent, expected) in gallery.recent.iter().zip(&frames[1..]) {
         assert_eq!(recent.as_ref().unwrap().filename, expected.filename);
@@ -226,7 +297,12 @@ async fn existing_archives_get_missing_previews_and_time_shortcuts() -> Result<(
     assert_eq!(image::image_dimensions(&thumbnail)?, (480, 270));
     assert!(store.latest_for("broken").is_none());
     std::fs::remove_file(&thumbnail)?;
-    let restarted = Store::open(directory.path().into(), false).await?;
+    let restarted = Store::open(
+        directory.path().into(),
+        false,
+        metadata::Settings::default(),
+    )
+    .await?;
     assert_eq!(image::image_dimensions(&thumbnail)?, (480, 270));
     assert_eq!(restarted.latest().unwrap().filename, frames[0].filename);
     assert_eq!(std::fs::read(store.path(&frames[0]))?, *bytes.get_ref());
@@ -235,7 +311,7 @@ async fn existing_archives_get_missing_previews_and_time_shortcuts() -> Result<(
 
 #[test]
 fn time_shortcuts_choose_the_nearest_capture_within_thirty_minutes_on_either_side() {
-    let store = Store::new(PathBuf::new());
+    let store = Store::new(PathBuf::new(), metadata::Settings::default());
     let now = Utc::now();
     let filename = |minutes, camera| {
         format!(
@@ -315,7 +391,12 @@ async fn archive_does_not_serve_symbolic_links() -> Result<()> {
     let name = "2026-11-02T12:00:00.000000000Z_station.png";
     let path = directory.path().join(name);
     std::os::unix::fs::symlink(outside.path(), &path)?;
-    let store = Store::open(directory.path().into(), false).await?;
+    let store = Store::open(
+        directory.path().into(),
+        false,
+        metadata::Settings::default(),
+    )
+    .await?;
     assert!(store.get(name).is_none());
     assert!(open_image(&path).await.is_err());
     Ok(())
