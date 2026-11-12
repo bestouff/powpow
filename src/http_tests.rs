@@ -13,6 +13,48 @@ async fn response_text(response: Response) -> anyhow::Result<String> {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn login_membership_link_survives_missing_cms_content(pool: PgPool) -> anyhow::Result<()> {
+    let mut state = state(pool.clone());
+    state.config.entity_name = "Association <Ski> & amis".into();
+    let fallback = format!(
+        "https://www.helloasso.com/associations/{}",
+        state.config.helloasso_association_slug
+    );
+    let app = build_router(state);
+    let campaign = "https://www.helloasso.com/associations/station/adhesions/saison";
+    for (configured, expected) in [(Some(campaign), campaign), (None, fallback.as_str())] {
+        if let Some(url) = configured {
+            sqlx::query("UPDATE contents SET body = '', link_url = $1, link_label = 'Adhérer <ici>' WHERE slug = 'about-association'")
+                .bind(url).execute(&pool).await?;
+        } else {
+            sqlx::query("DELETE FROM contents WHERE slug = 'about-association'")
+                .execute(&pool)
+                .await?;
+        }
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/login")
+                    .header("x-forwarded-prefix", "/powpow")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_text(response).await?;
+        assert!(body.contains(&format!("href=\"{expected}\"")));
+        assert!(body.contains("id=\"membership-link\""));
+        assert!(body.contains("data-entity-name=\"Association &lt;Ski&gt; &amp; amis\""));
+        assert!(body.contains("href=\"/powpow/login\""));
+        if configured.is_some() {
+            assert!(body.contains("Adhérer &lt;ici&gt;"));
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn today_requires_staff_and_shows_only_todays_assignments(
     pool: PgPool,
 ) -> anyhow::Result<()> {

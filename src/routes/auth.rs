@@ -22,7 +22,12 @@ pub async fn login_page(State(state): State<AppState>, headers: HeaderMap) -> im
         .await
         .ok()
         .flatten();
-    templates::login_page(&prefix, block.as_ref())
+    templates::login_page(
+        &prefix,
+        block.as_ref(),
+        &state.config.helloasso_association_slug,
+        &state.config.entity_name,
+    )
 }
 
 fn private_login_response(response: impl IntoResponse) -> Response {

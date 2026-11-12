@@ -48,8 +48,16 @@ use config::AppConfig;
 use helloasso::HelloAssoClient;
 use mailchimp::MailchimpClient;
 
-pub(crate) const POWPOW_CSS: &str = include_str!("../static/powpow.css");
-pub(crate) const POWPOW_JS: &str = include_str!("../static/powpow.js");
+pub(crate) const POWPOW_CSS: &str = concat!(
+    include_str!("../static/powpow.css"),
+    "\n",
+    include_str!("../static/tutorial.css")
+);
+pub(crate) const POWPOW_JS: &str = concat!(
+    include_str!("../static/powpow.js"),
+    "\n",
+    include_str!("../static/tutorial.js")
+);
 
 /// Extract the URL prefix from `X-Forwarded-Prefix` header.
 ///

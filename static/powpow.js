@@ -551,6 +551,7 @@ function initNavbar() {
   burger.addEventListener("click", function () {
     burger.classList.toggle("is-active");
     menu.classList.toggle("is-active");
+    burger.setAttribute("aria-expanded", String(menu.classList.contains("is-active")));
   });
 }
 
@@ -801,6 +802,7 @@ function initBadgeCounts(prefix) {
 function initLoginCheck(prefix) {
   fetch(prefix + "/api/me")
     .then(function (r) {
+      if (r.status === 401) initVolunteerTutorial(prefix);
       if (r.ok) return r.json();
       throw 0;
     })
@@ -825,6 +827,7 @@ function initLoginCheck(prefix) {
         document.querySelectorAll(".navbar-staff").forEach(function (el) {
           el.style.display = "";
         });
+        initVolunteerTutorial(prefix, d);
       }
     })
     .catch(function () {});
@@ -1987,6 +1990,7 @@ function initLoginPage(prefix) {
   var errorText = document.getElementById("error-text");
   var debounceTimer = null;
   var selectedStaff = null;
+  var searchNumber = 0;
 
   input.addEventListener("input", function () {
     clearTimeout(debounceTimer);
@@ -1994,10 +1998,12 @@ function initLoginPage(prefix) {
     successBox.style.display = "none";
     errorBox.style.display = "none";
     selectedStaff = null;
+    var currentSearch = ++searchNumber;
+    panel.style.display = "none";
+    panel.innerHTML = "";
+    document.dispatchEvent(new Event("powpow:login-search"));
     var q = input.value.trim();
     if (q.length < 4) {
-      panel.style.display = "none";
-      panel.innerHTML = "";
       return;
     }
     debounceTimer = setTimeout(function () {
@@ -2006,6 +2012,7 @@ function initLoginPage(prefix) {
           return r.json();
         })
         .then(function (data) {
+          if (currentSearch !== searchNumber) return;
           panel.innerHTML = "";
           if (data.length === 0) {
             panel.innerHTML = '<p class="panel-block">Aucun résultat</p>';
@@ -2027,13 +2034,16 @@ function initLoginPage(prefix) {
                 confirmBox.style.display = "block";
                 successBox.style.display = "none";
                 errorBox.style.display = "none";
+                document.dispatchEvent(new Event("powpow:login-selected"));
               });
               panel.appendChild(a);
             });
           }
           panel.style.display = "block";
+          document.dispatchEvent(new Event("powpow:login-results"));
         })
         .catch(function () {
+          if (currentSearch !== searchNumber) return;
           panel.innerHTML = '<p class="panel-block">Erreur de recherche</p>';
           panel.style.display = "block";
         });
@@ -2041,7 +2051,9 @@ function initLoginPage(prefix) {
   });
 
   sendBtn.addEventListener("click", function () {
-    if (!selectedStaff) return;
+    if (!selectedStaff || sendBtn.disabled) return;
+    var requestedSearch = searchNumber;
+    sendBtn.disabled = true;
     sendBtn.classList.add("is-loading");
     errorBox.style.display = "none";
     fetch(prefix + "/api/login/send", {
@@ -2050,24 +2062,30 @@ function initLoginPage(prefix) {
       body: JSON.stringify({ staff_id: selectedStaff.id }),
     })
       .then(function (r) {
-        return r.json();
+        return r.json().then(function (data) { return {ok: r.ok, data: data}; });
       })
-      .then(function (data) {
-        sendBtn.classList.remove("is-loading");
-        if (data.success) {
+      .then(function (response) {
+        if (requestedSearch !== searchNumber) return;
+        if (response.ok && response.data.success) {
           confirmBox.style.display = "none";
           panel.style.display = "none";
           successBox.style.display = "block";
           input.value = "";
+          selectedStaff = null;
+          document.dispatchEvent(new Event("powpow:login-sent"));
         } else {
-          errorText.textContent = data.error || "Erreur inconnue";
+          errorText.textContent = response.data.error || "Erreur inconnue";
           errorBox.style.display = "block";
         }
       })
       .catch(function () {
-        sendBtn.classList.remove("is-loading");
+        if (requestedSearch !== searchNumber) return;
         errorText.textContent = "Erreur réseau";
         errorBox.style.display = "block";
+      })
+      .finally(function () {
+        sendBtn.disabled = false;
+        sendBtn.classList.remove("is-loading");
       });
   });
 }

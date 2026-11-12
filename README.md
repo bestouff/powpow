@@ -136,6 +136,27 @@ Failed requests are logged and retried next cycle. Collection archives future
 observations while PowPow runs; it does not backfill downtime. To apply migrations
 and import once without starting the web server, run `powpow --sync-meteo`.
 
+### Volunteer welcome guide
+
+Anonymous visitors to the home and login pages see a short French guide with
+hand-drawn red circles and arrows. It points to **Se connecter**, then the name
+search (at least four characters). **Je ne trouve pas mon nom** points to the
+HelloAsso membership link configured in `about-association`, falling back to
+`HELLOASSO_ASSOCIATION_SLUG` when needed. Selecting a name highlights **Envoyer le
+lien de connexion** (step 4). After a successful send, step 5 directs the visitor
+to their inbox to open the email from `ENTITY_NAME` and click its login link.
+
+Closing or completing the guide is remembered in this browser's local storage.
+Closing it shows a three-second reminder pointing to **Aide**.
+Visitors can restart it with **Aide** in the navigation menu.
+On small screens, the first step opens the menu to reveal the login link.
+
+Authenticated volunteers with a current membership receive a separate four-step
+guide: their personal-page link, atelier selection and chief validation, half-day
+planning, and qualifications with their dates of completion. **Suivant** and
+**Précédent** let them explore each section at their own pace. Progress survives
+profile reloads and is stored separately for each account in this browser.
+
 ### Webcam
 
 The public `/webcam` page displays the latest camera image, the configured title,

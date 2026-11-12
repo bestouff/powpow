@@ -614,8 +614,8 @@ pub fn person_detail(
 
                     // Right column: ateliers + plannings + calendar
                     div .column {
-                        div .box {
-                            h2 .title.is-4 {
+                        div .box.tutorial-section #person-ateliers tabindex="-1" aria-labelledby="person-ateliers-title" {
+                            h2 .title.is-4 #person-ateliers-title {
                                 span .icon { i .fa-solid.fa-screwdriver-wrench {} }
                                 "\u{00a0}Ateliers (Saison " (current_season) ")"
                             }
@@ -702,9 +702,9 @@ pub fn person_detail(
                         }
 
                         // Personal planning table
-                        @if !person_calendar.is_empty() {
-                            div .box #person-calendar {
-                                h2 .title.is-4 {
+                        @if is_self || !person_calendar.is_empty() {
+                            div .box.tutorial-section #person-calendar tabindex="-1" aria-labelledby="person-calendar-title" {
+                                h2 .title.is-4 #person-calendar-title {
                                     span .icon { i .fa-solid.fa-calendar-days {} }
                                     @if is_self {
                                         "\u{00a0}Mes plannings"
@@ -712,7 +712,12 @@ pub fn person_detail(
                                         "\u{00a0}Plannings de " (staff.first_name)
                                     }
                                 }
-                                div .pcal-scroll tabindex="0" role="region" aria-label="Plannings personnels" {
+                                @if person_calendar.is_empty() {
+                                    p .has-text-grey {
+                                        "Aucun créneau disponible pour le moment. Choisissez vos ateliers ; leurs demi-journées apparaîtront ici une fois les plannings publiés."
+                                    }
+                                } @else {
+                                  div .pcal-scroll tabindex="0" role="region" aria-label="Plannings personnels" {
                                     table .pcal-table.table.is-bordered.is-narrow.is-hoverable {
                                         thead {
                                             tr {
@@ -801,14 +806,15 @@ pub fn person_detail(
                                             }
                                         }
                                     }
+                                  }
                                 }
                             }
                         }
 
                         // Formations box
                         @if can_manage_qualifs || !person_qualifications.is_empty() {
-                            div .box {
-                                h2 .title.is-4 {
+                            div .box.tutorial-section #person-qualifications tabindex="-1" aria-labelledby="person-qualifications-title" {
+                                h2 .title.is-4 #person-qualifications-title {
                                     span .icon { i .fa-solid.fa-certificate {} }
                                     "\u{00a0}Formations"
                                 }
@@ -897,7 +903,7 @@ pub fn person_detail(
                                     div .columns.is-multiline {
                                         div .column.is-one-third {
                                             div .field {
-                                                label .label { "Qualification" }
+                                                label .label for="pq-qual" { "Qualification" }
                                                 div .control {
                                                     div .select.is-fullwidth {
                                                         select #pq-qual {
@@ -912,7 +918,7 @@ pub fn person_detail(
                                         }
                                         div .column.is-one-third {
                                             div .field {
-                                                label .label { "Date d'obtention" }
+                                                label .label for="pq-date" { "Date d'obtention" }
                                                 div .control {
                                                     input .input #pq-date type="date"
                                                         value=(chrono::Utc::now().date_naive());

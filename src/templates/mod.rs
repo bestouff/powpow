@@ -13,6 +13,7 @@ mod photos;
 mod settings;
 mod staff;
 mod today;
+mod tutorial;
 mod webcam;
 
 pub use admin::{
@@ -58,12 +59,17 @@ mod script_tests {
     }
 }
 
-pub fn membership_notice(association_slug: &str, is_admin: bool) -> Markup {
+fn helloasso_url(association_slug: &str) -> reqwest::Url {
     let mut url = reqwest::Url::parse("https://www.helloasso.com/associations")
         .expect("HelloAsso base URL is valid");
     url.path_segments_mut()
         .expect("HelloAsso URL supports path segments")
         .push(association_slug);
+    url
+}
+
+pub fn membership_notice(association_slug: &str, is_admin: bool) -> Markup {
+    let url = helloasso_url(association_slug);
     html! {
         div .notification.is-warning role="alert" {
             p { "Votre adhésion n'est pas à jour pour la saison actuelle. Veuillez régler votre adhésion sur HelloAsso pour accéder à votre espace bénévole." }
@@ -232,7 +238,7 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBloc
                             }
                         }
                     }
-                    a .navbar-burger role="button" aria-label="menu" aria-expanded="false"
+                    button .navbar-burger type="button" aria-label="Menu" aria-expanded="false" aria-controls="main-navbar"
                       data-target="main-navbar" {
                         span aria-hidden="true" {}
                         span aria-hidden="true" {}
@@ -265,6 +271,10 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBloc
                             span .icon.mr-1 { i .fa-solid.fa-screwdriver-wrench {} }
                             "Administration"
                             span .nav-badge.d-none data-badge="admin" {}
+                        }
+                        button .navbar-item #volunteer-help type="button" hidden {
+                            span .icon.mr-1 { i .fa-solid.fa-circle-question {} }
+                            "Aide"
                         }
                         a .navbar-item #login-btn href={(p) "/login"} {
                             i .fa-solid.fa-right-to-bracket {}
@@ -365,6 +375,7 @@ fn page_with_footer(
             body class=[footer_contents.is_none().then_some("app-page")] data-prefix=(p) {
                 (nav)
                 (content)
+                (tutorial::guide())
                 (extra_scripts)
                 script defer src={(p) "/static/powpow.js?v=" (v)} {}
                 footer .footer.footer-station {

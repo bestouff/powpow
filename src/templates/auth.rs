@@ -96,7 +96,27 @@ pub fn invalid_login_link(prefix: &str) -> Markup {
     )
 }
 
-pub fn login_page(prefix: &str, about_block: Option<&ContentBlock>) -> Markup {
+pub fn login_page(
+    prefix: &str,
+    about_block: Option<&ContentBlock>,
+    association_slug: &str,
+    entity_name: &str,
+) -> Markup {
+    let membership_url = about_block
+        .and_then(|block| block.link_url.as_deref())
+        .and_then(|url| reqwest::Url::parse(url).ok())
+        .filter(|url| {
+            url.scheme() == "https"
+                && url
+                    .host_str()
+                    .is_some_and(|host| host == "helloasso.com" || host.ends_with(".helloasso.com"))
+        })
+        .unwrap_or_else(|| super::helloasso_url(association_slug));
+    let membership_label = about_block
+        .filter(|block| block.link_url.as_deref() == Some(membership_url.as_str()))
+        .and_then(|block| block.link_label.as_deref())
+        .filter(|label| !label.is_empty())
+        .unwrap_or("Adhérer sur HelloAsso");
     let content = html! {
         section .section {
             div .container {
@@ -108,17 +128,19 @@ pub fn login_page(prefix: &str, about_block: Option<&ContentBlock>) -> Markup {
                                     span .icon { i .fa-solid.fa-right-to-bracket {} }
                                     "Connexion"
                                 }
-                                div .field {
-                                    label .label { "Rechercher votre nom" }
-                                    div .control.has-icons-left {
-                                        input .input type="text" #search-input
-                                            placeholder="Tapez au moins 4 caractères..."
-                                            autocomplete="off";
-                                        span .icon.is-left { i .fa-solid.fa-magnifying-glass {} }
+                                div #login-search {
+                                    div .field {
+                                        label .label for="search-input" { "Rechercher votre nom" }
+                                        div .control.has-icons-left {
+                                            input .input type="text" #search-input
+                                                placeholder="Tapez au moins 4 caractères..."
+                                                autocomplete="off" aria-describedby="login-search-help" aria-controls="results-panel";
+                                            span .icon.is-left { i .fa-solid.fa-magnifying-glass {} }
+                                        }
+                                        p .help #login-search-help { "Entrez votre prénom ou nom de famille" }
                                     }
-                                    p .help { "Entrez votre prénom ou nom de famille" }
+                                    nav .panel.d-none #results-panel aria-label="Résultats de la recherche" aria-live="polite" {}
                                 }
-                                nav .panel.d-none #results-panel {}
                                 div #confirm-box .d-none.notification.is-info.is-light.mt-4 {
                                     p #confirm-text {}
                                     button .button.is-primary.mt-3 #send-btn {
@@ -126,10 +148,15 @@ pub fn login_page(prefix: &str, about_block: Option<&ContentBlock>) -> Markup {
                                         span { "Envoyer le lien de connexion" }
                                     }
                                 }
-                                div #success-box .d-none.notification.is-success.is-light.mt-4 {
+                                div #success-box .d-none.notification.is-success.is-light.mt-4
+                                  data-entity-name=(entity_name) role="status" tabindex="-1" {
                                     p {
                                         span .icon { i .fa-solid.fa-check {} }
-                                        " Un email de connexion a été envoyé. Vérifiez votre boîte de réception."
+                                        " Un email de connexion"
+                                        @if !entity_name.trim().is_empty() {
+                                            " de « " (entity_name) " »"
+                                        }
+                                        " a été envoyé. Ouvrez votre boîte de réception et cliquez sur le lien dans cet email."
                                     }
                                 }
                                 div #error-box .d-none.notification.is-danger.is-light.mt-4 {
@@ -137,21 +164,18 @@ pub fn login_page(prefix: &str, about_block: Option<&ContentBlock>) -> Markup {
                                 }
                             }
                         }
-                        @if let Some(block) = about_block {
-                            @if !block.body.is_empty() {
-                                div .section-about-association.mt-5 {
+                        div .section-about-association.mt-5 {
+                            @if let Some(block) = about_block {
+                                @if !block.body.is_empty() {
                                     h3 .title.is-4.has-text-centered { (block.title) }
                                     div .content {
                                         (PreEscaped(block.render_body()))
                                     }
-                                    @if let Some(ref url) = block.link_url {
-                                        @let label = block.link_label.as_deref().unwrap_or(url);
-                                        div .has-text-centered {
-                                            a .btn-station.btn-station-call-to-action href=(url) target="_blank" {
-                                                (label)
-                                            }
-                                        }
-                                    }
+                                }
+                            }
+                            div .has-text-centered {
+                                a #membership-link .btn-station.btn-station-call-to-action href=(membership_url.as_str()) target="_blank" rel="noopener noreferrer" {
+                                    (membership_label)
                                 }
                             }
                         }
