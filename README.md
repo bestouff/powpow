@@ -139,8 +139,9 @@ and import once without starting the web server, run `powpow --sync-meteo`.
 ### Webcam
 
 The public `/webcam` page displays the latest camera image, the configured title,
-the site's navbar logo, and available Météo-France measurements as an HTML/CSS
-overlay. Weather includes its observation time; missing measurements are omitted.
+the logo configured in the `hero-subtitle` content block, and available
+Météo-France measurements as an HTML/CSS overlay. Weather includes its observation
+time; missing measurements are omitted.
 Wind is displayed in km/h, snow depth in cm, and pressure in hPa. Rainfall in mm
 is accumulated over the hour ending at the displayed observation time, summing
 ten six-minute readings. The total is omitted if any of these readings is missing.

@@ -101,6 +101,13 @@ pub async fn page(
     } else {
         None
     };
+    let logo = match database::get_content(&state.db, "hero-subtitle").await {
+        Ok(block) => block.and_then(|block| block.image_id),
+        Err(error) => {
+            tracing::warn!(%error, "Cannot load webcam logo");
+            None
+        }
+    };
     let title = state
         .config
         .webcam
@@ -123,6 +130,7 @@ pub async fn page(
             follow_latest,
             reading.as_ref(),
             dimensions,
+            logo,
         ),
     )
         .into_response()

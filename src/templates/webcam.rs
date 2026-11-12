@@ -1,7 +1,7 @@
 use chrono::Local;
 use maud::{Markup, html};
 
-use super::{NavKind, get_navbar_block, page};
+use super::{NavKind, page};
 use crate::{
     models::MeteoReading,
     webcam::{Gallery, previews},
@@ -14,8 +14,8 @@ pub fn webcam_page(
     follow_latest: bool,
     weather: Option<&MeteoReading>,
     dimensions: Option<(u32, u32)>,
+    logo: Option<uuid::Uuid>,
 ) -> Markup {
-    let logo = get_navbar_block().and_then(|block| block.image_id);
     let selected_name = gallery
         .selected
         .as_ref()
