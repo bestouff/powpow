@@ -71,6 +71,84 @@ fn malformed_or_wrong_station_observations_fail_the_batch() {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn hourly_rainfall_uses_ten_complete_periods_for_the_selected_station_and_time(
+    pool: PgPool,
+) -> Result<()> {
+    let at: DateTime<Utc> = "2026-11-12T00:24:00Z".parse()?;
+    sqlx::query(
+        "INSERT INTO meteo (station_id, observed_at, reference_time, insert_time,
+                            latitude, longitude, rainfall_mm, raw_data)
+         SELECT '38395004', sample, sample, sample, 45.315, 5.884833,
+                CASE WHEN sample > $1 - interval '1 hour' AND sample <= $1 THEN 0.2 ELSE 99 END,
+                '{}'
+         FROM generate_series($1 - interval '66 minutes', $1 + interval '6 minutes',
+                              interval '6 minutes') AS sample",
+    )
+    .bind(at)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO meteo (station_id, observed_at, reference_time, insert_time,
+                            latitude, longitude, rainfall_mm, raw_data)
+         VALUES ('38395403', $1, $1, $1, 45.315, 5.884833, 999, '{}')",
+    )
+    .bind(at)
+    .execute(&pool)
+    .await?;
+    let reading =
+        database::meteo::at_or_before(&pool, "38395004", at + chrono::TimeDelta::minutes(1))
+            .await?
+            .unwrap();
+    assert_eq!(reading.observed_at, at);
+    assert!((reading.rainfall_last_hour_mm.unwrap() - 2.0).abs() < 1e-9);
+
+    sqlx::query("UPDATE meteo SET rainfall_mm = 1.2, fetched_at = $2 WHERE station_id = '38395004' AND observed_at = $1")
+        .bind(at - chrono::TimeDelta::minutes(30))
+        .bind(reading.fetched_at + chrono::TimeDelta::seconds(1))
+        .execute(&pool).await?;
+    let corrected = database::meteo::at_or_before(&pool, "38395004", at)
+        .await?
+        .unwrap();
+    assert!((corrected.rainfall_last_hour_mm.unwrap() - 3.0).abs() < 1e-9);
+    assert_eq!(corrected.observed_at, reading.observed_at);
+    assert_ne!(corrected.revision(), reading.revision());
+
+    sqlx::query("UPDATE meteo SET rainfall_mm = 0 WHERE station_id = '38395004'")
+        .execute(&pool)
+        .await?;
+    let dry = database::meteo::at_or_before(&pool, "38395004", at)
+        .await?
+        .unwrap();
+    assert!(dry.rainfall_last_hour_mm.unwrap().abs() < 1e-9);
+
+    sqlx::query(
+        "UPDATE meteo SET rainfall_mm = NULL WHERE station_id = '38395004' AND observed_at = $1",
+    )
+    .bind(at - chrono::TimeDelta::minutes(24))
+    .execute(&pool)
+    .await?;
+    let incomplete = database::meteo::at_or_before(&pool, "38395004", at)
+        .await?
+        .unwrap();
+    assert!(incomplete.rainfall_last_hour_mm.is_none());
+    sqlx::query("DELETE FROM meteo WHERE station_id = '38395004' AND observed_at = $1")
+        .bind(at - chrono::TimeDelta::minutes(24))
+        .execute(&pool)
+        .await?;
+    let missing = database::meteo::at_or_before(&pool, "38395004", at)
+        .await?
+        .unwrap();
+    assert!(missing.rainfall_last_hour_mm.is_none());
+    assert!(
+        database::meteo::at_or_before(&pool, "missing", at)
+            .await?
+            .is_none()
+    );
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn archive_converts_units_deduplicates_corrects_and_survives_backup(
     pool: PgPool,
 ) -> Result<()> {

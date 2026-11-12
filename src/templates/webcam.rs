@@ -127,7 +127,7 @@ fn weather_overlay(reading: &MeteoReading) -> Markup {
     let observed_at = reading.observed_at.with_timezone(&Local);
     let measurements = [
         ("Température", reading.temperature_c, "°C", None),
-        ("Pluie (6 min)", reading.rainfall_mm, "mm", None),
+        ("Pluie (1 h)", reading.rainfall_last_hour_mm, "mm", None),
         (
             "Vent",
             reading.wind_speed_m_s.map(|speed| speed * 3.6),

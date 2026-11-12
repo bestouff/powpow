@@ -4,19 +4,34 @@ use sqlx::PgPool;
 
 use crate::{meteo::Observation, models::MeteoReading};
 
-/// Find the most recent reading at or before the requested time for this station.
+/// Find the most recent reading and its preceding hour of rainfall for this station.
 pub async fn at_or_before(
     pool: &PgPool,
     station_id: &str,
     at: DateTime<Utc>,
 ) -> Result<Option<MeteoReading>> {
     Ok(sqlx::query_as(
-        "SELECT station_id, observed_at, fetched_at, temperature_c, dew_point_c,
-                humidity_percent, wind_direction_deg, wind_speed_m_s,
-                gust_direction_deg, gust_speed_m_s, rainfall_mm, snow_depth_m,
-                pressure_pa, sea_level_pressure_pa
-         FROM meteo WHERE station_id = $1 AND observed_at <= $2
-         ORDER BY observed_at DESC LIMIT 1",
+        "WITH latest AS (
+             SELECT * FROM meteo WHERE station_id = $1 AND observed_at <= $2
+             ORDER BY observed_at DESC LIMIT 1
+         )
+         SELECT latest.station_id, latest.observed_at,
+                GREATEST(latest.fetched_at, rainfall.fetched_at) AS fetched_at,
+                latest.temperature_c, latest.dew_point_c, latest.humidity_percent,
+                latest.wind_direction_deg, latest.wind_speed_m_s,
+                latest.gust_direction_deg, latest.gust_speed_m_s,
+                rainfall.total_mm AS rainfall_last_hour_mm,
+                latest.snow_depth_m, latest.pressure_pa, latest.sea_level_pressure_pa
+         FROM latest
+         CROSS JOIN LATERAL (
+             SELECT CASE WHEN count(reading.rainfall_mm) = 10
+                         THEN sum(reading.rainfall_mm) END AS total_mm,
+                    max(reading.fetched_at) AS fetched_at
+             FROM generate_series(latest.observed_at - interval '54 minutes',
+                                  latest.observed_at, interval '6 minutes') AS sample(at)
+             LEFT JOIN meteo AS reading
+                 ON reading.station_id = latest.station_id AND reading.observed_at = sample.at
+         ) AS rainfall",
     )
     .bind(station_id)
     .bind(at)

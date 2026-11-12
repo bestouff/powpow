@@ -14,14 +14,14 @@ pub struct MeteoReading {
     pub wind_speed_m_s: Option<f64>,
     pub gust_direction_deg: Option<i32>,
     pub gust_speed_m_s: Option<f64>,
-    pub rainfall_mm: Option<f64>,
+    pub rainfall_last_hour_mm: Option<f64>,
     pub snow_depth_m: Option<f64>,
     pub pressure_pa: Option<f64>,
     pub sea_level_pressure_pa: Option<f64>,
 }
 
 impl MeteoReading {
-    /// Changes when a different observation or a provider correction is stored.
+    /// Changes when an observation or any reading in its rainfall total is updated.
     pub fn revision(&self) -> String {
         format!(
             "{}:{}:{}",

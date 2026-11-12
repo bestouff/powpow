@@ -141,7 +141,9 @@ and import once without starting the web server, run `powpow --sync-meteo`.
 The public `/webcam` page displays the latest camera image, the configured title,
 the site's navbar logo, and available Météo-France measurements as an HTML/CSS
 overlay. Weather includes its observation time; missing measurements are omitted.
-Wind is displayed in km/h, snow depth in cm, and pressure in hPa.
+Wind is displayed in km/h, snow depth in cm, and pressure in hPa. Rainfall in mm
+is accumulated over the hour ending at the displayed observation time, summing
+ten six-minute readings. The total is omitted if any of these readings is missing.
 Visitors can choose a local date and scrub through its images with a slider.
 Dragging displays a small JPEG preview and its local timestamp; releasing loads
 the full image and its matching weather. Four shortcuts select the current image

@@ -745,11 +745,11 @@ async fn webcam_weather_tracks_live_updates_and_historical_image_times(
     })?;
     let directory = tempfile::tempdir()?;
     let now = Utc::now();
-    let image_time = now - TimeDelta::hours(1);
+    let image_time = now - TimeDelta::minutes(65);
     let mut bytes = std::io::Cursor::new(Vec::new());
     image::DynamicImage::new_rgb8(4, 3).write_to(&mut bytes, image::ImageFormat::Png)?;
     let mut filenames = Vec::new();
-    for time in [image_time, image_time - TimeDelta::hours(1)] {
+    for time in [image_time, image_time - TimeDelta::hours(2)] {
         let filename = format!(
             "{}_station.png",
             time.to_rfc3339_opts(SecondsFormat::Nanos, true)
@@ -777,13 +777,30 @@ async fn webcam_weather_tracks_live_updates_and_historical_image_times(
     .bind(now - TimeDelta::minutes(6))
     .execute(&pool)
     .await?;
+    for (end, rainfall) in [
+        (image_time - TimeDelta::minutes(6), 0.1),
+        (now - TimeDelta::minutes(6), 0.2),
+    ] {
+        sqlx::query(
+            "INSERT INTO meteo (station_id, observed_at, reference_time, insert_time,
+                                latitude, longitude, rainfall_mm, raw_data)
+             SELECT '38395004', sample, sample, sample, 45.315, 5.884833, $2, '{}'
+             FROM generate_series($1 - interval '54 minutes', $1, interval '6 minutes') AS sample
+             ON CONFLICT (station_id, observed_at) DO UPDATE SET rainfall_mm = EXCLUDED.rainfall_mm",
+        )
+        .bind(end)
+        .bind(rainfall)
+        .execute(&pool)
+        .await?;
+    }
     let store = state.webcam.clone();
     let app = build_router(state);
     let body =
         response_text(request(&app, "GET", "/webcam", None, serde_json::Value::Null).await).await?;
     for text in [
         "4,6 °C",
-        "0,0 mm",
+        "Pluie (1 h)",
+        "2,0 mm",
         "5,4 km/h",
         "10,8 km/h",
         "180°",
@@ -796,6 +813,7 @@ async fn webcam_weather_tracks_live_updates_and_historical_image_times(
         assert!(body.contains(text), "{text}");
     }
     assert!(!body.contains("Point de rosée"));
+    assert!(!body.contains("Pluie (6 min)"));
     assert!(!body.contains("99,0 °C"));
     assert!(!body.contains("98,0 °C"));
     assert!(!body.contains("UTC"));
@@ -850,6 +868,8 @@ async fn webcam_weather_tracks_live_updates_and_historical_image_times(
         response_text(request(&app, "GET", &path, None, serde_json::Value::Null).await).await?;
     assert!(body.contains("data-follow-latest=\"false\""));
     assert!(body.contains("1,5 °C"));
+    assert!(body.contains("Pluie (1 h)"));
+    assert!(body.contains("1,0 mm"));
     assert!(!body.contains("2,5 °C"));
     assert!(!body.contains("5,8 °C"));
     let path = format!("/webcam?image={}", filenames[1]);
