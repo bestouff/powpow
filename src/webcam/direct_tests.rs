@@ -93,7 +93,14 @@ async fn snapshots_use_content_detection_and_the_shared_persistent_archive() -> 
         .save(crate::webcam::tests::png(), "camera".into(), "png".into())
         .await?;
     let reopened = Store::open(archive, false).await?;
-    assert_eq!(reopened.gallery(None, None, 0).images.len(), 4);
+    assert_eq!(
+        reopened
+            .gallery(None, None, Some("pistes_nord-1"))
+            .images
+            .len(),
+        3
+    );
+    assert_eq!(reopened.gallery(None, None, Some("camera")).images.len(), 1);
     Ok(())
 }
 
@@ -139,6 +146,7 @@ async fn invalid_and_failed_downloads_preserve_the_last_image_and_allow_recovery
             }),
         );
     let server = Server::start(app).await?;
+    let file_count = directory.path().read_dir()?.count();
     for path in ["missing", "html", "truncated", "gif", "loop", "interrupted"] {
         let error = server
             .fetcher(&format!("{path}?token=secret"))?
@@ -151,11 +159,21 @@ async fn invalid_and_failed_downloads_preserve_the_last_image_and_allow_recovery
             original.filename,
             "{path}"
         );
-        assert_eq!(directory.path().read_dir()?.count(), 1);
+        assert_eq!(directory.path().read_dir()?.count(), file_count);
     }
     let next = server.fetcher("good")?.fetch(&store).await?;
     assert_ne!(next.filename, original.filename);
-    assert_eq!(store.gallery(None, None, 0).images.len(), 2);
+    assert_eq!(
+        store
+            .gallery(None, None, Some("pistes_nord-1"))
+            .images
+            .len(),
+        1
+    );
+    assert_eq!(
+        store.latest_for("camera").unwrap().filename,
+        original.filename
+    );
     Ok(())
 }
 

@@ -2,7 +2,10 @@ use chrono::Local;
 use maud::{Markup, html};
 
 use super::{NavKind, get_navbar_block, page};
-use crate::{models::MeteoReading, webcam::Gallery};
+use crate::{
+    models::MeteoReading,
+    webcam::{Gallery, previews},
+};
 
 pub fn webcam_page(
     prefix: &str,
@@ -18,6 +21,7 @@ pub fn webcam_page(
         .map_or("", |frame| frame.filename.as_str());
     let content = html! {
         section .section #webcam-page data-follow-latest=(follow_latest) data-image=(selected_name)
+          data-camera=(gallery.camera.as_deref().unwrap_or_default())
           data-weather-revision=(weather.map(MeteoReading::revision).unwrap_or_default()) {
             div .container {
                 div .level {
@@ -25,12 +29,6 @@ pub fn webcam_page(
                         div {
                             p .heading { "Webcam" }
                             h1 .title { (title) }
-                        }
-                    }
-                    div .level-right {
-                        a .button.is-link.is-light href={(prefix) "/webcam"} {
-                            span .icon { i .fa-solid.fa-clock-rotate-left {} }
-                            span { "Dernière image" }
                         }
                     }
                 }
@@ -55,23 +53,15 @@ pub fn webcam_page(
                                     }
                                 }
                             }
-                            nav .webcam-navigation.mt-4 aria-label="Parcourir les images" {
-                                @if let Some(previous) = &gallery.previous {
-                                    a .button href={(prefix) "/webcam?image=" (previous.filename)} {
-                                        span .icon { i .fa-solid.fa-chevron-left {} }
-                                        span { "Précédente" }
-                                    }
-                                } @else {
-                                    button .button disabled { "Précédente" }
-                                }
-                                @if let Some(next) = &gallery.next {
-                                    a .button href={(prefix) "/webcam?image=" (next.filename)} {
-                                        span { "Suivante" }
-                                        span .icon { i .fa-solid.fa-chevron-right {} }
-                                    }
-                                } @else {
-                                    button .button disabled { "Suivante" }
-                                }
+                            div .webcam-timeline.mt-4 data-list={(prefix) "/webcam/" (previews::list_name(gallery.date, &frame.username))} {
+                                label .label for="webcam-slider" { "Parcourir la journée" }
+                                input #webcam-slider type="range" min="0" max=(gallery.images.len().saturating_sub(1))
+                                  value=(gallery.images.iter().position(|image| image.filename == frame.filename).unwrap_or_default())
+                                  step="1" aria-valuetext=(frame.local_label()) aria-describedby="webcam-slider-help" disabled;
+                                output #webcam-slider-time for="webcam-slider" { (frame.local_label()) }
+                                p .help #webcam-slider-help { "Faites glisser pour prévisualiser, puis relâchez pour charger l'image complète." }
+                                p .help #webcam-slider-status role="status" {}
+                                noscript { p .help { "Activez JavaScript pour parcourir les images avec le curseur." } }
                             }
                             p .help.mt-3 { "Heure locale de réception sur le serveur." }
                         } @else {
@@ -85,8 +75,21 @@ pub fn webcam_page(
                     }
                     aside .column {
                         div .box.webcam-history {
-                            h2 .title.is-5 { "Images précédentes" }
+                            h2 .title.is-5 { "Choisir une image" }
+                            nav .webcam-shortcuts.mb-5 aria-label="Images récentes" {
+                                a .button.is-link.is-light href={(prefix) "/webcam" @if let Some(camera) = &gallery.camera { "?camera=" (camera) }} { "Actuelle" }
+                                @for (hours, frame) in [1, 3, 5].into_iter().zip(&gallery.recent) {
+                                    @if let Some(frame) = frame {
+                                        a .button href={(prefix) "/webcam?image=" (frame.filename)} title=(frame.local_label()) { "Il y a " (hours) " h" }
+                                    } @else {
+                                        button .button disabled { "Il y a " (hours) " h" }
+                                    }
+                                }
+                            }
                             form method="get" action={(prefix) "/webcam"} {
+                                @if let Some(camera) = &gallery.camera {
+                                    input type="hidden" name="camera" value=(camera);
+                                }
                                 div .field {
                                     label .label for="webcam-date" { "Date (heure locale)" }
                                     div .control {
@@ -94,29 +97,6 @@ pub fn webcam_page(
                                     }
                                 }
                                 button .button.is-link.is-fullwidth type="submit" { "Afficher" }
-                            }
-                            @if !gallery.images.is_empty() {
-                                div .webcam-times.mt-4 aria-label="Choisir une image" {
-                                    @for frame in &gallery.images {
-                                        a .webcam-time .is-selected[frame.filename == selected_name]
-                                          href={(prefix) "/webcam?image=" (frame.filename)}
-                                          aria-current=[(frame.filename == selected_name).then_some("true")]
-                                          title=(frame.username) {
-                                            (frame.received_at.with_timezone(&Local).format("%H:%M:%S"))
-                                        }
-                                    }
-                                }
-                                @if gallery.pages > 1 {
-                                    nav .webcam-pagination.mt-4 aria-label="Pages d'archives" {
-                                        @if gallery.page > 0 {
-                                            a .button.is-small href={(prefix) "/webcam?date=" (gallery.date) "&page=" (gallery.page - 1)} { "Plus récentes" }
-                                        }
-                                        span .is-size-7 { (gallery.page + 1) " / " (gallery.pages) }
-                                        @if gallery.page + 1 < gallery.pages {
-                                            a .button.is-small href={(prefix) "/webcam?date=" (gallery.date) "&page=" (gallery.page + 1)} { "Plus anciennes" }
-                                        }
-                                    }
-                                }
                             }
                         }
                     }

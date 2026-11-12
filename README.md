@@ -142,8 +142,11 @@ The public `/webcam` page displays the latest camera image, the configured title
 the site's navbar logo, and available Météo-France measurements as an HTML/CSS
 overlay. Weather includes its observation time; missing measurements are omitted.
 Wind is displayed in km/h, snow depth in cm, and pressure in hPa.
-Visitors can choose a local date
-and time, browse older/newer images, and return to the latest image. The latest
+Visitors can choose a local date and scrub through its images with a slider.
+Dragging displays a small JPEG preview and its local timestamp; releasing loads
+the full image and its matching weather. Four shortcuts select the current image
+or the last capture at or before one, three, or five hours ago. Use
+`/webcam?camera=tkecole` to select a specific camera. The latest
 view checks for image and weather updates every minute. Archive views stay on the
 selected image and show the most recent reading at or before its reception time,
 within 30 minutes; older or missing readings are omitted.
@@ -151,6 +154,21 @@ Displayed image and weather times, along with archive dates, use the server's
 local timezone (`TZ`, set to `Europe/Paris` in Docker Compose), including daylight
 saving time changes.
 The original image files retain their original pixels.
+
+`/webcam/tkecole.jpg` serves that camera's latest image as a JPEG. Other cameras
+use their source name in the same URL. Responses have `ETag`, `Last-Modified`,
+and `Cache-Control: public, max-age=60, must-revalidate`: browsers reuse the image
+for one minute, then receive `304 Not Modified` if it has not changed.
+
+PowPow generates missing previews at startup and creates them with each new
+capture. Thumbnails fit within 480 × 270 pixels and use the original filename
+plus `_small.jpg` (for example, `2026-11-12T12:00:00.000000000Z_tkecole.jpg_small.jpg`).
+Each local day and camera also has an atomically updated
+`2026-11-12_tkecole_list.json` file, served at `/webcam/2026-11-12_tkecole_list.json`.
+Its `images` array lists original filenames, thumbnail filenames, reception
+timestamps with their local offset, and display labels in chronological order.
+Originals and thumbnails under `/webcam/images/` use immutable caching.
+PNG/WebP originals also get a full-size JPEG for the stable `.jpg` URL.
 
 #### Retrieve snapshots from a URL
 

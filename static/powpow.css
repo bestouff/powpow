@@ -1294,29 +1294,20 @@
   font-size: 0.85em;
   opacity: 0.85;
 }
-.webcam-navigation,
-.webcam-pagination {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+.webcam-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
 }
-.webcam-times {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
-  gap: 0.35rem;
-}
-.webcam-time {
-  padding: 0.4rem;
-  text-align: center;
-  border-radius: 0.25rem;
-  background: var(--bulma-background);
+.webcam-timeline output {
+  display: block;
   font-variant-numeric: tabular-nums;
 }
-.webcam-time.is-selected {
-  background: var(--bulma-link);
-  color: white;
+#webcam-slider {
+  width: 100%;
+  min-height: 2rem;
+  accent-color: var(--bulma-link);
+  cursor: ew-resize;
 }
 .webcam-history input {
   min-width: 0;

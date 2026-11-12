@@ -360,6 +360,205 @@ async fn webcam_is_public_with_immutable_images_and_uncached_latest(
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn webcam_previews_and_latest_jpeg_are_public_and_revalidate(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let mut state = state(pool);
+    let directory = tempfile::tempdir()?;
+    state.webcam = webcam::Store::open(directory.path().into(), true).await?;
+    let store = state.webcam.clone();
+    let mut encoded = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(4, 3).write_to(&mut encoded, image::ImageFormat::Png)?;
+    let bytes = encoded.into_inner();
+    let frame = store
+        .save(bytes.clone(), "tkecole".into(), "png".into())
+        .await?;
+    store
+        .save(bytes.clone(), "other".into(), "png".into())
+        .await?;
+    let (unpaid, cookie) = member(&state, "webcam-assets@example.org").await?;
+    sqlx::query("DELETE FROM payments WHERE staff = $1")
+        .bind(unpaid.id)
+        .execute(&state.db)
+        .await?;
+    let app = build_router(state);
+    let list_path = format!(
+        "/webcam/{}",
+        webcam::previews::list_name(frame.date(), "tkecole")
+    );
+    let thumbnail_path = format!("/webcam/images/{}", frame.thumbnail());
+    for session in [None, Some(cookie.as_str())] {
+        for path in [&list_path, &thumbnail_path, "/webcam/tkecole.jpg"] {
+            assert_eq!(
+                request(&app, "GET", path, session, serde_json::Value::Null)
+                    .await
+                    .status(),
+                StatusCode::OK
+            );
+        }
+    }
+    let response = request(&app, "GET", &list_path, None, serde_json::Value::Null).await;
+    let list_etag = response.headers()["etag"].clone();
+    let list: serde_json::Value = serde_json::from_str(&response_text(response).await?)?;
+    assert_eq!(list["camera"], "tkecole");
+    assert_eq!(list["date"], frame.date().to_string());
+    assert_eq!(list["images"].as_array().unwrap().len(), 1);
+    assert_eq!(list["images"][0]["filename"], frame.filename);
+    assert_eq!(list["images"][0]["thumbnail"], frame.thumbnail());
+    assert_eq!(list["images"][0]["label"], frame.local_label());
+    let response = request(&app, "GET", &thumbnail_path, None, serde_json::Value::Null).await;
+    assert!(
+        response.headers()["cache-control"]
+            .to_str()?
+            .contains("immutable")
+    );
+    assert_eq!(response.headers()["content-type"], "image/jpeg");
+    assert_eq!(
+        image::guess_format(&to_bytes(response.into_body(), 1_000_000).await?)?,
+        image::ImageFormat::Jpeg
+    );
+
+    let response = request(
+        &app,
+        "GET",
+        "/webcam/tkecole.jpg",
+        None,
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(
+        response.headers()["cache-control"],
+        "public, max-age=60, must-revalidate"
+    );
+    assert_eq!(response.headers()["content-type"], "image/jpeg");
+    let etag = response.headers()["etag"].clone();
+    let modified = response.headers()["last-modified"].clone();
+    let length = response.headers()["content-length"].clone();
+    let body = to_bytes(response.into_body(), 1_000_000).await?;
+    assert_eq!(image::guess_format(&body)?, image::ImageFormat::Jpeg);
+    assert_eq!(body.as_ref(), std::fs::read(store.jpeg_path(&frame))?);
+    for (header, value) in [
+        ("if-none-match", format!("\"other\", W/{}", etag.to_str()?)),
+        ("if-none-match", "*".into()),
+        ("if-modified-since", modified.to_str()?.into()),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/webcam/tkecole.jpg")
+                    .header(header, value)
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+        assert_eq!(response.headers()["etag"], etag);
+        assert!(to_bytes(response.into_body(), 100).await?.is_empty());
+    }
+    let head = request(
+        &app,
+        "HEAD",
+        "/webcam/tkecole.jpg",
+        None,
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(head.status(), StatusCode::OK);
+    assert_eq!(head.headers()["content-length"], length);
+    assert!(to_bytes(head.into_body(), 100).await?.is_empty());
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/webcam/tkecole.jpg")
+                .header("if-none-match", "\"different-image\"")
+                .header("if-modified-since", &modified)
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(&list_path)
+                .header("if-none-match", &list_etag)
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+
+    let next = store.save(bytes, "tkecole".into(), "png".into()).await?;
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/webcam/tkecole.jpg")
+                .header("if-none-match", &etag)
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_ne!(response.headers()["etag"], etag);
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(&list_path)
+                .header("if-none-match", &list_etag)
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let list: serde_json::Value = serde_json::from_str(&response_text(response).await?)?;
+    assert_eq!(list["images"].as_array().unwrap().len(), 2);
+    assert_eq!(list["images"][1]["filename"], next.filename);
+    let response = request(
+        &app,
+        "GET",
+        "/api/webcam/latest?camera=other",
+        None,
+        serde_json::Value::Null,
+    )
+    .await;
+    let latest: serde_json::Value = serde_json::from_str(&response_text(response).await?)?;
+    assert_eq!(latest["image"]["username"], "other");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/webcam?camera=tkecole")
+                .header("x-forwarded-prefix", "/powpow")
+                .body(Body::empty())?,
+        )
+        .await?;
+    let body = response_text(response).await?;
+    assert!(body.contains("id=\"webcam-slider\""));
+    assert!(body.contains(&format!("data-list=\"/powpow{list_path}\"")));
+    for label in ["Actuelle", "Il y a 1 h", "Il y a 3 h", "Il y a 5 h"] {
+        assert!(body.contains(label));
+    }
+    assert!(!body.contains("webcam-times"));
+    assert!(!body.contains("webcam-pagination"));
+    for path in [
+        "/webcam/missing.jpg",
+        "/webcam/2026-11-12_missing_list.json",
+        "/webcam/..%2Fsecret.jpg",
+        "/webcam/images/missing.png_small.jpg",
+    ] {
+        assert_eq!(
+            request(&app, "GET", path, None, serde_json::Value::Null)
+                .await
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn webcam_weather_tracks_live_updates_and_historical_image_times(
     pool: PgPool,
 ) -> anyhow::Result<()> {

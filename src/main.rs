@@ -471,6 +471,7 @@ fn build_router(app_state: AppState) -> Router {
         .route("/", get(routes::home::index))
         .route("/today", get(routes::today::page))
         .route("/webcam", get(routes::webcam::page))
+        .route("/webcam/{filename}", get(routes::webcam::asset))
         .route("/webcam/images/{filename}", get(routes::webcam::image))
         .route("/api/webcam/latest", get(routes::webcam::latest))
         .route("/admin", get(routes::admin::admin_page_handler))

@@ -3,23 +3,22 @@
 pub mod config;
 pub mod direct;
 pub mod ftps;
+pub mod previews;
 #[cfg(test)]
 mod tests;
 
 use std::{
-    collections::BTreeSet,
-    io::{Cursor, Write},
-    ops::Bound::{Excluded, Unbounded},
+    collections::{BTreeMap, BTreeSet},
+    io::{Cursor, Read, Write},
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
 
 use anyhow::{Context, Result, ensure};
-use chrono::{DateTime, Local, NaiveDate, SecondsFormat, Utc};
+use chrono::{DateTime, Local, NaiveDate, SecondsFormat, TimeDelta, Utc};
 use tokio::sync::Semaphore;
 
 pub const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
-pub const PAGE_SIZE: usize = 48;
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct Frame {
@@ -29,6 +28,30 @@ pub struct Frame {
 }
 
 impl Frame {
+    pub fn date(&self) -> NaiveDate {
+        self.received_at.with_timezone(&Local).date_naive()
+    }
+
+    pub fn local_label(&self) -> String {
+        self.received_at
+            .with_timezone(&Local)
+            .format("%d/%m/%Y à %H:%M:%S")
+            .to_string()
+    }
+
+    pub fn thumbnail(&self) -> String {
+        // Keep the original extension: derivatives cannot be mistaken for another camera.
+        format!("{}_small.jpg", self.filename)
+    }
+
+    pub fn jpeg(&self) -> String {
+        if self.mime_type() == "image/jpeg" {
+            self.filename.clone()
+        } else {
+            format!("{}.jpg", self.filename)
+        }
+    }
+
     pub fn parse(filename: &str) -> Option<Self> {
         let (timestamp, rest) = filename.split_once('_')?;
         let (username, extension) = rest.rsplit_once('.')?;
@@ -74,10 +97,8 @@ pub struct Gallery {
     pub selected: Option<Frame>,
     pub images: Vec<Frame>,
     pub date: NaiveDate,
-    pub page: usize,
-    pub pages: usize,
-    pub previous: Option<Frame>,
-    pub next: Option<Frame>,
+    pub camera: Option<String>,
+    pub recent: [Option<Frame>; 3],
 }
 
 #[derive(Clone)]
@@ -98,26 +119,58 @@ impl Store {
 
     pub async fn open(directory: PathBuf, create: bool) -> Result<Self> {
         let store = Self::new(directory);
+        let loader = store.clone();
+        tokio::task::spawn_blocking(move || loader.load(create)).await??;
+        Ok(store)
+    }
+
+    fn load(&self, create: bool) -> Result<()> {
         if create {
-            tokio::fs::create_dir_all(&store.directory)
-                .await
-                .context("Cannot create WEBCAM_DIRECTORY")?;
+            std::fs::create_dir_all(&self.directory).context("Cannot create WEBCAM_DIRECTORY")?;
         }
-        let mut entries = match tokio::fs::read_dir(&store.directory).await {
+        let entries = match std::fs::read_dir(&self.directory) {
             Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(store),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             Err(error) => return Err(error).context("Cannot read WEBCAM_DIRECTORY"),
         };
         let mut images = BTreeSet::new();
-        while let Some(entry) = entries.next_entry().await? {
+        let mut days: BTreeMap<(NaiveDate, String), Vec<Frame>> = BTreeMap::new();
+        for entry in entries {
+            let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
-            if entry.file_type().await?.is_file() && Frame::parse(&name).is_some() {
-                images.insert(name);
+            if !entry.file_type()?.is_file() {
+                continue;
             }
+            let Some(frame) = Frame::parse(&name) else {
+                continue;
+            };
+            if previews::missing(&self.directory, &frame) {
+                let mut bytes = Vec::new();
+                std::fs::File::open(entry.path())?
+                    .take(MAX_IMAGE_BYTES + 1)
+                    .read_to_end(&mut bytes)?;
+                let extension = name.rsplit_once('.').expect("frame extension").1;
+                let image = match decode_image(&bytes, extension) {
+                    Ok(image) => image,
+                    Err(error) => {
+                        tracing::warn!(%name, %error, "Skipping invalid webcam image");
+                        continue;
+                    }
+                };
+                previews::generate(&self.directory, &frame, &image)?;
+            }
+            days.entry((frame.date(), frame.username.clone()))
+                .or_default()
+                .push(frame);
+            images.insert(name);
         }
-        tracing::info!(images = images.len(), directory = %store.directory.display(), "Webcam archive loaded");
-        *store.images.write().expect("webcam index lock") = images;
-        Ok(store)
+        for ((date, camera), mut frames) in days {
+            frames.sort_by(|a, b| a.filename.cmp(&b.filename));
+            previews::write_list(&self.directory, date, &camera, &frames)?;
+        }
+        tracing::info!(images = images.len(), directory = %self.directory.display(), "Webcam archive and previews loaded");
+        *self.images.write().expect("webcam index lock") = images;
+        Ok(())
     }
 
     pub fn latest(&self) -> Option<Frame> {
@@ -126,6 +179,16 @@ impl Store {
             .expect("webcam index lock")
             .last()
             .and_then(|name| Frame::parse(name))
+    }
+
+    pub fn latest_for(&self, camera: &str) -> Option<Frame> {
+        self.images
+            .read()
+            .expect("webcam index lock")
+            .iter()
+            .rev()
+            .filter_map(|name| Frame::parse(name))
+            .find(|frame| frame.username == camera)
     }
 
     pub fn get(&self, filename: &str) -> Option<Frame> {
@@ -141,65 +204,74 @@ impl Store {
         self.directory.join(&frame.filename)
     }
 
-    pub fn gallery(&self, date: Option<NaiveDate>, filename: Option<&str>, page: usize) -> Gallery {
+    pub fn thumbnail(&self, filename: &str) -> Option<PathBuf> {
+        let frame = self.get(filename.strip_suffix("_small.jpg")?)?;
+        Some(self.directory.join(frame.thumbnail()))
+    }
+
+    pub fn jpeg_path(&self, frame: &Frame) -> PathBuf {
+        self.directory.join(frame.jpeg())
+    }
+
+    pub fn list_path(&self, filename: &str) -> Option<PathBuf> {
+        let (date, camera) = previews::parse_list_name(filename)?;
+        let images = self.images.read().expect("webcam index lock");
+        (!day_frames(&images, date, camera).is_empty()).then(|| self.directory.join(filename))
+    }
+
+    pub fn gallery(
+        &self,
+        date: Option<NaiveDate>,
+        filename: Option<&str>,
+        camera: Option<&str>,
+    ) -> Gallery {
         let images = self.images.read().expect("webcam index lock");
         let requested = filename
             .filter(|name| images.contains(*name))
             .and_then(Frame::parse);
-        let date = requested
+        let camera = requested
             .as_ref()
-            .map(|frame| frame.received_at.with_timezone(&Local).date_naive())
-            .or(date)
+            .map(|frame| frame.username.as_str())
+            .or(camera)
+            .map(str::to_owned)
             .or_else(|| {
                 images
                     .last()
                     .and_then(|name| Frame::parse(name))
-                    .map(|frame| frame.received_at.with_timezone(&Local).date_naive())
-            })
-            .unwrap_or_else(|| Local::now().date_naive());
-        // Local days can span neighboring UTC dates, including during DST changes.
-        let day_start = format!("{}T", date.pred_opt().unwrap_or(date));
-        let day_end = format!("{}U", date.succ_opt().unwrap_or(date));
-        let day: Vec<_> = images
-            .range(day_start..day_end)
+                    .map(|frame| frame.username)
+            });
+        let latest = images
+            .iter()
             .rev()
             .filter_map(|name| Frame::parse(name))
-            .filter(|frame| frame.received_at.with_timezone(&Local).date_naive() == date)
-            .collect();
-        let pages = day.len().div_ceil(PAGE_SIZE).max(1);
-        let page = requested
+            .find(|frame| Some(&frame.username) == camera.as_ref());
+        let date = requested
             .as_ref()
-            .and_then(|frame| {
-                day.iter()
-                    .position(|image| image.filename == frame.filename)
-            })
-            .map_or(page, |position| position / PAGE_SIZE)
-            .min(pages - 1);
-        let shown: Vec<_> = day
-            .into_iter()
-            .skip(page * PAGE_SIZE)
-            .take(PAGE_SIZE)
-            .collect();
-        let selected = requested.or_else(|| shown.first().cloned());
-        let (previous, next) = selected.as_ref().map_or((None, None), |frame| {
-            let previous = images
-                .range(..frame.filename.clone())
-                .next_back()
-                .and_then(|name| Frame::parse(name));
-            let next = images
-                .range((Excluded(frame.filename.clone()), Unbounded))
-                .next()
-                .and_then(|name| Frame::parse(name));
-            (previous, next)
+            .map(Frame::date)
+            .or(date)
+            .or_else(|| latest.as_ref().map(Frame::date))
+            .unwrap_or_else(|| Local::now().date_naive());
+        let day = camera
+            .as_ref()
+            .map_or_else(Vec::new, |camera| day_frames(&images, date, camera));
+        let selected = requested.or_else(|| day.last().cloned());
+        let now = Utc::now();
+        let recent = [1, 3, 5].map(|hours| {
+            images
+                .iter()
+                .rev()
+                .filter_map(|name| Frame::parse(name))
+                .find(|frame| {
+                    Some(&frame.username) == camera.as_ref()
+                        && frame.received_at <= now - TimeDelta::hours(hours)
+                })
         });
         Gallery {
             selected,
-            images: shown,
+            images: day,
             date,
-            page,
-            pages,
-            previous,
-            next,
+            camera,
+            recent,
         }
     }
 
@@ -216,13 +288,19 @@ impl Store {
         let store = self.clone();
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
-            validate_image(&bytes, &extension)?;
-            store.publish(&bytes, &username, &extension)
+            let image = decode_image(&bytes, &extension)?;
+            store.publish(&bytes, &username, &extension, &image)
         })
         .await?
     }
 
-    fn publish(&self, bytes: &[u8], username: &str, extension: &str) -> Result<Frame> {
+    fn publish(
+        &self,
+        bytes: &[u8],
+        username: &str,
+        extension: &str,
+        image: &image::DynamicImage,
+    ) -> Result<Frame> {
         let mut upload = tempfile::Builder::new()
             .prefix(".upload-")
             .tempfile_in(&self.directory)?;
@@ -240,16 +318,21 @@ impl Store {
             );
             match upload.persist_noclobber(self.directory.join(&filename)) {
                 Ok(_) => {
-                    self.images
-                        .write()
-                        .expect("webcam index lock")
-                        .insert(filename.clone());
-                    tracing::info!(%filename, bytes = bytes.len(), "Webcam image archived");
-                    return Ok(Frame {
+                    let frame = Frame {
                         filename,
                         received_at,
                         username: username.into(),
-                    });
+                    };
+                    previews::generate(&self.directory, &frame, image)?;
+                    // Publish the index and manifest together; concurrent uploads cannot lose entries.
+                    let mut images = self.images.write().expect("webcam index lock");
+                    let mut day = day_frames(&images, frame.date(), username);
+                    day.push(frame.clone());
+                    day.sort_by(|a, b| a.filename.cmp(&b.filename));
+                    previews::write_list(&self.directory, frame.date(), username, &day)?;
+                    images.insert(frame.filename.clone());
+                    tracing::info!(filename = %frame.filename, bytes = bytes.len(), "Webcam image archived");
+                    return Ok(frame);
                 }
                 Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
                     upload = error.file;
@@ -261,7 +344,22 @@ impl Store {
     }
 }
 
-fn validate_image(bytes: &[u8], extension: &str) -> Result<()> {
+fn day_frames(images: &BTreeSet<String>, date: NaiveDate, camera: &str) -> Vec<Frame> {
+    // Local days can span neighboring UTC dates, including during DST changes.
+    let start = format!("{}T", date.pred_opt().unwrap_or(date));
+    let end = format!("{}U", date.succ_opt().unwrap_or(date));
+    images
+        .range(start..end)
+        .filter_map(|name| Frame::parse(name))
+        .filter(|frame| frame.username == camera && frame.date() == date)
+        .collect()
+}
+
+fn decode_image(bytes: &[u8], extension: &str) -> Result<image::DynamicImage> {
+    ensure!(
+        bytes.len() as u64 <= MAX_IMAGE_BYTES,
+        "Webcam image exceeds 20 MiB"
+    );
     let expected = image_format(extension).context("Unsupported webcam image extension")?;
     ensure!(
         image::guess_format(bytes)? == expected,
@@ -273,8 +371,7 @@ fn validate_image(bytes: &[u8], extension: &str) -> Result<()> {
     limits.max_image_height = Some(8192);
     limits.max_alloc = Some(128 * 1024 * 1024);
     reader.limits(limits);
-    reader.decode().context("Invalid webcam image")?;
-    Ok(())
+    reader.decode().context("Invalid webcam image")
 }
 
 pub async fn open_image(path: &Path) -> std::io::Result<tokio::fs::File> {

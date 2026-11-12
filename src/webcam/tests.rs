@@ -26,7 +26,27 @@ async fn archive_publishes_complete_images_and_recovers_after_restart() -> Resul
     );
     assert_eq!(std::fs::read(store.path(&first))?, png());
     assert_eq!(std::fs::read(store.path(&second))?, png());
-    assert_eq!(directory.path().read_dir()?.count(), 2);
+    for frame in [&first, &second] {
+        let thumbnail = std::fs::read(directory.path().join(frame.thumbnail()))?;
+        assert_eq!(image::guess_format(&thumbnail)?, image::ImageFormat::Jpeg);
+        assert!(Frame::parse(&frame.thumbnail()).is_none());
+        assert!(Frame::parse(&frame.jpeg()).is_none());
+    }
+    let list_path = directory
+        .path()
+        .join(previews::list_name(first.date(), "station_nord"));
+    let list: serde_json::Value = serde_json::from_slice(&std::fs::read(&list_path)?)?;
+    let listed = list["images"].as_array().unwrap();
+    assert_eq!(listed.len(), 2);
+    for frame in [&first, &second] {
+        assert!(
+            listed
+                .iter()
+                .any(|entry| entry["filename"] == frame.filename
+                    && entry["thumbnail"] == frame.thumbnail())
+        );
+    }
+    let file_count = directory.path().read_dir()?.count();
     assert!(
         store
             .save(png(), "../escape".into(), "png".into())
@@ -45,7 +65,7 @@ async fn archive_publishes_complete_images_and_recovers_after_restart() -> Resul
             .await
             .is_err()
     );
-    assert_eq!(directory.path().read_dir()?.count(), 2);
+    assert_eq!(directory.path().read_dir()?.count(), file_count);
 
     std::fs::write(directory.path().join(".upload-unfinished"), png())?;
     std::fs::write(directory.path().join("unrelated.png"), png())?;
@@ -54,14 +74,18 @@ async fn archive_publishes_complete_images_and_recovers_after_restart() -> Resul
         restarted.latest().unwrap().filename,
         store.latest().unwrap().filename
     );
-    assert_eq!(restarted.gallery(None, None, 0).images.len(), 2);
+    assert_eq!(restarted.gallery(None, None, None).images.len(), 2);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&std::fs::read(list_path)?)?,
+        list
+    );
     assert!(restarted.get("../outside.png").is_none());
     assert!(restarted.get(".upload-unfinished").is_none());
     Ok(())
 }
 
 #[tokio::test]
-async fn gallery_paginates_a_day_and_navigates_across_midnight() -> Result<()> {
+async fn gallery_lists_the_entire_local_day_and_keeps_cameras_separate() -> Result<()> {
     let directory = tempfile::tempdir()?;
     let midnight = Local
         .with_ymd_and_hms(2026, 11, 2, 0, 0, 0)
@@ -71,44 +95,53 @@ async fn gallery_paginates_a_day_and_navigates_across_midnight() -> Result<()> {
         let received_at = midnight - TimeDelta::hours(1) + TimeDelta::minutes(minute);
         std::fs::write(
             directory.path().join(format!(
-                "{}_station.jpg",
+                "{}_station.png",
                 received_at.to_rfc3339_opts(SecondsFormat::Nanos, true)
             )),
-            [],
+            png(),
         )?;
     }
     let newest = format!(
-        "{}_station.jpg",
+        "{}_station.png",
         midnight.to_rfc3339_opts(SecondsFormat::Nanos, true)
     );
-    std::fs::write(directory.path().join(&newest), [])?;
+    std::fs::write(directory.path().join(&newest), png())?;
+    std::fs::write(
+        directory
+            .path()
+            .join(newest.replace("_station", "_station_small")),
+        png(),
+    )?;
     let store = Store::open(directory.path().into(), false).await?;
     let day = "2026-11-01".parse()?;
-    let latest = store.gallery(None, None, 0);
+    let latest = store.gallery(None, None, Some("station"));
     assert_eq!(latest.selected.unwrap().filename, newest);
-    assert!(latest.next.is_none());
-    assert_eq!(
-        latest
-            .previous
-            .unwrap()
-            .received_at
-            .with_timezone(&Local)
-            .date_naive(),
-        day
+    assert_eq!(latest.images.len(), 1);
+    let first = store.gallery(Some(day), None, Some("station"));
+    assert_eq!(first.images.len(), 55);
+    assert!(
+        first
+            .images
+            .windows(2)
+            .all(|pair| pair[0].received_at < pair[1].received_at)
     );
-    let first = store.gallery(Some(day), None, 0);
-    assert_eq!(first.images.len(), PAGE_SIZE);
-    assert_eq!(first.pages, 2);
-    let last = store.gallery(Some(day), None, usize::MAX);
-    assert_eq!(last.page, 1);
-    assert_eq!(last.images.len(), 7);
-    let chosen = store.gallery(None, Some(&last.images[6].filename), 0);
-    assert_eq!(chosen.page, 1);
+    let chosen = store.gallery(None, Some(&first.images[0].filename), Some("station_small"));
     assert_eq!(chosen.date, day);
-    assert!(chosen.previous.is_none());
+    assert_eq!(chosen.camera.as_deref(), Some("station"));
+    assert_eq!(
+        chosen.selected.unwrap().received_at,
+        midnight - TimeDelta::hours(1)
+    );
+    let list: serde_json::Value = serde_json::from_slice(&std::fs::read(
+        directory.path().join(previews::list_name(day, "station")),
+    )?)?;
+    assert_eq!(list["images"].as_array().unwrap().len(), 55);
+    let other = store.gallery(None, None, Some("station_small"));
+    assert_eq!(other.images.len(), 1);
+    assert_eq!(other.images[0].username, "station_small");
     assert!(
         store
-            .gallery(Some("2026-10-30".parse()?), None, 0)
+            .gallery(Some("2026-10-30".parse()?), None, Some("station"))
             .selected
             .is_none()
     );
@@ -134,28 +167,69 @@ async fn gallery_keeps_complete_local_days_across_daylight_saving_changes() -> R
         let mut expected = Vec::new();
         while received_at <= end {
             let filename = format!(
-                "{}_station.jpg",
+                "{}_station.png",
                 received_at.to_rfc3339_opts(SecondsFormat::Nanos, true)
             );
-            std::fs::write(directory.path().join(&filename), [])?;
+            std::fs::write(directory.path().join(&filename), png())?;
             if received_at >= start && received_at < end {
                 expected.push(filename);
             }
             received_at += step;
         }
-        expected.reverse();
         let store = Store::open(directory.path().into(), false).await?;
-        let first = store.gallery(Some(date), None, 0);
-        let actual: Vec<_> = (0..first.pages)
-            .flat_map(|page| store.gallery(Some(date), None, page).images)
-            .map(|frame| frame.filename)
+        let gallery = store.gallery(Some(date), None, None);
+        let actual: Vec<_> = gallery
+            .images
+            .iter()
+            .map(|frame| frame.filename.clone())
             .collect();
         assert_eq!(actual, expected, "{date}");
-        let earliest = store.gallery(None, expected.last().map(String::as_str), 0);
+        let earliest = store.gallery(None, expected.first().map(String::as_str), None);
         assert_eq!(earliest.date, date);
-        assert_eq!(earliest.previous.unwrap().received_at, start - step);
-        assert_eq!(first.next.unwrap().received_at, end);
+        assert_eq!(earliest.selected.unwrap().received_at, start);
+        let list: serde_json::Value = serde_json::from_slice(&std::fs::read(
+            directory.path().join(previews::list_name(date, "station")),
+        )?)?;
+        assert_eq!(list["images"].as_array().unwrap().len(), expected.len());
+        assert_eq!(list["images"][0]["label"], gallery.images[0].local_label());
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn existing_archives_get_missing_previews_and_time_shortcuts() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let now = Utc::now();
+    let mut frames = Vec::new();
+    let mut bytes = Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(1920, 1080).write_to(&mut bytes, image::ImageFormat::Jpeg)?;
+    for minutes in [0, 61, 181, 301] {
+        let filename = format!(
+            "{}_tkecole.jpg",
+            (now - TimeDelta::minutes(minutes)).to_rfc3339_opts(SecondsFormat::Nanos, true)
+        );
+        std::fs::write(directory.path().join(&filename), bytes.get_ref())?;
+        frames.push(Frame::parse(&filename).unwrap());
+    }
+    std::fs::write(
+        directory
+            .path()
+            .join("2026-01-01T00:00:00.000000000Z_broken.jpg"),
+        b"broken",
+    )?;
+    let store = Store::open(directory.path().into(), false).await?;
+    let gallery = store.gallery(None, None, Some("tkecole"));
+    for (recent, expected) in gallery.recent.iter().zip(&frames[1..]) {
+        assert_eq!(recent.as_ref().unwrap().filename, expected.filename);
+    }
+    let thumbnail = directory.path().join(frames[0].thumbnail());
+    assert_eq!(image::image_dimensions(&thumbnail)?, (480, 270));
+    assert!(store.latest_for("broken").is_none());
+    std::fs::remove_file(&thumbnail)?;
+    let restarted = Store::open(directory.path().into(), false).await?;
+    assert_eq!(image::image_dimensions(&thumbnail)?, (480, 270));
+    assert_eq!(restarted.latest().unwrap().filename, frames[0].filename);
+    assert_eq!(std::fs::read(store.path(&frames[0]))?, *bytes.get_ref());
     Ok(())
 }
 

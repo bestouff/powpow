@@ -54,11 +54,140 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function initWebcam(prefix) {
   const page = document.getElementById("webcam-page");
-  if (!page || page.dataset.followLatest !== "true") return;
-  async function refresh() {
-    if (document.hidden || document.activeElement?.closest(".webcam-history")) return;
+  if (!page) return;
+  let interacting = false;
+  let navigating = false;
+  const timeline = page.querySelector(".webcam-timeline");
+  if (timeline) initTimeline();
+
+  async function initTimeline() {
+    const slider = document.getElementById("webcam-slider");
+    const output = document.getElementById("webcam-slider-time");
+    const status = document.getElementById("webcam-slider-status");
+    const photo = page.querySelector(".webcam-photo");
+    const time = page.querySelector(".webcam-caption-heading time");
+    const weather = page.querySelector(".webcam-weather");
+    const original = {src: photo.src, label: time.textContent, date: time.dateTime};
     try {
-      const response = await fetch(prefix + "/api/webcam/latest", {cache: "no-store"});
+      const response = await fetch(timeline.dataset.list, {cache: "no-cache"});
+      if (!response.ok) throw new Error("Cannot load webcam timeline");
+      const {images} = await response.json();
+      const selected = images.findIndex(image => image.filename === page.dataset.image);
+      if (selected < 0) throw new Error("Selected image missing from timeline");
+      slider.max = String(images.length - 1);
+      slider.value = String(selected);
+      slider.disabled = images.length < 2;
+      const thumbnails = new Map();
+      let keyboard = false;
+
+      function thumbnail(index) {
+        if (!thumbnails.has(index)) {
+          thumbnails.set(index, new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image.src);
+            image.onerror = () => {
+              thumbnails.delete(index);
+              reject(new Error("Cannot load webcam preview"));
+            };
+            image.src = prefix + "/webcam/images/" + encodeURIComponent(images[index].thumbnail);
+          }));
+        }
+        return thumbnails.get(index);
+      }
+
+      function restore() {
+        interacting = false;
+        slider.value = String(selected);
+        photo.src = original.src;
+        time.textContent = original.label;
+        time.dateTime = original.date;
+        output.textContent = original.label;
+        slider.setAttribute("aria-valuetext", original.label);
+        if (weather) weather.hidden = false;
+        status.textContent = "";
+      }
+
+      slider.addEventListener("input", async function () {
+        interacting = true;
+        const index = Number(slider.value);
+        const frame = images[index];
+        output.textContent = frame.label;
+        slider.setAttribute("aria-valuetext", frame.label);
+        status.textContent = "";
+        try {
+          const src = await thumbnail(index);
+          // A slow response must not replace a more recent slider selection.
+          if (!interacting || navigating || Number(slider.value) !== index) return;
+          photo.src = src;
+          time.textContent = frame.label;
+          time.dateTime = frame.received_at;
+          if (weather) weather.hidden = true;
+        } catch (_) {
+          if (Number(slider.value) === index && !navigating) {
+            status.textContent = "Aperçu indisponible. Relâchez pour charger l'image complète.";
+          }
+        }
+      });
+
+      function commit() {
+        if (navigating) return;
+        const frame = images[Number(slider.value)];
+        if (frame.filename === page.dataset.image) {
+          restore();
+          return;
+        }
+        navigating = true;
+        // Re-render the full image with the weather observation for its timestamp.
+        window.location.assign(prefix + "/webcam?image=" + encodeURIComponent(frame.filename));
+      }
+
+      slider.addEventListener("pointerdown", () => { interacting = true; });
+      slider.addEventListener("pointerup", () => {
+        if (Number(slider.value) === selected) restore();
+      });
+      slider.addEventListener("pointercancel", restore);
+      slider.addEventListener("change", () => { if (!keyboard) commit(); });
+      const navigationKeys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
+      slider.addEventListener("keydown", event => {
+        if (navigationKeys.includes(event.key)) {
+          keyboard = true;
+          interacting = true;
+        }
+      });
+      slider.addEventListener("keyup", event => {
+        if (navigationKeys.includes(event.key)) {
+          keyboard = false;
+          commit();
+        }
+      });
+      slider.addEventListener("blur", () => {
+        if (keyboard) {
+          keyboard = false;
+          commit();
+        }
+      });
+
+      // Warm the day's small images with bounded concurrency, nearest frames first.
+      const order = images.map((_, index) => index)
+        .sort((a, b) => Math.abs(a - selected) - Math.abs(b - selected));
+      let next = 0;
+      async function preload() {
+        while (next < order.length && !navigating) {
+          try { await thumbnail(order[next++]); } catch (_) { /* Retry on selection. */ }
+        }
+      }
+      for (let worker = 0; worker < 4; worker++) preload();
+    } catch (_) {
+      status.textContent = "Le curseur est indisponible. Actualisez la page pour réessayer.";
+    }
+  }
+
+  if (page.dataset.followLatest !== "true") return;
+  async function refresh() {
+    if (document.hidden || interacting || navigating || document.activeElement?.closest(".webcam-history, .webcam-timeline")) return;
+    try {
+      const camera = page.dataset.camera;
+      const response = await fetch(prefix + "/api/webcam/latest" + (camera ? "?camera=" + encodeURIComponent(camera) : ""), {cache: "no-store"});
       if (!response.ok) return;
       const data = await response.json();
       const imageChanged = data.image && data.image.filename !== page.dataset.image;

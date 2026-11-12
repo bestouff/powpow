@@ -229,7 +229,8 @@ mod tests {
                 bytes.len() as u64
             );
         }
-        assert_eq!(store.gallery(None, None, 0).images.len(), 2);
+        assert_eq!(store.gallery(None, None, None).images.len(), 2);
+        let file_count = directory.path().read_dir()?.count();
         assert_eq!(store.latest().unwrap().username, "camera");
         assert!(uploads.read(&(), &path, 0).await.is_err());
         let rejected = FtpPath::resolve(&FtpPath::root(), "/video.mp4")?;
@@ -244,7 +245,7 @@ mod tests {
             uploads.write(&(), &path, &mut oversized).await,
             Err(FsError::QuotaExceeded)
         );
-        assert_eq!(directory.path().read_dir()?.count(), 2);
+        assert_eq!(directory.path().read_dir()?.count(), file_count);
         Ok(())
     }
 }
