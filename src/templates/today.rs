@@ -27,12 +27,6 @@ pub fn today_page(
                             }
                         }
                     }
-                    div .level-right {
-                        a .button.is-link.is-light href={(prefix) "/today"} {
-                            span .icon { i .fa-solid.fa-arrows-rotate {} }
-                            span { "Actualiser" }
-                        }
-                    }
                 }
                 @if let Some(status) = opening_status {
                     @let (class, label) = match status {

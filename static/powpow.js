@@ -51,7 +51,19 @@ document.addEventListener("DOMContentLoaded", function () {
   initManualImport();
   initWebcam(prefix);
   initHomeWebcam(prefix);
+  initToday();
 });
+
+function initToday() {
+  if (!document.getElementById("today-page")) return;
+  const interval = 5 * 60 * 1000;
+  const refreshAt = Date.now() + interval;
+  function refresh() {
+    if (!document.hidden && Date.now() >= refreshAt) window.location.reload();
+  }
+  window.setInterval(refresh, interval);
+  document.addEventListener("visibilitychange", refresh);
+}
 
 function initHomeWebcam(prefix) {
   const preview = document.getElementById("home-webcam");

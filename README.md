@@ -46,7 +46,7 @@ labelled with the person's corresponding ateliers.
 - Define **opening days** for the station
 - Set **staffing needs** per atelier per day (number of volunteers needed)
 - Volunteers mark their **presence** for specific days
-- **Infos du jour** (`/today`) shows the day's weather forecast, current piste and téléski statuses, and volunteers by atelier and shift, using the server's local date. Access requires staff authentication and current membership. The Open-Meteo forecast for Saint-Hilaire at 1,200 m refreshes in the background every 15 minutes, independently of the dicton feature; an unavailable forecast does not block the planning.
+- **Infos du jour** (`/today`) shows the day's weather forecast, current piste and téléski statuses, and volunteers by atelier and shift, using the server's local date. Access requires staff authentication and current membership. The page refreshes automatically every five minutes while visible, and catches up when returning to an overdue background tab. The Open-Meteo forecast for Saint-Hilaire at 1,200 m refreshes in the background every 15 minutes, independently of the dicton feature; an unavailable forecast does not block the planning.
 - The system computes **deficits** (days where not enough volunteers have signed up)
 - A **weekly Monday morning email** is sent to admins summarizing unimported memberships and upcoming staffing shortfalls
 
