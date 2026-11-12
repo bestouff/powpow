@@ -234,6 +234,67 @@ async fn existing_archives_get_missing_previews_and_time_shortcuts() -> Result<(
 }
 
 #[test]
+fn time_shortcuts_choose_the_nearest_capture_within_thirty_minutes_on_either_side() {
+    let store = Store::new(PathBuf::new());
+    let now = Utc::now();
+    let filename = |minutes, camera| {
+        format!(
+            "{}_{}.jpg",
+            (now - TimeDelta::minutes(minutes)).to_rfc3339_opts(SecondsFormat::Nanos, true),
+            camera,
+        )
+    };
+    store.images.write().unwrap().extend([
+        filename(0, "tkecole"),
+        filename(58, "tkecole"),
+        filename(64, "tkecole"),
+        filename(176, "tkecole"),
+        filename(183, "tkecole"),
+        filename(338, "tkecole"),
+        filename(5 * 24 * 60, "tkecole"),
+        filename(180, "other"),
+        filename(300, "other"),
+    ]);
+    let gallery = store.gallery(None, None, Some("tkecole"));
+    assert_eq!(
+        gallery.recent[0].as_ref().unwrap().filename,
+        filename(58, "tkecole")
+    );
+    assert_eq!(
+        gallery.recent[1].as_ref().unwrap().filename,
+        filename(183, "tkecole")
+    );
+    assert!(gallery.recent[2].is_none());
+    store
+        .images
+        .write()
+        .unwrap()
+        .remove(&filename(183, "tkecole"));
+    let gallery = store.gallery(None, None, Some("tkecole"));
+    assert_eq!(
+        gallery.recent[1].as_ref().unwrap().filename,
+        filename(176, "tkecole")
+    );
+    store
+        .images
+        .write()
+        .unwrap()
+        .insert(filename(273, "tkecole"));
+    let gallery = store.gallery(None, None, Some("tkecole"));
+    assert_eq!(
+        gallery.recent[2].as_ref().unwrap().filename,
+        filename(273, "tkecole")
+    );
+    assert!(
+        store
+            .gallery(None, None, Some("missing"))
+            .recent
+            .iter()
+            .all(Option::is_none)
+    );
+}
+
+#[test]
 fn filenames_require_canonical_timestamps_and_safe_accounts() {
     for invalid in [
         "2026-11-02T12:00:00Z_station.jpg",

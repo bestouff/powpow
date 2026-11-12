@@ -63,7 +63,6 @@ pub fn webcam_page(
                                 p .help #webcam-slider-status role="status" {}
                                 noscript { p .help { "Activez JavaScript pour parcourir les images avec le curseur." } }
                             }
-                            p .help.mt-3 { "Heure locale de réception sur le serveur." }
                         } @else {
                             div .notification.is-light {
                                 "Aucune image disponible pour cette date."
@@ -82,7 +81,7 @@ pub fn webcam_page(
                                     @if let Some(frame) = frame {
                                         a .button href={(prefix) "/webcam?image=" (frame.filename)} title=(frame.local_label()) { "Il y a " (hours) " h" }
                                     } @else {
-                                        button .button disabled { "Il y a " (hours) " h" }
+                                        button .button disabled title="Aucune image à moins de 30 minutes avant ou après cette heure." { "Il y a " (hours) " h" }
                                     }
                                 }
                             }
@@ -91,7 +90,7 @@ pub fn webcam_page(
                                     input type="hidden" name="camera" value=(camera);
                                 }
                                 div .field {
-                                    label .label for="webcam-date" { "Date (heure locale)" }
+                                    label .label for="webcam-date" { "Date" }
                                     div .control {
                                         input .input #webcam-date type="date" name="date" value=(gallery.date) required;
                                     }

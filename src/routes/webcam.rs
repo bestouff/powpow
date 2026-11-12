@@ -3,7 +3,7 @@ use axum::{
     body::Body,
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
 };
 use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use std::path::Path as FilePath;
@@ -59,6 +59,29 @@ pub async fn page(
     let gallery = state
         .webcam
         .gallery(query.date, query.image.as_deref(), query.camera.as_deref());
+    let prefix = get_prefix(&headers);
+    if (query.image.is_some() || query.date.is_some())
+        && let Some(latest) = &gallery.latest
+        && gallery
+            .selected
+            .as_ref()
+            .is_some_and(|frame| frame.filename == latest.filename)
+    {
+        let destination = if state
+            .webcam
+            .latest()
+            .is_some_and(|frame| frame.username == latest.username)
+        {
+            format!("{prefix}/webcam")
+        } else {
+            format!("{prefix}/webcam?camera={}", latest.username)
+        };
+        return (
+            [(header::CACHE_CONTROL, "no-store")],
+            Redirect::to(&destination),
+        )
+            .into_response();
+    }
     let follow_latest = query.date.is_none() && query.image.is_none();
     let reading = if follow_latest {
         weather(&state, None).await
@@ -82,13 +105,7 @@ pub async fn page(
         .unwrap_or(&state.config.webcam.title);
     (
         [(header::CACHE_CONTROL, "no-store")],
-        templates::webcam_page(
-            &get_prefix(&headers),
-            title,
-            &gallery,
-            follow_latest,
-            reading.as_ref(),
-        ),
+        templates::webcam_page(&prefix, title, &gallery, follow_latest, reading.as_ref()),
     )
         .into_response()
 }

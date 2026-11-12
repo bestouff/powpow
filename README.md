@@ -145,7 +145,10 @@ Wind is displayed in km/h, snow depth in cm, and pressure in hPa.
 Visitors can choose a local date and scrub through its images with a slider.
 Dragging displays a small JPEG preview and its local timestamp; releasing loads
 the full image and its matching weather. Four shortcuts select the current image
-or the last capture at or before one, three, or five hours ago. Use
+or the capture nearest to one, three, or five hours ago, before or after the target
+time. Equally close captures favor the earlier image. A shortcut is disabled only
+when no capture is available within 30 minutes before or after its target time.
+Selecting the latest capture returns to the live view with automatic updates. Use
 `/webcam?camera=tkecole` to select a specific camera. The latest
 view checks for image and weather updates every minute. Archive views stay on the
 selected image and show the most recent reading at or before its reception time,

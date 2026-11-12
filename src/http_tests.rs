@@ -332,24 +332,33 @@ async fn webcam_is_public_with_immutable_images_and_uncached_latest(
     .await;
     assert!(response_text(response).await?.contains("Aucune image"));
     let direct = store.save(bytes, "pistes_sud".into(), "png".into()).await?;
-    for (path, expected_title, other_title) in [
+    for (path, expected_title, other_title, redirect) in [
         (
             "/webcam".into(),
             "Pistes &lt;sud&gt;",
             "Pistes &lt;nord&gt;",
+            None,
         ),
         (
             format!("/webcam?image={}", direct.filename),
             "Pistes &lt;sud&gt;",
             "Pistes &lt;nord&gt;",
+            Some("/webcam"),
         ),
         (
             format!("/webcam?image={}", frame.filename),
             "Pistes &lt;nord&gt;",
             "Pistes &lt;sud&gt;",
+            Some("/webcam?camera=station"),
         ),
     ] {
-        let response = request(&app, "GET", &path, None, serde_json::Value::Null).await;
+        let mut response = request(&app, "GET", &path, None, serde_json::Value::Null).await;
+        if let Some(redirect) = redirect {
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(response.headers()["location"], redirect);
+            assert_eq!(response.headers()["cache-control"], "no-store");
+            response = request(&app, "GET", redirect, None, serde_json::Value::Null).await;
+        }
         assert_eq!(response.status(), StatusCode::OK);
         let body = response_text(response).await?;
         assert!(body.contains(&format!("<strong>{expected_title}</strong>")));
@@ -489,6 +498,46 @@ async fn webcam_previews_and_latest_jpeg_are_public_and_revalidate(
     assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
 
     let next = store.save(bytes, "tkecole".into(), "png".into()).await?;
+    for prefix in ["", "/powpow"] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/webcam?image={}", next.filename))
+                    .header("x-forwarded-prefix", prefix)
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(response.headers()["location"], format!("{prefix}/webcam"));
+        assert_eq!(response.headers()["cache-control"], "no-store");
+    }
+    let live =
+        response_text(request(&app, "GET", "/webcam", None, serde_json::Value::Null).await).await?;
+    assert!(live.contains("data-follow-latest=\"true\""));
+    // Once a newer capture arrives, the old latest URL becomes an ordinary archive view.
+    let response = request(
+        &app,
+        "GET",
+        &format!("/webcam?image={}", frame.filename),
+        None,
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let historical = response_text(response).await?;
+    assert!(historical.contains("data-follow-latest=\"false\""));
+    assert!(historical.contains(&format!("data-image=\"{}\"", frame.filename)));
+    let response = request(
+        &app,
+        "GET",
+        &format!("/webcam?date={}", next.date()),
+        None,
+        serde_json::Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(response.headers()["location"], "/webcam");
     let response = app
         .clone()
         .oneshot(
@@ -604,6 +653,7 @@ async fn webcam_weather_tracks_live_updates_and_historical_image_times(
     .bind(now - TimeDelta::minutes(6))
     .execute(&pool)
     .await?;
+    let store = state.webcam.clone();
     let app = build_router(state);
     let body =
         response_text(request(&app, "GET", "/webcam", None, serde_json::Value::Null).await).await?;
@@ -668,6 +718,9 @@ async fn webcam_weather_tracks_live_updates_and_historical_image_times(
         response_text(request(&app, "GET", "/webcam", None, serde_json::Value::Null).await).await?;
     assert!(body.contains("5,8 °C"));
 
+    store
+        .save(bytes.into_inner(), "station".into(), "png".into())
+        .await?;
     let path = format!("/webcam?image={}", filenames[0]);
     let body =
         response_text(request(&app, "GET", &path, None, serde_json::Value::Null).await).await?;

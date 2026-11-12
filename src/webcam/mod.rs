@@ -95,6 +95,7 @@ pub fn image_format(extension: &str) -> Option<image::ImageFormat> {
 
 pub struct Gallery {
     pub selected: Option<Frame>,
+    pub latest: Option<Frame>,
     pub images: Vec<Frame>,
     pub date: NaiveDate,
     pub camera: Option<String>,
@@ -257,17 +258,17 @@ impl Store {
         let selected = requested.or_else(|| day.last().cloned());
         let now = Utc::now();
         let recent = [1, 3, 5].map(|hours| {
+            let target = now - TimeDelta::hours(hours);
             images
                 .iter()
-                .rev()
                 .filter_map(|name| Frame::parse(name))
-                .find(|frame| {
-                    Some(&frame.username) == camera.as_ref()
-                        && frame.received_at <= now - TimeDelta::hours(hours)
-                })
+                .filter(|frame| Some(&frame.username) == camera.as_ref())
+                .min_by_key(|frame| ((frame.received_at - target).abs(), frame.received_at))
+                .filter(|frame| (frame.received_at - target).abs() <= TimeDelta::minutes(30))
         });
         Gallery {
             selected,
+            latest,
             images: day,
             date,
             camera,
