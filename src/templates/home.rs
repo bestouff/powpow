@@ -1,5 +1,8 @@
 use super::{NavKind, page_with_footer};
-use crate::models::{ContentMap, Equipment, EquipmentStatus, EquipmentType, NewsRow};
+use crate::{
+    models::{ContentMap, Equipment, EquipmentStatus, EquipmentType, NewsRow},
+    webcam::Frame,
+};
 use chrono::Datelike;
 use maud::{Markup, PreEscaped, html};
 
@@ -16,6 +19,7 @@ pub fn index(
     logged_in: bool,
     membership_required: bool,
     association_slug: &str,
+    webcam: Option<&Frame>,
 ) -> Markup {
     let p = prefix;
 
@@ -179,6 +183,23 @@ pub fn index(
                                 "Fermé"
                             }
                         }
+                        a #home-webcam .is-block.mt-4 href={(p) "/webcam"}
+                          data-image=(webcam.map_or("", |frame| frame.filename.as_str())) {
+                            figure .webcam-view {
+                                img .station-preview-image .is-hidden[webcam.is_none()]
+                                  src=[webcam.map(|frame| format!("{p}/webcam/images/{}", frame.thumbnail()))]
+                                  alt="Dernière image de la webcam" loading="lazy" decoding="async";
+                                div .home-webcam-placeholder .is-hidden[webcam.is_some()] {
+                                    "Aucune image disponible."
+                                }
+                                figcaption .webcam-caption {
+                                    strong {
+                                        span .icon.mr-1 { i .fa-solid.fa-camera {} }
+                                        "Webcam"
+                                    }
+                                }
+                            }
+                        }
                         // Dicton du jour
                         @if let Some(dicton_text) = dicton {
                             div .dicton-du-jour.mt-4 {
@@ -209,9 +230,9 @@ pub fn index(
                             @let img_url = format!("{p}/content-images/{img_id}");
                             a .img-modal-trigger href="#"
                               data-src=(img_url) {
-                                img .mt-4 src=(img_url)
+                                img .station-preview-image.mt-4 src=(img_url)
                                     alt=(trail.title)
-                                    style="max-width:100%;border-radius:6px;cursor:zoom-in;";
+                                    style="cursor:zoom-in;";
                             }
                         }
                         div .mt-3 {

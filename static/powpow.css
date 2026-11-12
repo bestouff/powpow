@@ -1236,6 +1236,19 @@
 }
 
 /* === Public webcam and archive === */
+.station-preview-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.home-webcam-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 12rem;
+  padding: 1rem;
+  color: white;
+}
 .webcam-view {
   position: relative;
   overflow: hidden;
@@ -1246,6 +1259,21 @@
   display: block;
   width: 100%;
   height: auto;
+}
+.webcam-fullscreen {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1;
+  min-height: 2.75rem;
+}
+.webcam-view:fullscreen {
+  border-radius: 0;
+  background: black;
+}
+.webcam-view:fullscreen .webcam-photo {
+  height: 100%;
+  object-fit: contain;
 }
 .webcam-logo {
   position: absolute;

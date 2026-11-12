@@ -205,6 +205,14 @@ impl Store {
         self.directory.join(&frame.filename)
     }
 
+    pub async fn dimensions(&self, frame: &Frame) -> Result<(u32, u32)> {
+        let path = self.path(frame);
+        // Read the image header without decoding the full capture.
+        tokio::task::spawn_blocking(move || image::image_dimensions(path))
+            .await?
+            .context("Cannot read webcam image dimensions")
+    }
+
     pub fn thumbnail(&self, filename: &str) -> Option<PathBuf> {
         let frame = self.get(filename.strip_suffix("_small.jpg")?)?;
         Some(self.directory.join(frame.thumbnail()))

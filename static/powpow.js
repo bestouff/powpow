@@ -50,11 +50,47 @@ document.addEventListener("DOMContentLoaded", function () {
   initPhotoPage(prefix);
   initManualImport();
   initWebcam(prefix);
+  initHomeWebcam(prefix);
 });
+
+function initHomeWebcam(prefix) {
+  const preview = document.getElementById("home-webcam");
+  if (!preview) return;
+  const photo = preview.querySelector("img");
+  const placeholder = preview.querySelector(".home-webcam-placeholder");
+  let refreshing = false;
+  async function refresh() {
+    if (document.hidden || refreshing) return;
+    refreshing = true;
+    try {
+      const response = await fetch(prefix + "/api/webcam/latest", {cache: "no-store"});
+      if (!response.ok) return;
+      const {image} = await response.json();
+      if (!image || image.filename === preview.dataset.image) return;
+      const next = new Image();
+      next.src = prefix + "/webcam/images/" + encodeURIComponent(image.filename + "_small.jpg");
+      await next.decode();
+      photo.src = next.src;
+      photo.classList.remove("is-hidden");
+      placeholder.classList.add("is-hidden");
+      preview.dataset.image = image.filename;
+    } catch (_) {
+      // Keep the last preview visible through a temporary network outage.
+    } finally {
+      refreshing = false;
+    }
+  }
+  window.setInterval(refresh, 60000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
+  if (!preview.dataset.image) refresh();
+}
 
 function initWebcam(prefix) {
   const page = document.getElementById("webcam-page");
   if (!page) return;
+  initWebcamFullscreen(page);
   let interacting = false;
   let navigating = false;
   const timeline = page.querySelector(".webcam-timeline");
@@ -184,7 +220,8 @@ function initWebcam(prefix) {
 
   if (page.dataset.followLatest !== "true") return;
   async function refresh() {
-    if (document.hidden || interacting || navigating || document.activeElement?.closest(".webcam-history, .webcam-timeline")) return;
+    // Reloading would close fullscreen; check for updates as soon as it closes.
+    if (document.hidden || document.fullscreenElement || interacting || navigating || document.activeElement?.closest(".webcam-history, .webcam-timeline")) return;
     try {
       const camera = page.dataset.camera;
       const response = await fetch(prefix + "/api/webcam/latest" + (camera ? "?camera=" + encodeURIComponent(camera) : ""), {cache: "no-store"});
@@ -200,6 +237,34 @@ function initWebcam(prefix) {
   window.setInterval(refresh, 60000);
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) refresh();
+  });
+  document.addEventListener("fullscreenchange", function () {
+    if (!document.fullscreenElement) refresh();
+  });
+}
+
+function initWebcamFullscreen(page) {
+  const view = page.querySelector(".webcam-view");
+  const button = page.querySelector(".webcam-fullscreen");
+  if (!button || !document.fullscreenEnabled) return;
+  button.classList.remove("is-hidden");
+  button.addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement === view) await document.exitFullscreen();
+      else await view.requestFullscreen();
+    } catch (_) {
+      showNotification("Le plein écran est indisponible.", "warning");
+    }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    const fullscreen = document.fullscreenElement === view;
+    const label = fullscreen ? "Quitter le plein écran" : "Plein écran";
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.querySelector(".webcam-fullscreen-label").textContent = label;
+    const icon = button.querySelector("i");
+    icon.classList.toggle("fa-expand", !fullscreen);
+    icon.classList.toggle("fa-compress", fullscreen);
   });
 }
 

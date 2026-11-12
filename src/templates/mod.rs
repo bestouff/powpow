@@ -210,7 +210,7 @@ enum NavKind {
     StaffOnly, // Only Staff-related items
 }
 
-const SHOW_WEBCAM_LINK: bool = false;
+const SHOW_WEBCAM_LINK: bool = true;
 
 fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBlock>) -> Markup {
     let admin_hide = matches!(kind, NavKind::LoginOnly);

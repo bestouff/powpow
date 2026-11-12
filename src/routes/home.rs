@@ -90,6 +90,7 @@ pub async fn index(
         logged_in,
         query.membership_required,
         &state.config.helloasso_association_slug,
+        state.webcam.latest().as_ref(),
     )
 }
 

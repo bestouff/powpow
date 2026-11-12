@@ -90,6 +90,17 @@ pub async fn page(
     } else {
         None
     };
+    let dimensions = if let Some(frame) = &gallery.selected {
+        match state.webcam.dimensions(frame).await {
+            Ok(dimensions) => Some(dimensions),
+            Err(error) => {
+                tracing::warn!(filename = %frame.filename, %error, "Cannot load webcam image dimensions");
+                None
+            }
+        }
+    } else {
+        None
+    };
     let title = state
         .config
         .webcam
@@ -105,7 +116,14 @@ pub async fn page(
         .unwrap_or(&state.config.webcam.title);
     (
         [(header::CACHE_CONTROL, "no-store")],
-        templates::webcam_page(&prefix, title, &gallery, follow_latest, reading.as_ref()),
+        templates::webcam_page(
+            &prefix,
+            title,
+            &gallery,
+            follow_latest,
+            reading.as_ref(),
+            dimensions,
+        ),
     )
         .into_response()
 }

@@ -13,6 +13,7 @@ pub fn webcam_page(
     gallery: &Gallery,
     follow_latest: bool,
     weather: Option<&MeteoReading>,
+    dimensions: Option<(u32, u32)>,
 ) -> Markup {
     let logo = get_navbar_block().and_then(|block| block.image_id);
     let selected_name = gallery
@@ -37,9 +38,17 @@ pub fn webcam_page(
                         @if let Some(frame) = &gallery.selected {
                             @let received_at = frame.received_at.with_timezone(&Local);
                             figure .webcam-view {
-                                img .webcam-photo src={(prefix) "/webcam/images/" (frame.filename)} alt={"Vue de la webcam : " (title)};
+                                img .webcam-photo src={(prefix) "/webcam/images/" (frame.filename)}
+                                  width=[dimensions.map(|(width, _)| width)]
+                                  height=[dimensions.map(|(_, height)| height)]
+                                  alt={"Vue de la webcam : " (title)};
                                 @if let Some(id) = logo {
                                     img .webcam-logo src={(prefix) "/content-images/" (id)} alt="Logo de la station";
+                                }
+                                button .button.is-dark.webcam-fullscreen.is-hidden type="button"
+                                  title="Plein écran" aria-label="Plein écran" {
+                                    span .icon { i .fa-solid.fa-expand aria-hidden="true" {} }
+                                    span .webcam-fullscreen-label { "Plein écran" }
                                 }
                                 figcaption .webcam-caption {
                                     div .webcam-caption-heading {
