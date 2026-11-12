@@ -18,22 +18,25 @@ pub async fn page(
     match tokio::try_join!(
         database::planning::for_day(&state.db, today),
         database::get_opening_days_for_dates(&state.db, &dates),
+        database::get_all_equipments(&state.db),
     ) {
-        Ok((planning, opening_days)) => (
+        Ok((planning, opening_days, equipments)) => (
             [(header::CACHE_CONTROL, "private, no-store")],
             templates::today_page(
                 &get_prefix(&headers),
                 today,
                 &planning,
                 opening_days.first().map(|day| day.status),
+                &equipments,
+                state.forecast.for_date(today).as_ref(),
             ),
         )
             .into_response(),
         Err(error) => {
-            tracing::error!(%error, "Cannot load today's planning");
+            tracing::error!(%error, "Cannot load today's information");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                html! { p { "Impossible de charger le planning du jour." } },
+                html! { p { "Impossible de charger les informations du jour." } },
             )
                 .into_response()
         }

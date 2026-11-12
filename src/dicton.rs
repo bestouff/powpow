@@ -11,6 +11,7 @@ use std::sync::RwLock;
 use tracing::{info, warn};
 
 use crate::database;
+use crate::forecast::{WeatherResponse, fetch_weather};
 use crate::models::{Equipment, EquipmentStatus, EquipmentType};
 
 // ── Daily cache ──────────────────────────────────────────────────────
@@ -84,57 +85,7 @@ fn paris_today() -> NaiveDate {
     chrono::Local::now().date_naive()
 }
 
-// ── Weather fetching (Open-Meteo) ────────────────────────────────────
-
-/// Plateau des Petites Roches, France — approximate coordinates.
-const LATITUDE: f64 = 45.31;
-const LONGITUDE: f64 = 5.85;
-
-#[derive(Debug, Deserialize)]
-struct WeatherResponse {
-    current: Option<CurrentWeather>,
-    daily: Option<DailyWeather>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CurrentWeather {
-    temperature_2m: Option<f64>,
-    relative_humidity_2m: Option<f64>,
-    apparent_temperature: Option<f64>,
-    precipitation: Option<f64>,
-    snowfall: Option<f64>,
-    cloud_cover: Option<f64>,
-    wind_speed_10m: Option<f64>,
-    wind_gusts_10m: Option<f64>,
-}
-
-#[derive(Debug, Deserialize)]
-struct DailyWeather {
-    temperature_2m_max: Option<Vec<f64>>,
-    temperature_2m_min: Option<Vec<f64>>,
-    precipitation_sum: Option<Vec<f64>>,
-    snowfall_sum: Option<Vec<f64>>,
-    wind_speed_10m_max: Option<Vec<f64>>,
-    sunrise: Option<Vec<String>>,
-    sunset: Option<Vec<String>>,
-}
-
-async fn fetch_weather() -> anyhow::Result<WeatherResponse> {
-    let url = format!(
-        "https://api.open-meteo.com/v1/forecast?\
-         latitude={LATITUDE}&longitude={LONGITUDE}\
-         &current=temperature_2m,relative_humidity_2m,apparent_temperature,\
-         precipitation,snowfall,cloud_cover,wind_speed_10m,wind_gusts_10m\
-         &daily=temperature_2m_max,temperature_2m_min,precipitation_sum,\
-         snowfall_sum,wind_speed_10m_max,sunrise,sunset\
-         &timezone=Europe%2FParis&forecast_days=1\
-         &elevation=1200"
-    );
-
-    let resp = reqwest::get(&url).await?;
-    let body = resp.json::<WeatherResponse>().await?;
-    Ok(body)
-}
+// ── Weather summary ─────────────────────────────────────────────────
 
 fn format_weather(w: &WeatherResponse) -> String {
     let mut parts: Vec<String> = Vec::new();
@@ -183,24 +134,24 @@ fn format_weather(w: &WeatherResponse) -> String {
 
     if let Some(ref d) = w.daily {
         if let (Some(maxs), Some(mins)) = (&d.temperature_2m_max, &d.temperature_2m_min)
-            && let (Some(&mx), Some(&mn)) = (maxs.first(), mins.first())
+            && let (Some(Some(mx)), Some(Some(mn))) = (maxs.first(), mins.first())
         {
             parts.push(format!("Prévision du jour : {mn:.0}°C → {mx:.0}°C"));
         }
         if let Some(ref sums) = d.snowfall_sum
-            && let Some(&s) = sums.first()
+            && let Some(&Some(s)) = sums.first()
             && s > 0.0
         {
             parts.push(format!("Neige prévue : {s:.1} cm cumulés"));
         }
         if let Some(ref sums) = d.precipitation_sum
-            && let Some(&p) = sums.first()
+            && let Some(&Some(p)) = sums.first()
             && p > 0.0
         {
             parts.push(format!("Précipitations prévues : {p:.1} mm cumulés"));
         }
         if let Some(ref maxs) = d.wind_speed_10m_max
-            && let Some(&w) = maxs.first()
+            && let Some(&Some(w)) = maxs.first()
             && w > 50.0
         {
             parts.push(format!("Vent max prévu : {w:.0} km/h (attention !)"));

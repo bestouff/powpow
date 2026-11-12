@@ -27,6 +27,7 @@ mod database;
 mod dicton;
 mod email_change;
 mod email_recipients;
+mod forecast;
 mod helloasso;
 #[cfg(test)]
 mod http_tests;
@@ -109,6 +110,7 @@ async fn security_headers(
 
 #[derive(Clone)]
 pub struct AppState {
+    pub forecast: forecast::Cache,
     pub webcam: webcam::Store,
     pub mail_limits: std::sync::Arc<rate_limit::MailLimits>,
     pub db: PgPool,
@@ -399,6 +401,7 @@ async fn main() -> anyhow::Result<()> {
         .transpose()?;
 
     let app_state = AppState {
+        forecast: forecast::Cache::default(),
         webcam,
         mail_limits: std::sync::Arc::default(),
         db,
@@ -443,6 +446,7 @@ async fn main() -> anyhow::Result<()> {
         info!(station_id = %client.station_id(), "Météo-France polling enabled (every six minutes)");
         tokio::spawn(meteo::poll(app_state.db.clone(), client));
     }
+    tokio::spawn(forecast::poll(app_state.forecast.clone()));
     if let Some(fetcher) = direct_webcam {
         tokio::spawn(fetcher.poll(app_state.webcam.clone()));
     }

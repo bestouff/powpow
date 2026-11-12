@@ -206,6 +206,130 @@ async fn today_requires_staff_and_shows_only_todays_assignments(
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
+async fn today_shows_forecast_and_current_equipment_statuses(pool: PgPool) -> anyhow::Result<()> {
+    let state = state(pool);
+    let today = chrono::Local::now().date_naive();
+    let (_, cookie) = member(&state, "today-conditions@example.org").await?;
+    sqlx::query("DELETE FROM equipments")
+        .execute(&state.db)
+        .await?;
+    for kind in [
+        models::EquipmentType::SkiSlope,
+        models::EquipmentType::SkiTow,
+    ] {
+        for status in [
+            models::EquipmentStatus::Open,
+            models::EquipmentStatus::Partial,
+            models::EquipmentStatus::Closed,
+        ] {
+            sqlx::query(
+                "INSERT INTO equipments (name, equipment_type, status) VALUES ($1, $2, $3)",
+            )
+            .bind(format!("{kind} <{status}>"))
+            .bind(kind)
+            .bind(status)
+            .execute(&state.db)
+            .await?;
+        }
+    }
+    let app = build_router(state.clone());
+    let body = response_text(
+        request(
+            &app,
+            "GET",
+            "/today",
+            Some(&cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(body.contains("Prévisions temporairement indisponibles."));
+    assert!(body.contains("Aucun atelier prévu aujourd'hui."));
+
+    let response: forecast::WeatherResponse = serde_json::from_value(serde_json::json!({
+        "daily": {
+            "time": [today],
+            "weather_code": [73],
+            "temperature_2m_min": [-2.5],
+            "temperature_2m_max": [1.5],
+            "precipitation_sum": [6.0],
+            "snowfall_sum": [4.5],
+            "wind_speed_10m_max": [12.0],
+            "wind_gusts_10m_max": [30.0]
+        }
+    }))?;
+    state
+        .forecast
+        .store(response.forecast(today, chrono::Utc::now()).unwrap());
+    let body = response_text(
+        request(
+            &app,
+            "GET",
+            "/today",
+            Some(&cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(body.find("Prévisions météo").unwrap() < body.find("Planning du jour").unwrap());
+    for value in [
+        "Neige",
+        "-2,5 °C",
+        "1,5 °C",
+        "6,0 mm",
+        "4,5 cm",
+        "12,0 km/h",
+        "30,0 km/h",
+        "Open-Meteo",
+    ] {
+        assert!(body.contains(value), "Missing forecast value: {value}");
+    }
+    assert!(!body.contains("Prévisions temporairement indisponibles."));
+    for (name, label, class) in [
+        ("ski-slope &lt;open&gt;", "Ouverte", "is-success"),
+        ("ski-slope &lt;partial&gt;", "Partielle", "is-warning"),
+        ("ski-slope &lt;closed&gt;", "Fermée", "is-danger"),
+        ("ski-tow &lt;open&gt;", "Ouvert", "is-success"),
+        ("ski-tow &lt;partial&gt;", "Partiel", "is-warning"),
+        ("ski-tow &lt;closed&gt;", "Fermé", "is-danger"),
+    ] {
+        let row = body
+            .split_once(name)
+            .unwrap()
+            .1
+            .split("</li>")
+            .next()
+            .unwrap();
+        assert!(row.contains(&format!("class=\"tag {class}\">{label}</span>")));
+    }
+    sqlx::query("UPDATE equipments SET status = 'closed'")
+        .execute(&state.db)
+        .await?;
+    let mut old_forecast = state.forecast.for_date(today).unwrap();
+    old_forecast.date = today.pred_opt().unwrap();
+    state.forecast.store(old_forecast);
+    let body = response_text(
+        request(
+            &app,
+            "GET",
+            "/today",
+            Some(&cookie),
+            serde_json::Value::Null,
+        )
+        .await,
+    )
+    .await?;
+    assert!(body.contains("Prévisions temporairement indisponibles."));
+    assert!(body.contains("0 / 3 ouvertes"));
+    assert!(body.contains("0 / 3 ouverts"));
+    assert!(body.contains("Aucun atelier prévu aujourd'hui."));
+    Ok(())
+}
+
+#[sqlx::test]
+#[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
 async fn webcam_is_public_with_immutable_images_and_uncached_latest(
     pool: PgPool,
 ) -> anyhow::Result<()> {
@@ -1543,6 +1667,7 @@ fn state(db: PgPool) -> AppState {
         entity_email: "contact@example.org".into(),
     };
     AppState {
+        forecast: forecast::Cache::default(),
         webcam: webcam::Store::new(config.webcam.directory.clone()),
         db,
         config,
