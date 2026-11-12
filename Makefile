@@ -7,7 +7,7 @@ PROD    := $(shell sed -n 's/^PROD_USER_SERVER=//p' .env | head -1)
 # Docker image used for the build — Rust on Debian 13 (trixie)
 RUST_IMAGE := rust:1.97-trixie
 
-.PHONY: deb clean
+.PHONY: deb clean version-minor version-patch
 
 deb: $(DEB)
 
@@ -42,3 +42,22 @@ clean:
 deploy: deb
 	scp $(DEB) $(PROD):
 	ssh $(PROD) sudo dpkg -i $(DEB)
+
+version-minor version-patch:
+	@set -eu; \
+	status=$$(git status --porcelain --untracked-files=all); \
+	if [ -n "$$status" ]; then \
+		echo "Commit or stash all changes, including untracked files, before bumping the version." >&2; \
+		exit 1; \
+	fi; \
+	set -- $$(awk -F '[".]' '/^version = / {print $$2, $$3, $$4; exit}' Cargo.toml); \
+	if [ "$@" = version-minor ]; then \
+		version="$$1.$$(( $$2 + 1 )).0"; \
+		release=$${version%.0}; \
+	else \
+		version="$$1.$$2.$$(( $$3 + 1 ))"; \
+		release=$$version; \
+	fi; \
+	sed -i '/^\[package\]$$/,/^\[/{s/^version = ".*"$$/version = "'"$$version"'"/;}' Cargo.toml; \
+	sed -i '/^name = "$(PKG)"$$/{n;s/^version = ".*"$$/version = "'"$$version"'"/;}' Cargo.lock; \
+	git commit --only -m "release $$release" -- Cargo.toml Cargo.lock
