@@ -190,8 +190,9 @@ thumbnails and JPEG download:
   decimal degrees (for example, `45.31,5.85`). Latitude must be between -90 and 90,
   longitude between -180 and 180; negative values mean south and west. Invalid
   coordinates fail startup. Leave the setting empty to omit configured GPS.
-- Reception time matching the archived filename exactly, in `DateTimeOriginal`,
-  digitization, and modification dates, with a UTC offset and nanosecond fields.
+- Reception time in the server's local timezone (`TZ`), in `DateTimeOriginal`,
+  digitization, and modification dates. Matching UTC offsets account for daylight
+  saving time; nanosecond fields preserve the exact instant in the archived filename.
 - Author as `ENTITY_NAME <ENTITY_EMAIL>` in `Artist` and Unicode `XPAuthor`;
   either value can be used alone when the other is empty.
 

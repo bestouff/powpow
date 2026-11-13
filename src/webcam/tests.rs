@@ -1,5 +1,5 @@
 use super::*;
-use chrono::{TimeDelta, TimeZone};
+use chrono::{FixedOffset, TimeDelta, TimeZone};
 
 pub(super) fn assert_ascii(exif: &exif::Exif, tag: exif::Tag, expected: &str) {
     let exif::Value::Ascii(values) = &exif.get_field(tag, exif::In::PRIMARY).unwrap().value else {
@@ -12,6 +12,11 @@ pub(super) fn assert_timestamp(bytes: &[u8], frame: &Frame) -> Result<()> {
     let exif = exif::Reader::new().read_from_container(&mut Cursor::new(bytes))?;
     let time = Frame::parse(&frame.filename).unwrap().received_at;
     assert_eq!(time, frame.received_at);
+    assert_exif_timestamp(&exif, time.with_timezone(&Local).fixed_offset());
+    Ok(())
+}
+
+pub(super) fn assert_exif_timestamp(exif: &exif::Exif, time: DateTime<FixedOffset>) {
     for (tag, expected) in [
         (
             exif::Tag::DateTime,
@@ -25,9 +30,15 @@ pub(super) fn assert_timestamp(bytes: &[u8], frame: &Frame) -> Result<()> {
             exif::Tag::DateTimeDigitized,
             time.format("%Y:%m:%d %H:%M:%S").to_string(),
         ),
-        (exif::Tag::OffsetTime, "+00:00".into()),
-        (exif::Tag::OffsetTimeOriginal, "+00:00".into()),
-        (exif::Tag::OffsetTimeDigitized, "+00:00".into()),
+        (exif::Tag::OffsetTime, time.format("%:z").to_string()),
+        (
+            exif::Tag::OffsetTimeOriginal,
+            time.format("%:z").to_string(),
+        ),
+        (
+            exif::Tag::OffsetTimeDigitized,
+            time.format("%:z").to_string(),
+        ),
         (
             exif::Tag::SubSecTime,
             format!("{:09}", time.timestamp_subsec_nanos()),
@@ -41,9 +52,8 @@ pub(super) fn assert_timestamp(bytes: &[u8], frame: &Frame) -> Result<()> {
             format!("{:09}", time.timestamp_subsec_nanos()),
         ),
     ] {
-        assert_ascii(&exif, tag, &expected);
+        assert_ascii(exif, tag, &expected);
     }
-    Ok(())
 }
 
 pub(super) fn png() -> Vec<u8> {

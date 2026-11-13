@@ -1,7 +1,7 @@
 //! EXIF for archived captures, without recompressing their image data.
 
 use anyhow::{Context, Result, ensure};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use img_parts::Bytes;
 use little_exif::{
     exif_tag::ExifTag, filetype::FileExtension, ifd::ExifTagGroup, metadata::Metadata,
@@ -44,15 +44,17 @@ impl Settings {
             },
             None => Metadata::new(),
         };
-        let date = received_at.format("%Y:%m:%d %H:%M:%S").to_string();
+        let local_time = received_at.with_timezone(&Local);
+        let date = local_time.format("%Y:%m:%d %H:%M:%S").to_string();
+        let offset = local_time.format("%:z").to_string();
         let subseconds = format!("{:09}", received_at.timestamp_subsec_nanos());
         for tag in [
             ExifTag::ModifyDate(date.clone()),
             ExifTag::DateTimeOriginal(date.clone()),
             ExifTag::CreateDate(date),
-            ExifTag::OffsetTime("+00:00".into()),
-            ExifTag::OffsetTimeOriginal("+00:00".into()),
-            ExifTag::OffsetTimeDigitized("+00:00".into()),
+            ExifTag::OffsetTime(offset.clone()),
+            ExifTag::OffsetTimeOriginal(offset.clone()),
+            ExifTag::OffsetTimeDigitized(offset),
             ExifTag::SubSecTime(subseconds.clone()),
             ExifTag::SubSecTimeOriginal(subseconds.clone()),
             ExifTag::SubSecTimeDigitized(subseconds),

@@ -1,7 +1,7 @@
 use super::*;
 use crate::webcam::{
     Store,
-    tests::{assert_ascii, assert_timestamp},
+    tests::{assert_ascii, assert_exif_timestamp, assert_timestamp},
 };
 use exif::{In, Tag, Value};
 use img_parts::{DynImage, ImageEXIF};
@@ -207,6 +207,73 @@ fn missing_coordinates_and_partial_identity_still_produce_dated_exif() -> Result
         assert!(exif.get_field(Tag::GPSLongitude, In::PRIMARY).is_none());
         assert_ascii(&exif, Tag::Artist, author);
         assert_ascii(&exif, Tag::SubSecTimeOriginal, "000000007");
+    }
+    Ok(())
+}
+
+#[test]
+fn capture_timestamps_follow_server_timezone_and_dst() -> Result<()> {
+    let cases: &[(&str, &[&str])] = &[
+        (
+            "Europe/Paris",
+            &[
+                "2026-01-15T13:34:56.123456789+01:00",
+                "2026-07-15T14:34:56.000000007+02:00",
+                "2026-03-29T01:59:59.999999999+01:00",
+                "2026-03-29T03:00:00.000000000+02:00",
+                "2026-10-25T02:30:00.000000000+02:00",
+                "2026-10-25T02:30:00.000000000+01:00",
+                "2027-01-01T00:30:00.000000000+01:00",
+            ],
+        ),
+        ("Asia/Kathmandu", &["2026-07-16T00:15:00.000000007+05:45"]),
+        (
+            "America/St_Johns",
+            &[
+                "2026-01-14T23:30:00.123456789-03:30",
+                "2026-07-14T23:30:00.123456789-02:30",
+            ],
+        ),
+        ("UTC", &["2026-07-15T12:34:56.123456789+00:00"]),
+    ];
+    // Isolate TZ in child processes: changing the environment of parallel tests is unsafe.
+    let Ok(timezone) = std::env::var("POWPOW_TEST_EXIF_TZ") else {
+        let qualified_name = concat!(
+            module_path!(),
+            "::capture_timestamps_follow_server_timezone_and_dst"
+        );
+        let (_, test_name) = qualified_name.split_once("::").unwrap();
+        for (timezone, _) in cases {
+            let output = std::process::Command::new(std::env::current_exe()?)
+                .args(["--exact", test_name, "--nocapture"])
+                .env("TZ", timezone)
+                .env("POWPOW_TEST_EXIF_TZ", timezone)
+                .output()?;
+            assert!(
+                output.status.success()
+                    && String::from_utf8_lossy(&output.stdout).contains("1 passed;"),
+                "EXIF timestamps failed with TZ={timezone}:\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+        }
+        return Ok(());
+    };
+    let (_, timestamps) = cases.iter().find(|(zone, _)| *zone == timezone).unwrap();
+    for coordinates in [
+        None,
+        Some(Coordinates {
+            latitude: 45.31,
+            longitude: 5.85,
+        }),
+    ] {
+        let settings = Settings::new(coordinates, "Station", "");
+        for timestamp in *timestamps {
+            let expected = DateTime::parse_from_rfc3339(timestamp)?;
+            let raw = settings.encode(None, expected.with_timezone(&Utc))?;
+            let exif = exif::Reader::new().read_raw(raw)?;
+            assert_exif_timestamp(&exif, expected);
+        }
     }
     Ok(())
 }
