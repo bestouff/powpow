@@ -91,7 +91,7 @@ pub fn today_page(
 fn pdf_button(prefix: &str, day: Option<NaiveDate>, label: &str, empty_label: &str) -> Markup {
     html! {
         @if let Some(day) = day {
-            a .button.is-link.is-outlined href={(prefix) "/planning/pdf/" (day)} download {
+            a .button.is-link.is-outlined href={(prefix) "/calendar/pdf/" (day)} download {
                 span .icon { i .fa-solid.fa-file-pdf aria-hidden="true" {} }
                 span { (label) }
             }

@@ -64,7 +64,7 @@ async fn planning_pdf_downloads_select_dates_and_require_membership(
     let today = chrono::Local::now().date_naive();
     let tomorrow = today.succ_opt().unwrap();
     let historic = today - chrono::Duration::days(7);
-    let path = |day| format!("/planning/pdf/{day}");
+    let path = |day| format!("/calendar/pdf/{day}");
     for session in [None, Some("aghil_session=invalid")] {
         let response = request(&app, "GET", &path(today), session, serde_json::Value::Null).await;
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
@@ -84,7 +84,7 @@ async fn planning_pdf_downloads_select_dates_and_require_membership(
             request(
                 &app,
                 "GET",
-                &format!("/planning/pdf/{invalid}"),
+                &format!("/calendar/pdf/{invalid}"),
                 Some(&cookie),
                 serde_json::Value::Null
             )
@@ -124,13 +124,13 @@ async fn planning_pdf_downloads_select_dates_and_require_membership(
             .await?;
         let html = response_text(page).await?;
         assert!(!html.contains("Voir le planning complet"));
-        assert!(html.contains(&format!("href=\"/powpow/planning/pdf/{tomorrow}\"")));
+        assert!(html.contains(&format!("href=\"/powpow/calendar/pdf/{tomorrow}\"")));
         assert!(!html.contains("Pas d’activité demain"));
         if day == tomorrow {
             assert!(html.contains("disabled>Pas d’activité aujourd’hui</button>"));
-            assert!(!html.contains(&format!("href=\"/powpow/planning/pdf/{today}\"")));
+            assert!(!html.contains(&format!("href=\"/powpow/calendar/pdf/{today}\"")));
         } else {
-            assert!(html.contains(&format!("href=\"/powpow/planning/pdf/{today}\"")));
+            assert!(html.contains(&format!("href=\"/powpow/calendar/pdf/{today}\"")));
         }
         let response = request(
             &app,
@@ -182,7 +182,7 @@ async fn planning_pdf_downloads_select_dates_and_require_membership(
     )
     .await?;
     assert!(html.contains("disabled>Pas d’activité demain</button>"));
-    assert!(html.contains(&format!("href=\"/planning/pdf/{today}\"")));
+    assert!(html.contains(&format!("href=\"/calendar/pdf/{today}\"")));
     sqlx::query("DELETE FROM payments WHERE staff = $1")
         .bind(viewer.id)
         .execute(&state.db)
