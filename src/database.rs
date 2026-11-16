@@ -15,6 +15,8 @@ pub mod manual_import;
 pub mod meteo;
 pub mod planning;
 #[cfg(test)]
+mod pole_migration_tests;
+#[cfg(test)]
 mod regression_tests;
 
 /// Lifetime of a pending login link (magic link emailed to the staff member).
@@ -417,7 +419,7 @@ pub async fn get_chiefs_for_pole(pool: &PgPool, pole_id: uuid::Uuid) -> Result<V
         r"
         SELECT s.* FROM staff s
         JOIN roles r ON r.staff = s.id
-        WHERE r.atelier = r.atelier AND r.chief = true AND r.atelier = $1 AND s.email != ''
+        WHERE r.pole = r.pole AND r.chief = true AND r.pole = $1 AND s.email != ''
         ",
     )
     .bind(pole_id)
@@ -430,8 +432,8 @@ pub async fn get_chiefs_for_pole(pool: &PgPool, pole_id: uuid::Uuid) -> Result<V
 pub async fn get_chief_poles(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<Pole>> {
     let poles = sqlx::query_as::<_, Pole>(
         r"
-        SELECT a.* FROM ateliers a
-        JOIN roles r ON r.atelier = a.id
+        SELECT a.* FROM poles a
+        JOIN roles r ON r.pole = a.id
         WHERE r.staff = $1 AND r.chief = true
         ORDER BY a.name
         ",
@@ -605,7 +607,7 @@ pub async fn get_all_staff_with_season(pool: &PgPool) -> Result<Vec<(Staff, Opti
 
 /// Get all pôles
 pub async fn get_all_poles(pool: &PgPool) -> Result<Vec<Pole>> {
-    let poles = sqlx::query_as::<_, Pole>(r"SELECT * FROM ateliers ORDER BY name")
+    let poles = sqlx::query_as::<_, Pole>(r"SELECT * FROM poles ORDER BY name")
         .fetch_all(pool)
         .await?;
 
@@ -621,9 +623,9 @@ pub async fn chief_manages_staff(
 ) -> Result<bool> {
     Ok(sqlx::query_scalar(
         r"SELECT EXISTS (
-            SELECT 1 FROM roles c JOIN roles r ON r.atelier = c.atelier
+            SELECT 1 FROM roles c JOIN roles r ON r.pole = c.pole
             WHERE c.staff = $1 AND c.chief AND r.staff = $2
-              AND ($3::uuid IS NULL OR c.atelier = $3)
+              AND ($3::uuid IS NULL OR c.pole = $3)
         )",
     )
     .bind(chief)
@@ -648,7 +650,7 @@ pub async fn can_register_for_need(
     staff: uuid::Uuid,
     need: uuid::Uuid,
 ) -> Result<bool> {
-    Ok(sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM roles r JOIN needs n ON n.atelier = r.atelier WHERE r.staff = $1 AND n.id = $2 AND r.validated)")
+    Ok(sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM roles r JOIN needs n ON n.pole = r.pole WHERE r.staff = $1 AND n.id = $2 AND r.validated)")
         .bind(staff).bind(need).fetch_one(pool).await?)
 }
 
@@ -671,9 +673,9 @@ pub async fn add_role(
 ) -> Result<()> {
     sqlx::query(
         r"
-        INSERT INTO roles (staff, atelier, validated, chief)
+        INSERT INTO roles (staff, pole, validated, chief)
         VALUES ($1, $2, $3, false)
-        ON CONFLICT (staff, atelier) DO NOTHING
+        ON CONFLICT (staff, pole) DO NOTHING
         ",
     )
     .bind(staff_id)
@@ -687,7 +689,7 @@ pub async fn add_role(
 
 /// Remove a role for a staff member
 pub async fn remove_role(pool: &PgPool, staff_id: uuid::Uuid, pole_id: uuid::Uuid) -> Result<()> {
-    sqlx::query(r"DELETE FROM roles WHERE staff = $1 AND atelier = $2")
+    sqlx::query(r"DELETE FROM roles WHERE staff = $1 AND pole = $2")
         .bind(staff_id)
         .bind(pole_id)
         .execute(pool)
@@ -723,7 +725,7 @@ pub async fn update_role(
     chief: Option<bool>,
 ) -> Result<()> {
     if let Some(v) = validated {
-        sqlx::query(r"UPDATE roles SET validated = $3 WHERE staff = $1 AND atelier = $2")
+        sqlx::query(r"UPDATE roles SET validated = $3 WHERE staff = $1 AND pole = $2")
             .bind(staff_id)
             .bind(pole_id)
             .bind(v)
@@ -735,7 +737,7 @@ pub async fn update_role(
         // If setting chief to true, also set validated to true
         if c {
             sqlx::query(
-                r"UPDATE roles SET chief = $3, validated = true WHERE staff = $1 AND atelier = $2",
+                r"UPDATE roles SET chief = $3, validated = true WHERE staff = $1 AND pole = $2",
             )
             .bind(staff_id)
             .bind(pole_id)
@@ -743,7 +745,7 @@ pub async fn update_role(
             .execute(pool)
             .await?;
         } else {
-            sqlx::query(r"UPDATE roles SET chief = $3 WHERE staff = $1 AND atelier = $2")
+            sqlx::query(r"UPDATE roles SET chief = $3 WHERE staff = $1 AND pole = $2")
                 .bind(staff_id)
                 .bind(pole_id)
                 .bind(c)
@@ -757,7 +759,7 @@ pub async fn update_role(
 
 /// Get a pôle by ID
 pub async fn get_pole_by_id(pool: &PgPool, pole_id: uuid::Uuid) -> Result<Option<Pole>> {
-    let pole = sqlx::query_as::<_, Pole>(r"SELECT * FROM ateliers WHERE id = $1")
+    let pole = sqlx::query_as::<_, Pole>(r"SELECT * FROM poles WHERE id = $1")
         .bind(pole_id)
         .fetch_optional(pool)
         .await?;
@@ -1377,7 +1379,7 @@ pub async fn count_unimported_cash(pool: &PgPool) -> Result<i64> {
 
 /// Get a pôle by slug
 pub async fn get_pole_by_slug(pool: &PgPool, slug: &str) -> Result<Option<Pole>> {
-    let pole = sqlx::query_as::<_, Pole>(r"SELECT * FROM ateliers WHERE slug = $1")
+    let pole = sqlx::query_as::<_, Pole>(r"SELECT * FROM poles WHERE slug = $1")
         .bind(slug)
         .fetch_optional(pool)
         .await?;
@@ -1387,7 +1389,7 @@ pub async fn get_pole_by_slug(pool: &PgPool, slug: &str) -> Result<Option<Pole>>
 
 /// Get all needs for a pôle, ordered by day
 pub async fn get_needs_for_pole(pool: &PgPool, pole_id: uuid::Uuid) -> Result<Vec<Need>> {
-    let needs = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE atelier = $1 ORDER BY day")
+    let needs = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE pole = $1 ORDER BY day")
         .bind(pole_id)
         .fetch_all(pool)
         .await?;
@@ -1427,7 +1429,7 @@ pub async fn get_staff_for_pole(pool: &PgPool, pole_id: uuid::Uuid) -> Result<Ve
     let staff = sqlx::query_as::<_, Staff>(
         r"
         SELECT s.* FROM staff s
-        JOIN roles r ON r.staff = s.id AND r.atelier = $1
+        JOIN roles r ON r.staff = s.id AND r.pole = $1
         ORDER BY r.chief DESC, s.last_name, s.first_name
         ",
     )
@@ -1451,7 +1453,7 @@ pub async fn get_upcoming_needs_deficit(
                LEAST(COUNT(DISTINCT p.staff) FILTER (WHERE p.first_half),
                      COUNT(DISTINCT p.staff) FILTER (WHERE p.second_half)) AS filled
         FROM needs n
-        JOIN ateliers a ON a.id = n.atelier
+        JOIN poles a ON a.id = n.pole
         LEFT JOIN presence p ON p.needs = n.id AND (p.first_half OR p.second_half)
         WHERE n.day >= $1 AND n.day <= $2
         GROUP BY n.id, a.name
@@ -1491,7 +1493,7 @@ pub async fn get_all_need_days(pool: &PgPool) -> Result<Vec<chrono::NaiveDate>> 
 
 /// Get all needs for a given day (across all pôles)
 pub async fn get_needs_for_day(pool: &PgPool, day: chrono::NaiveDate) -> Result<Vec<Need>> {
-    let needs = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE day = $1 ORDER BY atelier")
+    let needs = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE day = $1 ORDER BY pole")
         .bind(day)
         .fetch_all(pool)
         .await?;
@@ -1507,14 +1509,14 @@ pub async fn get_all_future_needs_with_counts(
 ) -> Result<Vec<(Need, i64, i64)>> {
     let rows = sqlx::query(
         r"
-        SELECT n.id, n.day, n.atelier, n.quantity, n.minimal_quantity, n.nightly,
+        SELECT n.id, n.day, n.pole, n.quantity, n.minimal_quantity, n.nightly,
                COUNT(DISTINCT CASE WHEN p.first_half  THEN p.staff END) AS h1,
                COUNT(DISTINCT CASE WHEN p.second_half THEN p.staff END) AS h2
         FROM needs n
         LEFT JOIN presence p ON p.needs = n.id
         WHERE n.day >= $1
         GROUP BY n.id
-        ORDER BY n.day, n.atelier
+        ORDER BY n.day, n.pole
         ",
     )
     .bind(from)
@@ -1526,7 +1528,7 @@ pub async fn get_all_future_needs_with_counts(
         let need = Need {
             id: row.try_get("id")?,
             day: row.try_get("day")?,
-            pole: row.try_get("atelier")?,
+            pole: row.try_get("pole")?,
             quantity: row.try_get("quantity")?,
             minimal_quantity: row.try_get("minimal_quantity")?,
             nightly: row.try_get("nightly")?,
@@ -1547,9 +1549,9 @@ pub async fn upsert_need(
 ) -> Result<Need> {
     let need = sqlx::query_as::<_, Need>(
         r"
-        INSERT INTO needs (day, atelier, quantity, minimal_quantity, nightly)
+        INSERT INTO needs (day, pole, quantity, minimal_quantity, nightly)
         VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (day, atelier) DO UPDATE SET
+        ON CONFLICT (day, pole) DO UPDATE SET
             quantity = EXCLUDED.quantity,
             minimal_quantity = EXCLUDED.minimal_quantity,
             nightly = EXCLUDED.nightly
@@ -1574,7 +1576,7 @@ pub async fn delete_need(
     pole_id: uuid::Uuid,
     day: chrono::NaiveDate,
 ) -> Result<bool> {
-    let result = sqlx::query(r"DELETE FROM needs WHERE atelier = $1 AND day = $2")
+    let result = sqlx::query(r"DELETE FROM needs WHERE pole = $1 AND day = $2")
         .bind(pole_id)
         .bind(day)
         .execute(pool)
@@ -1634,12 +1636,10 @@ pub async fn create_opening_days(
                 .map_err(anyhow::Error::msg)?;
             anyhow::ensure!(seen.insert(need.pole_id), "Rôle indiqué plusieurs fois");
             anyhow::ensure!(
-                sqlx::query_scalar::<_, bool>(
-                    "SELECT EXISTS (SELECT 1 FROM ateliers WHERE id = $1)"
-                )
-                .bind(need.pole_id)
-                .fetch_one(&mut *tx)
-                .await?,
+                sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM poles WHERE id = $1)")
+                    .bind(need.pole_id)
+                    .fetch_one(&mut *tx)
+                    .await?,
                 "Rôle inconnu"
             );
         }
@@ -1670,8 +1670,8 @@ pub async fn create_opening_days(
             let mut created = 0;
             for need in needs.iter().filter(|need| need.quantity > 0) {
                 created += sqlx::query(
-                    "INSERT INTO needs (day, atelier, quantity, minimal_quantity, nightly) VALUES ($1, $2, $3, $4, $5)
-                     ON CONFLICT (day, atelier) DO UPDATE SET quantity = EXCLUDED.quantity,
+                    "INSERT INTO needs (day, pole, quantity, minimal_quantity, nightly) VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (day, pole) DO UPDATE SET quantity = EXCLUDED.quantity,
                          minimal_quantity = EXCLUDED.minimal_quantity, nightly = EXCLUDED.nightly",
                 )
                 .bind(day).bind(need.pole_id).bind(need.quantity).bind(need.minimal_quantity).bind(need.nightly)
@@ -1680,10 +1680,10 @@ pub async fn create_opening_days(
             created
         } else {
             sqlx::query(
-                r"INSERT INTO needs (day, atelier, quantity, minimal_quantity, nightly)
-          SELECT $1, id, opening_day_typical_needed, opening_day_minimal_needed, default_nightly FROM ateliers
+                r"INSERT INTO needs (day, pole, quantity, minimal_quantity, nightly)
+          SELECT $1, id, opening_day_typical_needed, opening_day_minimal_needed, default_nightly FROM poles
           WHERE opening_day_typical_needed > 0
-          ON CONFLICT (day, atelier) DO UPDATE SET
+          ON CONFLICT (day, pole) DO UPDATE SET
               quantity = EXCLUDED.quantity, minimal_quantity = EXCLUDED.minimal_quantity, nightly = EXCLUDED.nightly",
             )
             .bind(day)
@@ -1820,7 +1820,7 @@ pub async fn check_presence_conflict(
         SELECT a.name
         FROM presence p
         JOIN needs n ON n.id = p.needs
-        JOIN ateliers a ON a.id = n.atelier
+        JOIN poles a ON a.id = n.pole
         WHERE p.staff = $1
           AND n.day = $2
           AND n.id <> $3
@@ -1848,13 +1848,13 @@ pub async fn get_person_calendar(
     let today = chrono::Utc::now().date_naive();
     let rows = sqlx::query(
         r"
-        SELECT n.id, n.day, n.atelier, n.quantity, n.minimal_quantity, n.nightly,
+        SELECT n.id, n.day, n.pole, n.quantity, n.minimal_quantity, n.nightly,
                a.name AS pole_name, a.slug AS pole_slug, a.icon AS pole_icon,
                COALESCE(p.first_half, false) AS first_half,
                COALESCE(p.second_half, false) AS second_half
         FROM needs n
-        JOIN ateliers a ON a.id = n.atelier
-        JOIN roles r ON r.staff = $1 AND r.atelier = n.atelier
+        JOIN poles a ON a.id = n.pole
+        JOIN roles r ON r.staff = $1 AND r.pole = n.pole
         LEFT JOIN presence p ON p.needs = n.id AND p.staff = $1
         WHERE n.day >= $2
         ORDER BY n.day, a.name
@@ -1870,7 +1870,7 @@ pub async fn get_person_calendar(
         let need = Need {
             id: row.try_get("id")?,
             day: row.try_get("day")?,
-            pole: row.try_get("atelier")?,
+            pole: row.try_get("pole")?,
             quantity: row.try_get("quantity")?,
             minimal_quantity: row.try_get("minimal_quantity")?,
             nightly: row.try_get("nightly")?,
@@ -2438,9 +2438,9 @@ pub async fn count_pending_validations_for_chief(
         r"
         SELECT a.name, COUNT(*) as cnt
         FROM roles r
-        JOIN ateliers a ON a.id = r.atelier
+        JOIN poles a ON a.id = r.pole
         WHERE r.validated = false
-        AND r.atelier IN (SELECT atelier FROM roles WHERE staff = $1 AND chief = true)
+        AND r.pole IN (SELECT pole FROM roles WHERE staff = $1 AND chief = true)
         GROUP BY a.name
         ORDER BY a.name
         ",
@@ -2466,7 +2466,7 @@ pub async fn count_pending_validations(pool: &PgPool, staff_id: Option<uuid::Uui
             SELECT COUNT(*) as cnt
             FROM roles r
             WHERE r.validated = false
-            AND r.atelier IN (SELECT atelier FROM roles WHERE staff = $1 AND chief = true)
+            AND r.pole IN (SELECT pole FROM roles WHERE staff = $1 AND chief = true)
             ",
         )
         .bind(sid)
@@ -2493,8 +2493,8 @@ pub async fn get_pending_validations(
             SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed, a.opening_day_minimal_needed AS a_opening_day_minimal_needed, a.whatsapp_group_url AS a_whatsapp_group_url
             FROM roles r
             JOIN staff s ON s.id = r.staff
-            JOIN ateliers a ON a.id = r.atelier
-            WHERE r.validated = false AND r.atelier = ANY($1)
+            JOIN poles a ON a.id = r.pole
+            WHERE r.validated = false AND r.pole = ANY($1)
             ORDER BY a.name, s.last_name, s.first_name
             ",
         )
@@ -2507,7 +2507,7 @@ pub async fn get_pending_validations(
             SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed, a.opening_day_minimal_needed AS a_opening_day_minimal_needed, a.whatsapp_group_url AS a_whatsapp_group_url
             FROM roles r
             JOIN staff s ON s.id = r.staff
-            JOIN ateliers a ON a.id = r.atelier
+            JOIN poles a ON a.id = r.pole
             WHERE r.validated = false
             ORDER BY a.name, s.last_name, s.first_name
             ",
@@ -2575,7 +2575,7 @@ const TABLES_PARENT_FIRST: &[&str] = &[
     "staff",
     "calendar_subscriptions",
     "cash",
-    "ateliers",
+    "poles",
     "equipments",
     "opening_days",
     "memberships",
@@ -2616,7 +2616,7 @@ const TABLES_CHILD_FIRST: &[&str] = &[
     "opening_days",
     "equipments",
     "cash",
-    "ateliers",
+    "poles",
     "staff",
     "users",
 ];
@@ -2733,7 +2733,7 @@ async fn restore_inner(conn: &mut sqlx::PgConnection, sql: &str) -> Result<()> {
         // Handle COPY ... FROM stdin blocks
         if line.to_uppercase().starts_with("COPY") && line.to_lowercase().ends_with("from stdin;") {
             // Extract the COPY header (without the trailing semicolon for copy_in_raw)
-            let copy_header = line.trim_end_matches(';');
+            let copy_header = restore_copy_header(line.trim_end_matches(';'));
 
             // Collect data lines until we hit the \. terminator
             let mut data_lines = Vec::new();
@@ -2755,16 +2755,16 @@ async fn restore_inner(conn: &mut sqlx::PgConnection, sql: &str) -> Result<()> {
             }
 
             // Stream the data into the COPY command
-            let mut copy_in = conn.copy_in_raw(copy_header).await?;
+            let mut copy_in = conn.copy_in_raw(&copy_header).await?;
             copy_in.read_from(&mut &buf[..]).await?;
             copy_in.finish().await?;
             // Backups made before the split have one staffing target. Restore
             // the same value into both thresholds, just as migration 050 does.
-            if copy_header.starts_with("COPY ateliers (")
+            if copy_header.starts_with("COPY poles (")
                 && !copy_header.contains("\"opening_day_minimal_needed\"")
             {
                 sqlx::query(
-                    "UPDATE ateliers SET opening_day_minimal_needed = opening_day_typical_needed",
+                    "UPDATE poles SET opening_day_minimal_needed = opening_day_typical_needed",
                 )
                 .execute(&mut *conn)
                 .await?;
@@ -2780,6 +2780,11 @@ async fn restore_inner(conn: &mut sqlx::PgConnection, sql: &str) -> Result<()> {
         }
 
         // TRUNCATE and other SQL statements — execute directly
+        let line = match line {
+            "TRUNCATE ateliers CASCADE;" => "TRUNCATE poles CASCADE;",
+            "TRUNCATE ateliers;" => "TRUNCATE poles;",
+            _ => line,
+        };
         sqlx::query(sqlx::AssertSqlSafe(line))
             .execute(&mut *conn)
             .await?;
@@ -2787,6 +2792,17 @@ async fn restore_inner(conn: &mut sqlx::PgConnection, sql: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Translate schema identifiers in pre-052 backups without touching COPY data.
+fn restore_copy_header(header: &str) -> String {
+    if let Some(columns) = header.strip_prefix("COPY ateliers (") {
+        format!("COPY poles ({columns}")
+    } else if header.starts_with("COPY roles (") || header.starts_with("COPY needs (") {
+        header.replace("\"atelier\"", "\"pole\"")
+    } else {
+        header.to_string()
+    }
 }
 
 // Photo functions
@@ -3235,7 +3251,7 @@ pub async fn create_pole(
     whatsapp_group_url: Option<&str>,
 ) -> Result<Pole> {
     let pole = sqlx::query_as::<_, Pole>(
-        r"INSERT INTO ateliers (id, name, slug, icon, needs_validation, default_nightly, opening_day_typical_needed, opening_day_minimal_needed, whatsapp_group_url)
+        r"INSERT INTO poles (id, name, slug, icon, needs_validation, default_nightly, opening_day_typical_needed, opening_day_minimal_needed, whatsapp_group_url)
           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
           RETURNING *",
     )
@@ -3268,7 +3284,7 @@ pub async fn update_pole(
     whatsapp_group_url: Option<&str>,
 ) -> Result<Pole> {
     let pole = sqlx::query_as::<_, Pole>(
-        r"UPDATE ateliers
+        r"UPDATE poles
           SET name = $2, slug = $3, icon = $4, needs_validation = $5,
               default_nightly = $6, opening_day_typical_needed = $7, opening_day_minimal_needed = $8, whatsapp_group_url = $9
           WHERE id = $1
@@ -3291,7 +3307,7 @@ pub async fn update_pole(
 
 /// Delete a pôle by ID.
 pub async fn delete_pole(pool: &PgPool, id: uuid::Uuid) -> Result<()> {
-    sqlx::query(r"DELETE FROM ateliers WHERE id = $1")
+    sqlx::query(r"DELETE FROM poles WHERE id = $1")
         .bind(id)
         .execute(pool)
         .await?;
@@ -3377,7 +3393,7 @@ mod chief_permissions_tests {
             .connect(&std::env::var("DATABASE_URL")?)
             .await?;
         // A temporary table shadows the real roles table on this single connection.
-        sqlx::query("CREATE TEMP TABLE roles (staff uuid, atelier uuid, chief bool)")
+        sqlx::query("CREATE TEMP TABLE roles (staff uuid, pole uuid, chief bool)")
             .execute(&pool)
             .await?;
         let chief = uuid::Uuid::new_v4();
@@ -3513,12 +3529,16 @@ mod opening_day_tests {
         sqlx::query("UPDATE needs SET minimal_quantity = 0")
             .execute(&pool)
             .await?;
+        // Restore into the current table name after checking migration 050.
+        sqlx::query("ALTER TABLE ateliers RENAME TO poles")
+            .execute(&pool)
+            .await?;
         // Legacy backups still restore with both thresholds equal.
         super::restore_from_sql(&pool,
             "TRUNCATE ateliers;\nTRUNCATE needs;\nCOPY ateliers (\"opening_day_typical_needed\") FROM stdin;\n4\n\\.\nCOPY needs (\"quantity\") FROM stdin;\n7\n\\.\n"
         ).await?;
         assert_eq!(
-            sqlx::query_scalar::<_, i16>("SELECT opening_day_minimal_needed FROM ateliers")
+            sqlx::query_scalar::<_, i16>("SELECT opening_day_minimal_needed FROM poles")
                 .fetch_one(&pool)
                 .await?,
             4
@@ -3549,10 +3569,10 @@ mod opening_day_tests {
         let result = async {
             sqlx::raw_sql(
                 "CREATE TABLE opening_days (day date PRIMARY KEY, status text DEFAULT 'reserved');
-                 CREATE TABLE ateliers (id uuid PRIMARY KEY, opening_day_typical_needed smallint, default_nightly bool,
+                 CREATE TABLE poles (id uuid PRIMARY KEY, opening_day_typical_needed smallint, default_nightly bool,
                     opening_day_minimal_needed smallint DEFAULT 0);
                  CREATE TABLE needs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), day date NOT NULL,
-                    atelier uuid NOT NULL, quantity smallint, nightly bool, minimal_quantity smallint DEFAULT 0, UNIQUE(day, atelier));
+                    pole uuid NOT NULL, quantity smallint, nightly bool, minimal_quantity smallint DEFAULT 0, UNIQUE(day, pole));
                  INSERT INTO opening_days VALUES ('2030-01-01', 'reserved');",
             ).execute(&pool).await?;
             sqlx::raw_sql(include_str!("../migrations/042_remove_empty_opening_days.sql"))
@@ -3564,7 +3584,7 @@ mod opening_day_tests {
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 0);
             let first = uuid::Uuid::new_v4();
             let second = uuid::Uuid::new_v4();
-            sqlx::query("INSERT INTO ateliers VALUES ($1, 2, false, 1), ($2, 1, true, 1)")
+            sqlx::query("INSERT INTO poles VALUES ($1, 2, false, 1), ($2, 1, true, 1)")
                 .bind(first).bind(second).execute(&pool).await?;
             assert_eq!(super::create_opening_days(&pool, day, day, None).await?, (1, 2));
             assert_eq!(super::create_opening_days(&pool, day, day, None).await?, (0, 0));
@@ -3591,7 +3611,7 @@ mod opening_day_tests {
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT sum(quantity)::bigint FROM needs WHERE day = $1").bind(end).fetch_one(&pool).await?, 14);
             assert!(super::create_opening_days(&pool, end, day, None).await.is_err());
             assert!(super::create_opening_days(&pool, day, day + chrono::Duration::days(366), None).await.is_err());
-            sqlx::query("UPDATE ateliers SET opening_day_typical_needed = 0").execute(&pool).await?;
+            sqlx::query("UPDATE poles SET opening_day_typical_needed = 0").execute(&pool).await?;
             assert!(super::create_opening_days(&pool, end, end + chrono::Duration::days(4), None).await.is_err());
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 5);
             let custom = [
@@ -3600,7 +3620,7 @@ mod opening_day_tests {
             ];
             // Custom needs work without defaults and do not modify overlapping days.
             assert_eq!(super::create_opening_days(&pool, end, end + chrono::Duration::days(4), Some(&custom)).await?, (2, 2));
-            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM needs WHERE day > $1 AND quantity = 4 AND minimal_quantity = 2 AND nightly AND atelier = $2")
+            assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM needs WHERE day > $1 AND quantity = 4 AND minimal_quantity = 2 AND nightly AND pole = $2")
                 .bind(end + chrono::Duration::days(2)).bind(first).fetch_one(&pool).await?, 2);
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT sum(quantity)::bigint FROM needs WHERE day = $1").bind(end).fetch_one(&pool).await?, 14);
             let invalid = [crate::models::OpeningDayNeed { pole_id: uuid::Uuid::new_v4(), quantity: 1, minimal_quantity: 1, nightly: false }];

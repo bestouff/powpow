@@ -94,7 +94,7 @@ async fn planning_pdf_downloads_select_dates_and_require_membership(
         );
     }
     let pole: uuid::Uuid = sqlx::query_scalar(
-        "INSERT INTO ateliers (name, slug, needs_validation) VALUES ('Accueil PDF', 'pdf-accueil', false) RETURNING id",
+        "INSERT INTO poles (name, slug, needs_validation) VALUES ('Accueil PDF', 'pdf-accueil', false) RETURNING id",
     )
     .fetch_one(&state.db)
     .await?;
@@ -266,7 +266,7 @@ async fn today_requires_staff_and_shows_only_todays_assignments(
         ("Buvette", "today-buvette", false),
         ("Nocturne", "today-nocturne", true),
     ] {
-        let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation, default_nightly, icon) VALUES ($1, $2, false, $3, 'users') RETURNING id")
+        let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO poles (name, slug, needs_validation, default_nightly, icon) VALUES ($1, $2, false, $3, 'users') RETURNING id")
             .bind(name).bind(slug).bind(nightly).fetch_one(&state.db).await?;
         poles.push(id);
         database::upsert_need(&state.db, id, today, 4, 1, nightly).await?;
@@ -1265,14 +1265,14 @@ async fn calendar_feed_tracks_attendance_with_stable_events(pool: PgPool) -> any
     let state = state(pool);
     let (owner, cookie) = member(&state, "owner@example.org").await?;
     let (other, _) = member(&state, "other@example.org").await?;
-    let pole: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation) VALUES ('Buvette', 'feed-test', false) RETURNING id").fetch_one(&state.db).await?;
+    let pole: uuid::Uuid = sqlx::query_scalar("INSERT INTO poles (name, slug, needs_validation) VALUES ('Buvette', 'feed-test', false) RETURNING id").fetch_one(&state.db).await?;
     let mut needs = vec![];
     for (day, nightly) in [
         ("2026-03-29", false),
         ("2026-10-25", true),
         ("2026-12-31", false),
     ] {
-        let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, atelier, quantity, nightly) VALUES ($1::text::date, $2, 2, $3) RETURNING id")
+        let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, pole, quantity, nightly) VALUES ($1::text::date, $2, 2, $3) RETURNING id")
             .bind(day).bind(pole).bind(nightly).fetch_one(&state.db).await?;
         needs.push(id);
     }
@@ -1320,7 +1320,7 @@ async fn calendar_feed_tracks_attendance_with_stable_events(pool: PgPool) -> any
     assert!(body.contains(&format!("UID:{uid}\r\n")));
     assert!(body.contains("SUMMARY:Buvette — matin et après-midi\r\n"));
     assert_eq!(body.matches("BEGIN:VEVENT").count(), 2);
-    sqlx::query("UPDATE ateliers SET name = 'Accueil' WHERE id = $1")
+    sqlx::query("UPDATE poles SET name = 'Accueil' WHERE id = $1")
         .bind(pole)
         .execute(&state.db)
         .await?;
@@ -1815,13 +1815,17 @@ async fn pole_names_are_escaped_in_reminders_and_calendar_data(pool: PgPool) -> 
     let (chief, cookie) = member(&state, "chief@example.org").await?;
     let (pending, _) = member(&state, "pending@example.org").await?;
     let attack = "</script><script>window.reviewXss=1</script>";
-    let pole: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation) VALUES ($1, 'test-escaping', true) RETURNING id")
+    let pole: uuid::Uuid = sqlx::query_scalar("INSERT INTO poles (name, slug, needs_validation) VALUES ($1, 'test-escaping', true) RETURNING id")
         .bind(attack).fetch_one(&state.db).await?;
     database::add_role(&state.db, chief.id, pole, true).await?;
     database::update_role(&state.db, chief.id, pole, None, Some(true)).await?;
     database::add_role(&state.db, pending.id, pole, false).await?;
-    sqlx::query("INSERT INTO needs (day, atelier, quantity, nightly) VALUES (current_date + 1, $1, 1, false)")
-        .bind(pole).execute(&state.db).await?;
+    sqlx::query(
+        "INSERT INTO needs (day, pole, quantity, nightly) VALUES (current_date + 1, $1, 1, false)",
+    )
+    .bind(pole)
+    .execute(&state.db)
+    .await?;
     let app = build_router(state);
     for path in [format!("/person/{}", chief.id), "/calendar".into()] {
         let response = request(&app, "GET", &path, Some(&cookie), serde_json::Value::Null).await;

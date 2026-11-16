@@ -347,7 +347,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Role {
     fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
         Ok(Role {
             staff: row.try_get("staff")?,
-            pole: row.try_get("atelier")?,
+            pole: row.try_get("pole")?,
             validated: row.try_get("validated")?,
             chief: row.try_get("chief")?,
         })
@@ -440,7 +440,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Need {
         Ok(Need {
             id: row.try_get("id")?,
             day: row.try_get("day")?,
-            pole: row.try_get("atelier")?,
+            pole: row.try_get("pole")?,
             quantity: row.try_get("quantity")?,
             minimal_quantity: row.try_get("minimal_quantity")?,
             nightly: row.try_get("nightly")?,

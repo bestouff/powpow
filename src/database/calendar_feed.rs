@@ -36,7 +36,7 @@ pub async fn load(pool: &PgPool, token: &str) -> Result<Option<(Staff, Vec<Calen
         "SELECT n.id AS need_id, n.day, a.name AS pole_name, n.nightly,
         p.first_half, p.second_half,
         GREATEST(p.calendar_updated_at, n.calendar_updated_at, a.calendar_updated_at) AS modified_at
-        FROM presence p JOIN needs n ON n.id = p.needs JOIN ateliers a ON a.id = n.atelier
+        FROM presence p JOIN needs n ON n.id = p.needs JOIN poles a ON a.id = n.pole
         WHERE p.staff = $1 AND (p.first_half OR p.second_half) ORDER BY n.day, n.id",
     )
     .bind(staff.id)

@@ -19,7 +19,7 @@ pub async fn for_day(pool: &PgPool, day: NaiveDate) -> anyhow::Result<Vec<PoleDa
         "SELECT a.id AS pole_id, a.name, a.slug, a.icon, n.nightly,
                 s.id AS staff_id, s.first_name, s.last_name, p.first_half, p.second_half
          FROM needs n
-         JOIN ateliers a ON a.id = n.atelier
+         JOIN poles a ON a.id = n.pole
          LEFT JOIN presence p ON p.needs = n.id AND (p.first_half OR p.second_half)
          LEFT JOIN staff s ON s.id = p.staff
          WHERE n.day = $1

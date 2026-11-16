@@ -346,6 +346,9 @@ SQL backups and restores are accessible via the admin panel or an automation tok
 Exports use one consistent PostgreSQL snapshot and include import-review decisions,
 news, pending newsletter cleanup, and sequence counters. Login sessions and pending
 account tokens are excluded; restoring a backup clears them.
+Migration 052 renames the pôle table and related columns to `poles` and `pole`.
+Older PowPow backups remain restorable: the importer translates their table and
+column names while preserving stored text and staffing targets.
 
 ## Tech stack
 

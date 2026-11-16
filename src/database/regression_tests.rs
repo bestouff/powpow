@@ -7,12 +7,12 @@ async fn staff(pool: &PgPool) -> Result<Staff> {
 
 async fn need(pool: &PgPool, name: &str) -> Result<Need> {
     let pole: uuid::Uuid = sqlx::query_scalar(
-        "INSERT INTO ateliers (name, slug, needs_validation) VALUES ($1, $1, true) RETURNING id",
+        "INSERT INTO poles (name, slug, needs_validation) VALUES ($1, $1, true) RETURNING id",
     )
     .bind(name)
     .fetch_one(pool)
     .await?;
-    Ok(sqlx::query_as("INSERT INTO needs (day, atelier, quantity, nightly) VALUES (current_date + 7, $1, 2, false) RETURNING *")
+    Ok(sqlx::query_as("INSERT INTO needs (day, pole, quantity, nightly) VALUES (current_date + 7, $1, 2, false) RETURNING *")
         .bind(pole).fetch_one(pool).await?)
 }
 
@@ -68,7 +68,7 @@ async fn leaving_or_revoking_a_pole_clears_future_presence(pool: PgPool) -> Resu
     let future = need(&pool, "Leaving").await?;
     add_role(&pool, person.id, future.pole, true).await?;
     planning::toggle(&pool, person.id, future.id, "first", true).await?;
-    let past: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, atelier, quantity, nightly) VALUES (current_date - 7, $1, 2, false) RETURNING id")
+    let past: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, pole, quantity, nightly) VALUES (current_date - 7, $1, 2, false) RETURNING id")
         .bind(future.pole).fetch_one(&pool).await?;
     upsert_presence(&pool, past, person.id, true, false).await?;
     remove_role(&pool, person.id, future.pole).await?;
@@ -105,7 +105,7 @@ async fn unimport_uses_june_to_may_seasons(pool: PgPool) -> Result<()> {
     let person = staff(&pool).await?;
     let need = need(&pool, "Season").await?;
     for date in ["2025-05-31", "2025-06-01", "2026-05-31", "2026-06-01"] {
-        let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, atelier, quantity, nightly) VALUES ($1::text::date, $2, 1, false) RETURNING id")
+        let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, pole, quantity, nightly) VALUES ($1::text::date, $2, 1, false) RETURNING id")
             .bind(date).bind(need.pole).fetch_one(&pool).await?;
         upsert_presence(&pool, id, person.id, true, false).await?;
     }
