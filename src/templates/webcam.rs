@@ -32,6 +32,12 @@ pub fn webcam_page(
                             h1 .title { (title) }
                         }
                     }
+                    div .level-right {
+                        a .button.is-link.is-light href={(prefix) "/webcam/export" @if let Some(camera) = &gallery.camera { "?camera=" (camera) }} {
+                            span .icon { i .fa-solid.fa-film aria-hidden="true" {} }
+                            span { "Exporter une vidéo" }
+                        }
+                    }
                 }
                 div .columns.is-variable.is-5 {
                     div .column.is-three-quarters {

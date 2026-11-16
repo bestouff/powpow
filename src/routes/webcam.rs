@@ -11,6 +11,8 @@ use tokio_util::io::ReaderStream;
 
 use crate::{AppState, database, get_prefix, models::MeteoReading, templates, webcam};
 
+pub mod export;
+
 async fn weather(state: &AppState, image_time: Option<DateTime<Utc>>) -> Option<MeteoReading> {
     let config = state.config.meteo.as_ref()?;
     let at = image_time.unwrap_or_else(Utc::now);

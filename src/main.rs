@@ -121,6 +121,7 @@ async fn security_headers(
 pub struct AppState {
     pub forecast: forecast::Cache,
     pub webcam: webcam::Store,
+    pub webcam_sun: webcam::sun::Cache,
     pub mail_limits: std::sync::Arc<rate_limit::MailLimits>,
     pub db: PgPool,
     pub helloasso_client: HelloAssoClient,
@@ -417,6 +418,7 @@ async fn main() -> anyhow::Result<()> {
     let app_state = AppState {
         forecast: forecast::Cache::default(),
         webcam,
+        webcam_sun: webcam::sun::Cache::default(),
         mail_limits: std::sync::Arc::default(),
         db,
         helloasso_client,
@@ -490,6 +492,8 @@ fn build_router(app_state: AppState) -> Router {
         .route("/today", get(routes::today::page))
         .route("/calendar/pdf/{date}", get(routes::planning_pdf::download))
         .route("/webcam", get(routes::webcam::page))
+        .route("/webcam/export", get(routes::webcam::export::page))
+        .route("/webcam/export/video", get(routes::webcam::export::video))
         .route("/webcam/{filename}", get(routes::webcam::asset))
         .route("/webcam/images/{filename}", get(routes::webcam::image))
         .route("/api/webcam/latest", get(routes::webcam::latest))

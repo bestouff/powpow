@@ -15,6 +15,7 @@ mod staff;
 mod today;
 mod tutorial;
 mod webcam;
+mod webcam_export;
 
 pub use admin::{
     admin_page, audit_page, qualifications_page, restore_page, restore_result, validation_page,
@@ -34,6 +35,7 @@ pub use settings::settings_page;
 pub use staff::{person_detail, staff_list};
 pub use today::today_page;
 pub use webcam::webcam_page;
+pub use webcam_export::webcam_export_page;
 
 use crate::models::{ContentBlock, ContentMap};
 use maud::{DOCTYPE, Markup, html};

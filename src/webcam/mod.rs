@@ -2,9 +2,11 @@
 
 pub mod config;
 pub mod direct;
+pub mod export;
 pub mod ftps;
 pub mod metadata;
 pub mod previews;
+pub mod sun;
 #[cfg(test)]
 mod tests;
 
@@ -109,6 +111,7 @@ pub struct Store {
     directory: PathBuf,
     images: Arc<RwLock<BTreeSet<String>>>,
     processors: Arc<Semaphore>,
+    exports: Arc<Semaphore>,
     metadata: metadata::Settings,
 }
 
@@ -118,6 +121,7 @@ impl Store {
             directory,
             images: Arc::default(),
             processors: Arc::new(Semaphore::new(2)),
+            exports: Arc::new(Semaphore::new(1)),
             metadata,
         }
     }

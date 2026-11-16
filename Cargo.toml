@@ -65,6 +65,8 @@ tempfile = "3"
 tokio-util = { version = "0.7", features = ["io"] }
 subtle = "2.6"
 genpdf = { version = "0.2", features = ["images"] }
+filmcraft-h264enc = { version = "0.9", default-features = false }
+mp4 = "0.14"
 
 [dev-dependencies]
 kamadak-exif = "0.6.2"

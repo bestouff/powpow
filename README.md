@@ -183,6 +183,26 @@ local timezone (`TZ`, set to `Europe/Paris` in Docker Compose), including daylig
 saving time changes.
 The original image files retain their original pixels.
 
+The **Exporter une vidéo** link opens `/webcam/export`, available to authenticated
+staff. Choose a day (today by default), start/end times, and an integer speed
+factor (2000× by default). Open-Meteo supplies sunrise and sunset for the chosen
+date, using `DIRECT_WEBCAM_COORDINATES` or the station coordinates (45.31, 5.85).
+No API key is needed. Older dates use its historical API. Sun times are cached;
+if the service is unavailable, enter the times manually. Today's end defaults to
+the earlier of sunset and now. Times and date boundaries use the server's `TZ`;
+ambiguous or nonexistent times at a DST transition must be changed explicitly.
+
+Downloads are H.264 Baseline MP4 files, encoded in pure Rust with
+`filmcraft-h264enc` and `mp4`, with no FFmpeg runtime dependency. Encoding runs on
+a blocking worker, with one export at a time and cancellation between frames if
+the request disconnects. A temporary file streams the finished download and is
+removed automatically. Images fit within 1280×720, preserving aspect ratio;
+captures closer than 1/25 second after acceleration are thinned. Capture intervals
+and gaps retain their relative duration: at 2000×, an hour becomes 1.8 seconds.
+The first selected image covers the beginning of the requested interval, and the
+last stays visible until its end. Both the form and `/webcam/export/video` require
+a valid staff session; generated videos are private and never cached publicly.
+
 Every new HTTP or FTPS capture receives EXIF metadata, also included in its
 thumbnails and JPEG download:
 

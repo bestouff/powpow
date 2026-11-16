@@ -9,6 +9,9 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveDate, Utc};
 use serde::Deserialize;
 
+pub const STATION_LATITUDE: f64 = 45.31;
+pub const STATION_LONGITUDE: f64 = 5.85;
+
 #[derive(Debug, Deserialize)]
 pub struct WeatherResponse {
     pub current: Option<CurrentWeather>,
@@ -96,18 +99,20 @@ impl Cache {
 
 pub async fn fetch_weather() -> Result<WeatherResponse> {
     // Plateau des Petites Roches, at the same elevation used for the daily saying.
-    const URL: &str = "https://api.open-meteo.com/v1/forecast?\
-        latitude=45.31&longitude=5.85&elevation=1200\
+    let url = format!(
+        "https://api.open-meteo.com/v1/forecast?\
+        latitude={STATION_LATITUDE}&longitude={STATION_LONGITUDE}&elevation=1200\
         &current=temperature_2m,relative_humidity_2m,apparent_temperature,\
         precipitation,snowfall,cloud_cover,wind_speed_10m,wind_gusts_10m\
         &daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,\
         snowfall_sum,wind_speed_10m_max,wind_gusts_10m_max,sunrise,sunset\
         &temperature_unit=celsius&wind_speed_unit=kmh&precipitation_unit=mm\
-        &timezone=Europe%2FParis&forecast_days=1";
+        &timezone=Europe%2FParis&forecast_days=1"
+    );
     reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()?
-        .get(URL)
+        .get(url)
         .send()
         .await?
         .error_for_status()?

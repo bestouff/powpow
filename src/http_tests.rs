@@ -5,6 +5,8 @@ use axum::{
 };
 use tower::ServiceExt;
 
+mod webcam_export_tests;
+
 async fn response_text(response: Response) -> anyhow::Result<String> {
     Ok(String::from_utf8(
         to_bytes(response.into_body(), 1_000_000).await?.to_vec(),
@@ -1881,6 +1883,7 @@ fn state(db: PgPool) -> AppState {
     };
     AppState {
         forecast: forecast::Cache::default(),
+        webcam_sun: webcam::sun::Cache::default(),
         webcam: webcam::Store::new(
             config.webcam.directory.clone(),
             webcam::metadata::Settings::new(

@@ -50,9 +50,18 @@ document.addEventListener("DOMContentLoaded", function () {
   initPhotoPage(prefix);
   initManualImport();
   initWebcam(prefix);
+  initWebcamExport();
   initHomeWebcam(prefix);
   initToday();
 });
+
+function initWebcamExport() {
+  const form = document.getElementById("webcam-export-form");
+  if (!form) return;
+  document.getElementById("export-date").addEventListener("change", function () {
+    if (this.validity.valid) form.requestSubmit(document.getElementById("export-refresh"));
+  });
+}
 
 function initToday() {
   if (!document.getElementById("today-page")) return;
