@@ -1,8 +1,8 @@
 use super::{NavKind, page};
-use crate::models::Atelier;
+use crate::models::Pole;
 use maud::{Markup, PreEscaped, html};
 
-/// Curated list of Font Awesome 7.x solid icons suitable for ateliers.
+/// Curated list of Font Awesome 7.x solid icons suitable for pôles.
 const ICON_CHOICES: &[(&str, &str)] = &[
     ("person-skiing", "Ski alpin"),
     ("person-skiing-nordic", "Ski nordique"),
@@ -76,7 +76,7 @@ const ICON_CHOICES: &[(&str, &str)] = &[
     ("trowel", "Truelle"),
 ];
 
-pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
+pub fn settings_page(prefix: &str, poles: &[Pole]) -> Markup {
     let p = prefix;
 
     let content = html! {
@@ -97,11 +97,11 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                     "Paramètres"
                 }
 
-                // ── Ateliers section ─────────────────────────────────────
+                // ── Pôles section ────────────────────────────────────────
                 div .box {
                     h2 .title.is-4.mb-4 {
                         span .icon.mr-2 { i .fa-solid.fa-people-group {} }
-                        "Ateliers"
+                        "Pôles"
                     }
 
                     div .notification.is-info.is-light.mb-4 {
@@ -110,7 +110,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                         "."
                     }
 
-                    // Existing ateliers table
+                    // Existing pôles table
                     div .table-container {
                         table .table.is-striped.is-hoverable.is-fullwidth {
                             thead {
@@ -126,14 +126,14 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                                     th {}
                                 }
                             }
-                            tbody #ateliers-tbody {
-                                @for atelier in ateliers {
-                                    (atelier_row(p, atelier))
+                            tbody #poles-tbody {
+                                @for pole in poles {
+                                    (pole_row(p, pole))
                                 }
-                                @if ateliers.is_empty() {
+                                @if poles.is_empty() {
                                     tr .empty-row {
                                         td colspan="8" .has-text-centered.has-text-grey-light.py-5 {
-                                            "Aucun atelier défini"
+                                            "Aucun pôle défini"
                                         }
                                     }
                                 }
@@ -142,21 +142,21 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                     }
 
                     p .help.mt-2 {
-                        "Dans WhatsApp, ouvrez les infos du groupe, puis « Inviter via un lien ». Copiez le lien d'invitation ici. Laissez le champ vide si l'atelier n'a pas de groupe."
+                        "Dans WhatsApp, ouvrez les infos du groupe, puis « Inviter via un lien ». Copiez le lien d'invitation ici. Laissez le champ vide si le pôle n'a pas de groupe."
                     }
 
-                    // Add new atelier form
+                    // Add new pôle form
                     hr;
                     h3 .title.is-5 {
                         span .icon.mr-1 { i .fa-solid.fa-plus {} }
-                        "Ajouter un atelier"
+                        "Ajouter un pôle"
                     }
                     div .columns.is-multiline.is-vcentered {
                         div .column.is-3 {
                             div .field {
                                 label .label { "Nom" }
                                 div .control {
-                                    input .input #new-atelier-name type="text" placeholder="ex: Pistes";
+                                    input .input #new-pole-name type="text" placeholder="ex: Pistes";
                                 }
                             }
                         }
@@ -164,7 +164,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                             div .field {
                                 label .label { "Slug" }
                                 div .control {
-                                    input .input #new-atelier-slug type="text" placeholder="ex: pistes";
+                                    input .input #new-pole-slug type="text" placeholder="ex: pistes";
                                 }
                             }
                         }
@@ -172,19 +172,19 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                             div .field {
                                 label .label { "Icône" }
                                 div .control {
-                                    button .button.is-fullwidth #new-atelier-icon-btn data-icon="question" {
+                                    button .button.is-fullwidth #new-pole-icon-btn data-icon="question" {
                                         span .icon { i .fa-solid.fa-question {} }
                                         span { "Choisir..." }
                                     }
-                                    input type="hidden" #new-atelier-icon value="question";
+                                    input type="hidden" #new-pole-icon value="question";
                                 }
                             }
                         }
                         div .column.is-3 {
                             div .field {
-                                label .label for="new-atelier-whatsapp" { "Groupe WhatsApp" }
+                                label .label for="new-pole-whatsapp" { "Groupe WhatsApp" }
                                 div .control {
-                                    input .input #new-atelier-whatsapp type="url" placeholder="https://chat.whatsapp.com/…";
+                                    input .input #new-pole-whatsapp type="url" placeholder="https://chat.whatsapp.com/…";
                                 }
                             }
                         }
@@ -193,7 +193,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                                 label .label { "Validation" }
                                 div .control {
                                     label .checkbox {
-                                        input #new-atelier-validation type="checkbox";
+                                        input #new-pole-validation type="checkbox";
                                         " Requise"
                                     }
                                 }
@@ -204,7 +204,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                                 label .label { "Nocturne" }
                                 div .control {
                                     label .checkbox {
-                                        input #new-atelier-nightly type="checkbox";
+                                        input #new-pole-nightly type="checkbox";
                                         " Par défaut"
                                     }
                                 }
@@ -212,18 +212,18 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                         }
                         div .column.is-narrow {
                             div .field {
-                                label .label for="new-atelier-needed" { "Besoin confortable / jour" }
+                                label .label for="new-pole-needed" { "Besoin confortable / jour" }
                                 div .control {
-                                    input .input #new-atelier-needed type="number" min="0" max="32767" step="1" required value="0"
+                                    input .input #new-pole-needed type="number" min="0" max="32767" step="1" required value="0"
                                         style="width:5em";
                                 }
                             }
                         }
                         div .column.is-narrow {
                             div .field {
-                                label .label for="new-atelier-minimal" { "Besoin minimal / jour" }
+                                label .label for="new-pole-minimal" { "Besoin minimal / jour" }
                                 div .control {
-                                    input .input #new-atelier-minimal type="number" min="0" max="32767" step="1" required value="0"
+                                    input .input #new-pole-minimal type="number" min="0" max="32767" step="1" required value="0"
                                         style="width:5em";
                                 }
                             }
@@ -232,7 +232,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
                             div .field {
                                 label .label { "\u{00a0}" }
                                 div .control {
-                                    button .button.is-success #add-atelier-btn {
+                                    button .button.is-success #add-pole-btn {
                                         span .icon { i .fa-solid.fa-plus {} }
                                         span { "Ajouter" }
                                     }
@@ -284,7 +284,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
 (function() {{
     var PREFIX = "{p}";
 
-    // ── Helper: save a single field for an atelier row ──────────
+    // ── Helper: save a single field for a pôle row ──────────────
     async function saveField(row, changes) {{
         var comfortable = row.querySelector('[data-field="opening_day_typical_needed"]');
         var minimal = row.querySelector('[data-field="opening_day_minimal_needed"]');
@@ -301,7 +301,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
             opening_day_minimal_needed: Number(minimal.value)
         }};
         Object.assign(body, changes || {{}});
-        var res = await fetch(PREFIX + "/api/ateliers/" + id, {{
+        var res = await fetch(PREFIX + "/api/poles/" + id, {{
             method: "POST",
             headers: {{ "Content-Type": "application/json" }},
             body: JSON.stringify(body)
@@ -332,29 +332,29 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
         }});
 
     // ── Pen button: inline edit name / slug / WhatsApp ──────────
-    document.querySelectorAll(".atelier-edit-btn").forEach(function(btn) {{
+    document.querySelectorAll(".pole-edit-btn").forEach(function(btn) {{
         btn.addEventListener("click", function() {{
             var row = btn.closest("tr");
-            row.querySelectorAll(".atelier-display").forEach(function(el) {{
+            row.querySelectorAll(".pole-display").forEach(function(el) {{
                 el.classList.add("d-none");
             }});
-            row.querySelectorAll(".atelier-edit").forEach(function(el) {{
+            row.querySelectorAll(".pole-edit").forEach(function(el) {{
                 el.classList.remove("d-none");
             }});
             btn.classList.add("d-none");
-            row.querySelector(".atelier-delete-btn").classList.add("d-none");
-            row.querySelector(".atelier-save-btn").classList.remove("d-none");
-            row.querySelector(".atelier-cancel-btn").classList.remove("d-none");
+            row.querySelector(".pole-delete-btn").classList.add("d-none");
+            row.querySelector(".pole-save-btn").classList.remove("d-none");
+            row.querySelector(".pole-cancel-btn").classList.remove("d-none");
         }});
     }});
 
-    document.querySelectorAll(".atelier-cancel-btn").forEach(function(btn) {{
+    document.querySelectorAll(".pole-cancel-btn").forEach(function(btn) {{
         btn.addEventListener("click", function() {{
             location.reload();
         }});
     }});
 
-    document.querySelectorAll(".atelier-save-btn").forEach(function(btn) {{
+    document.querySelectorAll(".pole-save-btn").forEach(function(btn) {{
         btn.addEventListener("click", async function() {{
             var row = btn.closest("tr");
             var id = row.dataset.id;
@@ -373,23 +373,23 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
         }});
     }});
 
-    // ── Delete atelier ──────────────────────────────────────────
-    document.querySelectorAll(".atelier-delete-btn").forEach(function(btn) {{
+    // ── Delete pôle ─────────────────────────────────────────────
+    document.querySelectorAll(".pole-delete-btn").forEach(function(btn) {{
         btn.addEventListener("click", async function() {{
             var row = btn.closest("tr");
             var name = row.dataset.name;
-            if (!confirm('Supprimer l\'atelier "' + name
+            if (!confirm('Supprimer le pôle "' + name
                 + '" ? Cela supprimera aussi tous les rôles associés.')) return;
             var id = row.dataset.id;
-            var res = await fetch(PREFIX + "/api/ateliers/" + id, {{ method: "DELETE" }});
+            var res = await fetch(PREFIX + "/api/poles/" + id, {{ method: "DELETE" }});
             if (res.ok) {{ location.reload(); }}
             else {{ var e = await res.json(); alert(e.error || "Erreur"); }}
         }});
     }});
 
-    // ── Auto-generate slug from name (new atelier form) ─────────
-    var nameInput = document.getElementById("new-atelier-name");
-    var slugInput = document.getElementById("new-atelier-slug");
+    // ── Auto-generate slug from name (new pôle form) ────────────
+    var nameInput = document.getElementById("new-pole-name");
+    var slugInput = document.getElementById("new-pole-slug");
     if (nameInput && slugInput) {{
         nameInput.addEventListener("input", function() {{
             slugInput.value = nameInput.value.trim().toLowerCase()
@@ -398,27 +398,27 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
         }});
     }}
 
-    // ── Create atelier ──────────────────────────────────────────
-    var addBtn = document.getElementById("add-atelier-btn");
+    // ── Create pôle ─────────────────────────────────────────────
+    var addBtn = document.getElementById("add-pole-btn");
     if (addBtn) {{
         addBtn.addEventListener("click", async function() {{
-            var name = document.getElementById("new-atelier-name").value.trim();
-            var slug = document.getElementById("new-atelier-slug").value.trim();
+            var name = document.getElementById("new-pole-name").value.trim();
+            var slug = document.getElementById("new-pole-slug").value.trim();
             if (!name || !slug) {{ alert("Nom et slug requis"); return; }}
-            var comfortable = document.getElementById("new-atelier-needed");
-            var minimal = document.getElementById("new-atelier-minimal");
+            var comfortable = document.getElementById("new-pole-needed");
+            var minimal = document.getElementById("new-pole-minimal");
             if (!validateStaffingInputs(comfortable, minimal)) return;
             var body = {{
                 name: name,
                 slug: slug,
-                icon: document.getElementById("new-atelier-icon").value || "question",
-                whatsapp_group_url: document.getElementById("new-atelier-whatsapp").value.trim(),
-                needs_validation: document.getElementById("new-atelier-validation").checked,
-                default_nightly: document.getElementById("new-atelier-nightly").checked,
+                icon: document.getElementById("new-pole-icon").value || "question",
+                whatsapp_group_url: document.getElementById("new-pole-whatsapp").value.trim(),
+                needs_validation: document.getElementById("new-pole-validation").checked,
+                default_nightly: document.getElementById("new-pole-nightly").checked,
                 opening_day_typical_needed: Number(comfortable.value),
                 opening_day_minimal_needed: Number(minimal.value)
             }};
-            var res = await fetch(PREFIX + "/api/ateliers", {{
+            var res = await fetch(PREFIX + "/api/poles", {{
                 method: "POST",
                 headers: {{ "Content-Type": "application/json" }},
                 body: JSON.stringify(body)
@@ -467,17 +467,17 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
             var icon = btn.dataset.icon;
             if (!pickerTarget) return;
 
-            if (pickerTarget.id === "new-atelier-icon-btn") {{
-                // New atelier form
-                document.getElementById("new-atelier-icon").value = icon;
+            if (pickerTarget.id === "new-pole-icon-btn") {{
+                // New pôle form
+                document.getElementById("new-pole-icon").value = icon;
                 pickerTarget.querySelector("i").className = "fa-solid fa-" + icon;
                 pickerTarget.querySelector("span:last-child").textContent = icon;
             }} else {{
-                // Existing atelier row icon button
+                // Existing pôle row icon button
                 var row = pickerTarget.closest("tr");
                 row.dataset.icon = icon;
                 // Update displayed icon
-                row.querySelector(".atelier-icon-display i").className = "fa-solid fa-" + icon;
+                row.querySelector(".pole-icon-display i").className = "fa-solid fa-" + icon;
                 pickerTarget.querySelector("i").className = "fa-solid fa-" + icon;
                 saveField(row);
             }}
@@ -485,8 +485,8 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
         }});
     }});
 
-    // Open picker from new-atelier button
-    var newIconBtn = document.getElementById("new-atelier-icon-btn");
+    // Open picker from new-pole button
+    var newIconBtn = document.getElementById("new-pole-icon-btn");
     if (newIconBtn) {{
         newIconBtn.addEventListener("click", function() {{
             openPicker(newIconBtn);
@@ -494,7 +494,7 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
     }}
 
     // Open picker from existing row icon buttons
-    document.querySelectorAll(".atelier-icon-change-btn").forEach(function(btn) {{
+    document.querySelectorAll(".pole-icon-change-btn").forEach(function(btn) {{
         btn.addEventListener("click", function() {{
             openPicker(btn);
         }});
@@ -515,39 +515,39 @@ pub fn settings_page(prefix: &str, ateliers: &[Atelier]) -> Markup {
     )
 }
 
-fn atelier_row(_prefix: &str, a: &Atelier) -> Markup {
+fn pole_row(_prefix: &str, a: &Pole) -> Markup {
     html! {
         tr data-id=(a.id) data-name=(a.name) data-slug=(a.slug) data-icon=(a.icon)
             data-whatsapp-group-url=(a.whatsapp_group_url.as_deref().unwrap_or("")) {
             // Icon column: display + change button
             td {
-                span .atelier-icon-display {
+                span .pole-icon-display {
                     span .icon { i class=(format!("fa-solid fa-{}", a.icon)) {} }
                 }
-                button .button.is-small.is-ghost.atelier-icon-change-btn
+                button .button.is-small.is-ghost.pole-icon-change-btn
                     title="Changer l'icône" {
                     i .fa-solid.fa-pen.is-size-7 {}
                 }
             }
             // Name: display + inline edit
             td {
-                span .atelier-display { (a.name) }
-                input .input.is-small.atelier-edit.d-none type="text" value=(a.name) data-field="name";
+                span .pole-display { (a.name) }
+                input .input.is-small.pole-edit.d-none type="text" value=(a.name) data-field="name";
             }
             // Slug: display + inline edit
             td {
-                span .atelier-display { code { (a.slug) } }
-                input .input.is-small.atelier-edit.d-none type="text" value=(a.slug) data-field="slug";
+                span .pole-display { code { (a.slug) } }
+                input .input.is-small.pole-edit.d-none type="text" value=(a.slug) data-field="slug";
             }
             td {
-                span .atelier-display {
+                span .pole-display {
                     @if let Some(url) = &a.whatsapp_group_url {
                         a href=(url) target="_blank" rel="noopener noreferrer" { "Ouvrir le groupe" }
                     } @else {
                         "—"
                     }
                 }
-                input .input.is-small.atelier-edit.d-none type="url"
+                input .input.is-small.pole-edit.d-none type="url"
                     value=(a.whatsapp_group_url.as_deref().unwrap_or(""))
                     data-field="whatsapp_group_url" aria-label="Lien d'invitation WhatsApp"
                     placeholder="https://chat.whatsapp.com/…";
@@ -578,17 +578,17 @@ fn atelier_row(_prefix: &str, a: &Atelier) -> Markup {
             // Actions: edit name/slug/WhatsApp, delete
             td {
                 div .buttons.are-small {
-                    button .button.is-info.is-outlined.atelier-edit-btn
+                    button .button.is-info.is-outlined.pole-edit-btn
                         title="Modifier nom / slug / groupe WhatsApp" {
                         span .icon { i .fa-solid.fa-pen {} }
                     }
-                    button .button.is-success.atelier-save-btn.d-none {
+                    button .button.is-success.pole-save-btn.d-none {
                         span .icon { i .fa-solid.fa-check {} }
                     }
-                    button .button.is-light.atelier-cancel-btn.d-none {
+                    button .button.is-light.pole-cancel-btn.d-none {
                         span .icon { i .fa-solid.fa-xmark {} }
                     }
-                    button .button.is-danger.is-outlined.atelier-delete-btn {
+                    button .button.is-danger.is-outlined.pole-delete-btn {
                         span .icon { i .fa-solid.fa-trash {} }
                     }
                 }

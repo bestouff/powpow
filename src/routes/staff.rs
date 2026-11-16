@@ -39,11 +39,11 @@ pub async fn list_staff(
         }
     };
 
-    let ateliers = match database::get_all_ateliers(&state.db).await {
+    let poles = match database::get_all_poles(&state.db).await {
         Ok(list) => list,
         Err(e) => {
-            error!("Error fetching ateliers: {}", e);
-            return html! { p { "Error loading ateliers: " (e) } };
+            error!("Error fetching pôles: {}", e);
+            return html! { p { "Error loading pôles: " (e) } };
         }
     };
 
@@ -94,7 +94,7 @@ pub async fn list_staff(
 
     templates::staff_list(
         staff_list,
-        &ateliers,
+        &poles,
         &roles,
         &qualifications,
         &staff_qualifs,
@@ -189,11 +189,11 @@ pub async fn view_person(
     };
     let show_contact = can_manage_profile || is_viewer_admin || is_viewer_chief;
 
-    // Get all ateliers
-    let ateliers = match database::get_all_ateliers(&state.db).await {
+    // Get all pôles
+    let poles = match database::get_all_poles(&state.db).await {
         Ok(a) => a,
         Err(e) => {
-            error!("Error fetching ateliers: {}", e);
+            error!("Error fetching pôles: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 html! { p { "Error: " (e) } },
@@ -232,13 +232,13 @@ pub async fn view_person(
 
         // Chiefs: pending validations
         if let Ok(pending) = database::count_pending_validations_for_chief(&state.db, id).await {
-            for (atelier_name, count) in pending {
+            for (pole_name, count) in pending {
                 items.push(templates::TodoItem {
                     icon: "fa-user-check",
                     color: "warning",
                     html: format!(
                         r#"<a href="{}/validation"><strong>{}</strong> demande(s) en attente de validation pour <strong>{}</strong></a>"#,
-                        prefix, count, templates::escape_html_public(&atelier_name),
+                        prefix, count, templates::escape_html_public(&pole_name),
                     ),
                 });
             }
@@ -274,12 +274,12 @@ pub async fn view_person(
             }
         }
 
-        // No roles: remind to choose ateliers
+        // No roles: remind to choose pôles
         if roles.is_empty() {
             items.push(templates::TodoItem {
                 icon: "fa-tools",
                 color: "info",
-                html: "Choisissez un ou plusieurs ateliers ci-dessous pour participer à la vie de la station !".to_string(),
+                html: "Choisissez un ou plusieurs pôles ci-dessous pour participer à la vie de la station !".to_string(),
             });
         }
 
@@ -323,15 +323,13 @@ pub async fn view_person(
             }
         };
 
-    let chief_atelier_ids: Vec<uuid::Uuid> = database::get_chief_ateliers(&state.db, viewer.id)
+    let chief_pole_ids: Vec<uuid::Uuid> = database::get_chief_poles(&state.db, viewer.id)
         .await
         .unwrap_or_default()
         .iter()
-        .map(|atelier| atelier.id)
+        .map(|pole| pole.id)
         .collect();
-    let manages_person = roles
-        .iter()
-        .any(|role| chief_atelier_ids.contains(&role.atelier));
+    let manages_person = roles.iter().any(|role| chief_pole_ids.contains(&role.pole));
 
     // Fetch qualification types for everyone allowed to manage this person.
     let all_qualifications = if can_manage_profile || is_viewer_admin || manages_person {
@@ -342,7 +340,7 @@ pub async fn view_person(
         Vec::new()
     };
 
-    // Fetch person calendar (upcoming needs + presence across all ateliers)
+    // Fetch person calendar (upcoming needs + presence across all pôles)
     // Visible to self, admins, and chiefs
     let person_calendar = if can_manage_profile || is_viewer_admin || is_viewer_chief {
         match database::get_person_calendar(&state.db, id).await {
@@ -367,7 +365,7 @@ pub async fn view_person(
 
     templates::person_detail(
         &staff,
-        &ateliers,
+        &poles,
         &roles,
         current_season,
         &prefix,
@@ -375,7 +373,7 @@ pub async fn view_person(
         can_manage_profile,
         is_viewer_admin,
         is_viewer_god,
-        &chief_atelier_ids,
+        &chief_pole_ids,
         show_contact,
         &todos,
         &payment_history,
@@ -390,7 +388,7 @@ pub async fn view_person(
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ToggleRoleRequest {
-    atelier_id: uuid::Uuid,
+    pole_id: uuid::Uuid,
     #[serde(default)]
     add: Option<bool>,
     #[serde(default)]
@@ -411,23 +409,23 @@ pub async fn toggle_role(
     };
     let is_admin = me.is_admin;
 
-    // Check if caller is chief of the target atelier
-    let is_chief_of_atelier = if is_admin {
+    // Check if caller is chief of the target pôle
+    let is_chief_of_pole = if is_admin {
         false
     } else {
-        database::get_chief_ateliers(&state.db, me.id)
+        database::get_chief_poles(&state.db, me.id)
             .await
             .unwrap_or_default()
             .iter()
-            .any(|a| a.id == payload.atelier_id)
+            .any(|a| a.id == payload.pole_id)
     };
 
-    // Authorization: validated changes require admin or chief of that atelier
-    if payload.validated.is_some() && !is_admin && !is_chief_of_atelier {
+    // Authorization: validated changes require admin or chief of that pôle
+    if payload.validated.is_some() && !is_admin && !is_chief_of_pole {
         return (
             StatusCode::FORBIDDEN,
             Json(
-                serde_json::json!({"error": "Seuls les admins ou chefs d'atelier peuvent modifier le statut de validation"}),
+                serde_json::json!({"error": "Seuls les admins ou chefs de pôle peuvent modifier le statut de validation"}),
             ),
         );
     }
@@ -441,11 +439,11 @@ pub async fn toggle_role(
         );
     }
     // Household management follows self-service rules, not chief/admin powers.
-    if payload.add.is_some() && !can_manage_profile && !is_admin && !is_chief_of_atelier {
+    if payload.add.is_some() && !can_manage_profile && !is_admin && !is_chief_of_pole {
         return (
             StatusCode::FORBIDDEN,
             Json(
-                serde_json::json!({"error": "Vous ne pouvez modifier que vos ateliers ou ceux des membres partageant votre email"}),
+                serde_json::json!({"error": "Vous ne pouvez modifier que vos pôles ou ceux des membres partageant votre email"}),
             ),
         );
     }
@@ -453,17 +451,17 @@ pub async fn toggle_role(
     // Handle add/remove role
     if let Some(add) = payload.add {
         if add {
-            // Get atelier to check needs_validation
-            let atelier = match database::get_atelier_by_id(&state.db, payload.atelier_id).await {
+            // Get pôle to check needs_validation
+            let pole = match database::get_pole_by_id(&state.db, payload.pole_id).await {
                 Ok(Some(a)) => a,
                 Ok(None) => {
                     return (
                         StatusCode::NOT_FOUND,
-                        Json(serde_json::json!({"error": "Atelier not found"})),
+                        Json(serde_json::json!({"error": "Pôle introuvable"})),
                     );
                 }
                 Err(e) => {
-                    error!("Error fetching atelier: {}", e);
+                    error!("Error fetching pôle: {}", e);
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(serde_json::json!({"error": e.to_string()})),
@@ -471,24 +469,24 @@ pub async fn toggle_role(
                 }
             };
 
-            // validated = true if atelier doesn't need validation, false if it does
-            let validated = !atelier.needs_validation;
+            // validated = true if pôle doesn't need validation, false if it does
+            let validated = !pole.needs_validation;
 
-            match database::add_role(&state.db, staff_id, payload.atelier_id, validated).await {
+            match database::add_role(&state.db, staff_id, payload.pole_id, validated).await {
                 Ok(()) => {
                     let _ = database::insert_audit(
                         &state.db,
                         Some(me.id),
                         &format!("{} {}", me.first_name, me.last_name),
                         "Ajout rôle",
-                        &format!("staff={} atelier={}", staff_id, atelier.name),
+                        &format!("staff={} pôle={}", staff_id, pole.name),
                     )
                     .await;
                     // Notify chiefs if this role needs validation
                     if !validated {
                         let state_clone = state.clone();
-                        let atelier_name = atelier.name.clone();
-                        let atelier_id = atelier.id;
+                        let pole_name = pole.name.clone();
+                        let pole_id = pole.id;
                         tokio::spawn(async move {
                             let staff_name = database::get_staff_by_id(&state_clone.db, staff_id)
                                 .await
@@ -498,24 +496,23 @@ pub async fn toggle_role(
                                     || "Quelqu'un".to_string(),
                                     |s| format!("{} {}", s.first_name, s.last_name),
                                 );
-                            let chiefs =
-                                database::get_chiefs_for_atelier(&state_clone.db, atelier_id)
-                                    .await
-                                    .unwrap_or_default();
+                            let chiefs = database::get_chiefs_for_pole(&state_clone.db, pole_id)
+                                .await
+                                .unwrap_or_default();
                             let chief_emails: Vec<String> =
                                 chiefs.iter().map(|c| c.email.clone()).collect();
                             if !chief_emails.is_empty() {
                                 let subject = format!(
                                     "{} — {} demande à rejoindre {}",
-                                    state_clone.config.entity_name, staff_name, atelier_name
+                                    state_clone.config.entity_name, staff_name, pole_name
                                 );
                                 let html_body = format!(
                                     r"<p>Bonjour,</p>
-<p><strong>{staff}</strong> souhaite rejoindre l'atelier <strong>{atelier}</strong> et attend votre validation.</p>
+<p><strong>{staff}</strong> souhaite rejoindre le pôle <strong>{pole}</strong> et attend votre validation.</p>
 <p>Connectez-vous à PowPow pour valider ou refuser cette demande.</p>
 {sig}",
                                     staff = templates::escape_html_public(&staff_name),
-                                    atelier = templates::escape_html_public(&atelier_name),
+                                    pole = templates::escape_html_public(&pole_name),
                                     sig = crate::email_signature(&state_clone.config.entity_name),
                                 );
                                 send_notification_email(
@@ -542,9 +539,9 @@ pub async fn toggle_role(
                 }
             }
         }
-        match database::remove_role(&state.db, staff_id, payload.atelier_id).await {
+        match database::remove_role(&state.db, staff_id, payload.pole_id).await {
             Ok(()) => {
-                let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
+                let pole_name = database::get_pole_by_id(&state.db, payload.pole_id)
                     .await
                     .ok()
                     .flatten()
@@ -555,7 +552,7 @@ pub async fn toggle_role(
                     Some(me.id),
                     &format!("{} {}", me.first_name, me.last_name),
                     "Suppression rôle",
-                    &format!("staff={} atelier={}", staff_id, atelier_name),
+                    &format!("staff={} pôle={}", staff_id, pole_name),
                 )
                 .await;
                 return (StatusCode::OK, Json(serde_json::json!({"success": true})));
@@ -575,7 +572,7 @@ pub async fn toggle_role(
         match database::update_role(
             &state.db,
             staff_id,
-            payload.atelier_id,
+            payload.pole_id,
             payload.validated,
             payload.chief,
         )
@@ -583,7 +580,7 @@ pub async fn toggle_role(
         {
             Ok(()) => {
                 // Audit
-                let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
+                let pole_name = database::get_pole_by_id(&state.db, payload.pole_id)
                     .await
                     .ok()
                     .flatten()
@@ -601,18 +598,13 @@ pub async fn toggle_role(
                     Some(me.id),
                     &format!("{} {}", me.first_name, me.last_name),
                     "Modification rôle",
-                    &format!(
-                        "staff={} atelier={} {}",
-                        staff_id,
-                        atelier_name,
-                        parts.join(" ")
-                    ),
+                    &format!("staff={} pôle={} {}", staff_id, pole_name, parts.join(" ")),
                 )
                 .await;
 
                 // Send notification emails for validated / chief changes
                 let state_clone = state.clone();
-                let atelier_id = payload.atelier_id;
+                let pole_id = payload.pole_id;
                 let validated = payload.validated;
                 let chief = payload.chief;
                 tokio::spawn(async move {
@@ -620,24 +612,24 @@ pub async fn toggle_role(
                         Ok(Some(s)) if !s.email.is_empty() => s,
                         _ => return,
                     };
-                    let atelier_name = database::get_atelier_by_id(&state_clone.db, atelier_id)
+                    let pole_name = database::get_pole_by_id(&state_clone.db, pole_id)
                         .await
                         .ok()
                         .flatten()
-                        .map_or_else(|| "atelier inconnu".to_string(), |a| a.name);
+                        .map_or_else(|| "pôle inconnu".to_string(), |a| a.name);
 
                     // Notification: role validated
                     if validated == Some(true) {
                         let subject = format!(
                             "{} — Votre rôle dans {} a été validé",
-                            state_clone.config.entity_name, atelier_name
+                            state_clone.config.entity_name, pole_name
                         );
                         let html_body = format!(
                             r"<p>Bonjour {},</p>
-<p>Votre demande pour rejoindre l'atelier <strong>{}</strong> a été validée. Vous pouvez dès maintenant vous inscrire aux créneaux sur le calendrier.</p>
+<p>Votre demande pour rejoindre le pôle <strong>{}</strong> a été validée. Vous pouvez dès maintenant vous inscrire aux créneaux sur le calendrier.</p>
 {}",
                             staff.first_name,
-                            atelier_name,
+                            pole_name,
                             crate::email_signature(&state_clone.config.entity_name),
                         );
                         send_notification_email(
@@ -655,15 +647,15 @@ pub async fn toggle_role(
                             (
                                 format!(
                                     "{} — Vous êtes maintenant chef de {}",
-                                    state_clone.config.entity_name, atelier_name
+                                    state_clone.config.entity_name, pole_name
                                 ),
                                 format!(
                                     r"<p>Bonjour {},</p>
-<p>Vous avez été nommé(e) <strong>chef</strong> de l'atelier <strong>{}</strong>.</p>
-<p>Vous recevrez désormais les notifications liées à cet atelier.</p>
+<p>Vous avez été nommé(e) <strong>chef</strong> du pôle <strong>{}</strong>.</p>
+<p>Vous recevrez désormais les notifications liées à ce pôle.</p>
 {}",
                                     staff.first_name,
-                                    atelier_name,
+                                    pole_name,
                                     crate::email_signature(&state_clone.config.entity_name),
                                 ),
                             )
@@ -671,14 +663,14 @@ pub async fn toggle_role(
                             (
                                 format!(
                                     "{} — Vous n'êtes plus chef de {}",
-                                    state_clone.config.entity_name, atelier_name
+                                    state_clone.config.entity_name, pole_name
                                 ),
                                 format!(
                                     r"<p>Bonjour {},</p>
-<p>Vous n'êtes plus chef de l'atelier <strong>{}</strong>.</p>
+<p>Vous n'êtes plus chef du pôle <strong>{}</strong>.</p>
 {}",
                                     staff.first_name,
-                                    atelier_name,
+                                    pole_name,
                                     crate::email_signature(&state_clone.config.entity_name),
                                 ),
                             )
@@ -1181,7 +1173,7 @@ pub async fn api_delete_own_staff_qualif(
 // --- Training proof image management ---
 
 /// Upload a training proof image for a staff qualification.
-/// Allowed for the owner, admins, or a chief of the owner's atelier.
+/// Allowed for the owner, admins, or a chief of the owner's pôle.
 pub async fn upload_training_proof(
     RequireStaff(me): RequireStaff,
     State(state): State<AppState>,
@@ -1346,7 +1338,7 @@ pub async fn serve_training_proof(
 }
 
 /// Delete the training proof image for a staff qualification.
-/// Allowed for the owner, admins, or a chief of the owner's atelier.
+/// Allowed for the owner, admins, or a chief of the owner's pôle.
 pub async fn delete_training_proof(
     RequireStaff(me): RequireStaff,
     State(state): State<AppState>,

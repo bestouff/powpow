@@ -32,14 +32,14 @@ pub async fn calendar_view(
     let prefix = get_prefix(&headers);
     let me = Some(me_staff);
 
-    // Lookup atelier by slug
-    let atelier = match database::get_atelier_by_slug(&state.db, &slug).await {
+    // Lookup pôle by slug
+    let pole = match database::get_pole_by_slug(&state.db, &slug).await {
         Ok(Some(a)) => a,
         Ok(None) => {
-            return (StatusCode::NOT_FOUND, html! { p { "Atelier not found" } }).into_response();
+            return (StatusCode::NOT_FOUND, html! { p { "Pôle introuvable" } }).into_response();
         }
         Err(e) => {
-            error!("Error fetching atelier: {}", e);
+            error!("Error fetching pôle: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 html! { p { "Error: " (e) } },
@@ -50,7 +50,7 @@ pub async fn calendar_view(
 
     // Fetch needs, optionally filtering to today+future only
     let today = chrono::Utc::now().date_naive();
-    let needs = match database::get_needs_for_atelier(&state.db, atelier.id).await {
+    let needs = match database::get_needs_for_pole(&state.db, pole.id).await {
         Ok(n) => {
             if query.show_past {
                 n
@@ -70,7 +70,7 @@ pub async fn calendar_view(
         }
     };
 
-    let staff_list = match database::get_staff_for_atelier(&state.db, atelier.id).await {
+    let staff_list = match database::get_staff_for_pole(&state.db, pole.id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Error fetching staff: {}", e);
@@ -82,10 +82,10 @@ pub async fn calendar_view(
         }
     };
 
-    let all_ateliers = match database::get_all_ateliers(&state.db).await {
+    let all_poles = match database::get_all_poles(&state.db).await {
         Ok(a) => a,
         Err(e) => {
-            error!("Error fetching ateliers: {}", e);
+            error!("Error fetching pôles: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 html! { p { "Error: " (e) } },
@@ -123,20 +123,20 @@ pub async fn calendar_view(
     let can_manage_presence = if let Some(viewer) = &me {
         viewer.is_admin
             || viewer.is_god
-            || database::get_chief_ateliers(&state.db, viewer.id)
+            || database::get_chief_poles(&state.db, viewer.id)
                 .await
                 .unwrap_or_default()
                 .iter()
-                .any(|managed| managed.id == atelier.id)
+                .any(|managed| managed.id == pole.id)
     } else {
         false
     };
     templates::calendar(
-        &atelier,
+        &pole,
         &needs,
         &staff_list,
         &presence_map,
-        &all_ateliers,
+        &all_poles,
         &prefix,
         me.as_ref(),
         can_manage_presence,
@@ -160,7 +160,7 @@ pub async fn toggle_presence_api(
     State(state): State<AppState>,
     Json(payload): Json<TogglePresenceRequest>,
 ) -> impl IntoResponse {
-    // Household members have self-service rights; chiefs remain atelier-scoped.
+    // Household members have self-service rights; chiefs remain pôle-scoped.
     if payload.staff_id != me.id {
         let need = match database::get_need_by_id(&state.db, payload.needs_id).await {
             Ok(Some(need)) => need,
@@ -178,13 +178,9 @@ pub async fn toggle_presence_api(
                 );
             }
         };
-        if let Err(response) = crate::auth::authorize_staff_management(
-            &state,
-            &me,
-            payload.staff_id,
-            Some(need.atelier),
-        )
-        .await
+        if let Err(response) =
+            crate::auth::authorize_staff_management(&state, &me, payload.staff_id, Some(need.pole))
+                .await
         {
             return response;
         }
@@ -390,7 +386,7 @@ pub async fn api_update_opening_day_status(
     }
 }
 
-// --- Calendar landing (public: redirect to first atelier, or editor for chiefs) ---
+// --- Calendar landing (public: redirect to first pôle, or editor for chiefs) ---
 
 pub async fn calendar_landing(
     jar: SignedCookieJar,
@@ -411,21 +407,21 @@ pub async fn calendar_landing(
         None
     };
 
-    // Fetch ateliers
-    let ateliers = match database::get_all_ateliers(&state.db).await {
+    // Fetch pôles
+    let poles = match database::get_all_poles(&state.db).await {
         Ok(a) => a,
         Err(e) => {
-            error!("Error fetching ateliers: {}", e);
+            error!("Error fetching pôles: {}", e);
             return html! { p { "Error: " (e) } }.into_response();
         }
     };
 
-    // Determine which ateliers this user can edit (empty = read-only)
+    // Determine which pôles this user can edit (empty = read-only)
     let editable_ids: Vec<uuid::Uuid> = if let Some(ref s) = staff {
         if s.is_admin || s.is_god {
-            ateliers.iter().map(|a| a.id).collect()
+            poles.iter().map(|a| a.id).collect()
         } else {
-            database::get_chief_ateliers(&state.db, s.id)
+            database::get_chief_poles(&state.db, s.id)
                 .await
                 .unwrap_or_default()
                 .iter()
@@ -456,7 +452,7 @@ pub async fn calendar_landing(
     let is_admin = staff.as_ref().is_some_and(|s| s.is_admin || s.is_god);
 
     templates::calendar_editor(
-        &ateliers,
+        &poles,
         &editable_ids,
         &future_needs,
         &prefix,
@@ -473,7 +469,7 @@ pub async fn calendar_landing(
 
 #[derive(Debug, Deserialize)]
 pub struct NeedsQuery {
-    atelier_id: uuid::Uuid,
+    pole_id: uuid::Uuid,
 }
 
 pub async fn api_get_needs(
@@ -481,7 +477,7 @@ pub async fn api_get_needs(
     State(state): State<AppState>,
     Query(params): Query<NeedsQuery>,
 ) -> impl IntoResponse {
-    match database::get_needs_for_atelier(&state.db, params.atelier_id).await {
+    match database::get_needs_for_pole(&state.db, params.pole_id).await {
         Ok(needs) => {
             let json_needs: Vec<serde_json::Value> = needs
                 .iter()
@@ -489,7 +485,7 @@ pub async fn api_get_needs(
                     serde_json::json!({
                         "id": n.id,
                         "day": n.day.format("%Y-%m-%d").to_string(),
-                        "atelier": n.atelier,
+                        "pole": n.pole,
                         "quantity": n.quantity,
                         "minimal_quantity": n.minimal_quantity,
                         "nightly": n.nightly,
@@ -561,7 +557,7 @@ pub async fn api_get_needs_by_day(
                     serde_json::json!({
                         "id": n.id,
                         "day": n.day.format("%Y-%m-%d").to_string(),
-                        "atelier": n.atelier,
+                        "pole": n.pole,
                         "quantity": n.quantity,
                         "minimal_quantity": n.minimal_quantity,
                         "nightly": n.nightly,
@@ -583,7 +579,7 @@ pub async fn api_get_needs_by_day(
 
 #[derive(Debug, Deserialize)]
 pub struct UpsertNeedRequest {
-    atelier_id: uuid::Uuid,
+    pole_id: uuid::Uuid,
     day: String,
     quantity: i16,
     minimal_quantity: i16,
@@ -596,15 +592,15 @@ pub async fn api_upsert_need(
     State(state): State<AppState>,
     Json(payload): Json<UpsertNeedRequest>,
 ) -> impl IntoResponse {
-    // Authorization: admins can edit all, chiefs only their ateliers
+    // Authorization: admins can edit all, chiefs only their pôles
     if !chief.is_admin && !chief.is_god {
-        let my_ateliers = database::get_chief_ateliers(&state.db, chief.id)
+        let my_poles = database::get_chief_poles(&state.db, chief.id)
             .await
             .unwrap_or_default();
-        if !my_ateliers.iter().any(|a| a.id == payload.atelier_id) {
+        if !my_poles.iter().any(|a| a.id == payload.pole_id) {
             return (
                 StatusCode::FORBIDDEN,
-                Json(serde_json::json!({"error": "Vous n'êtes pas chef de cet atelier"})),
+                Json(serde_json::json!({"error": "Vous n'êtes pas chef de ce pôle"})),
             );
         }
     }
@@ -630,7 +626,7 @@ pub async fn api_upsert_need(
 
     match database::upsert_need(
         &state.db,
-        payload.atelier_id,
+        payload.pole_id,
         day,
         payload.quantity,
         payload.minimal_quantity,
@@ -639,7 +635,7 @@ pub async fn api_upsert_need(
     .await
     {
         Ok(need) => {
-            let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
+            let pole_name = database::get_pole_by_id(&state.db, payload.pole_id)
                 .await
                 .ok()
                 .flatten()
@@ -652,7 +648,7 @@ pub async fn api_upsert_need(
                 "Création/modification besoin",
                 &format!(
                     "{} {} comfortable={} minimal={} nightly={}",
-                    atelier_name,
+                    pole_name,
                     payload.day,
                     payload.quantity,
                     payload.minimal_quantity,
@@ -665,7 +661,7 @@ pub async fn api_upsert_need(
                 Json(serde_json::json!({
                     "id": need.id,
                     "day": need.day.format("%Y-%m-%d").to_string(),
-                    "atelier": need.atelier,
+                    "pole": need.pole,
                     "quantity": need.quantity,
                     "minimal_quantity": need.minimal_quantity,
                     "nightly": need.nightly,
@@ -684,7 +680,7 @@ pub async fn api_upsert_need(
 
 #[derive(Debug, Deserialize)]
 pub struct DeleteNeedRequest {
-    atelier_id: uuid::Uuid,
+    pole_id: uuid::Uuid,
     day: String,
 }
 
@@ -693,15 +689,15 @@ pub async fn api_delete_need(
     State(state): State<AppState>,
     Json(payload): Json<DeleteNeedRequest>,
 ) -> impl IntoResponse {
-    // Authorization: admins can edit all, chiefs only their ateliers
+    // Authorization: admins can edit all, chiefs only their pôles
     if !chief.is_admin && !chief.is_god {
-        let my_ateliers = database::get_chief_ateliers(&state.db, chief.id)
+        let my_poles = database::get_chief_poles(&state.db, chief.id)
             .await
             .unwrap_or_default();
-        if !my_ateliers.iter().any(|a| a.id == payload.atelier_id) {
+        if !my_poles.iter().any(|a| a.id == payload.pole_id) {
             return (
                 StatusCode::FORBIDDEN,
-                Json(serde_json::json!({"error": "Vous n'êtes pas chef de cet atelier"})),
+                Json(serde_json::json!({"error": "Vous n'êtes pas chef de ce pôle"})),
             );
         }
     }
@@ -716,10 +712,10 @@ pub async fn api_delete_need(
         }
     };
 
-    match database::delete_need(&state.db, payload.atelier_id, day).await {
+    match database::delete_need(&state.db, payload.pole_id, day).await {
         Ok(deleted) => {
             if deleted {
-                let atelier_name = database::get_atelier_by_id(&state.db, payload.atelier_id)
+                let pole_name = database::get_pole_by_id(&state.db, payload.pole_id)
                     .await
                     .ok()
                     .flatten()
@@ -730,7 +726,7 @@ pub async fn api_delete_need(
                     Some(chief.id),
                     &format!("{} {}", chief.first_name, chief.last_name),
                     "Suppression besoin",
-                    &format!("{} {}", atelier_name, payload.day),
+                    &format!("{} {}", pole_name, payload.day),
                 )
                 .await;
             }

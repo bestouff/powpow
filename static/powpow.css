@@ -838,7 +838,7 @@
 .staff-table .table {
   margin-bottom: 0;
 }
-.atelier-col {
+.pole-col {
   border-left: 1px solid var(--bulma-border) !important;
   border-right: 1px solid var(--bulma-border) !important;
 }
@@ -889,7 +889,7 @@
   align-items: center;
   min-height: 1.5rem;
 }
-.staff-table th.atelier-col {
+.staff-table th.pole-col {
   background: var(--bulma-scheme-main) !important;
   padding: 0.125rem;
   width: 3rem;
@@ -1125,7 +1125,7 @@
     background: var(--bulma-scheme-main);
     border-right: 2px solid var(--bulma-border);
   }
-  .app-page :is(.cal-name-col, .pcal-atelier-col) {
+  .app-page :is(.cal-name-col, .pcal-pole-col) {
     min-width: 7rem;
     max-width: 9rem;
     white-space: normal;
@@ -1197,7 +1197,7 @@
     justify-content: center;
     gap: 0.25rem;
   }
-  .app-page :is(.atelier-nav a, .calendar-links a) {
+  .app-page :is(.pole-nav a, .calendar-links a) {
     min-height: 2.75rem;
     display: inline-flex;
     align-items: center;
@@ -1212,7 +1212,7 @@
     max-width: 100%;
     flex-basis: 100%;
   }
-  .app-page .atelier-card {
+  .app-page .pole-card {
     min-width: 0;
     max-width: 100%;
   }
@@ -1375,30 +1375,30 @@
   max-width: 100%;
 }
 
-/* === Profile atelier choices === */
-.ateliers-list {
+/* === Profile pôle choices === */
+.poles-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
   gap: 1rem 1.5rem;
 }
-.atelier-option {
+.pole-option {
   min-width: 0;
 }
-.atelier-choice {
+.pole-choice {
   display: grid;
   grid-template-columns: 1.25rem 1.5rem minmax(0, 1fr);
   align-items: center;
   gap: 0.25rem 0.5rem;
   min-height: 2rem;
 }
-.atelier-name {
+.pole-name {
   overflow-wrap: anywhere;
 }
-.atelier-validation {
+.pole-validation {
   grid-column: 3;
   justify-self: start;
 }
-.atelier-checkbox {
+.pole-checkbox {
   width: 1.25rem;
   height: 1.25rem;
 }
@@ -1436,14 +1436,14 @@
 .pcal-table thead th {
   background: var(--bulma-scheme-main-bis) !important;
 }
-.pcal-atelier-col {
+.pcal-pole-col {
   position: sticky;
   left: 0;
   z-index: 2;
   min-width: 140px;
   background: var(--bulma-scheme-main);
 }
-.pcal-table thead th.pcal-atelier-col {
+.pcal-table thead th.pcal-pole-col {
   z-index: 3;
   background: var(--bulma-scheme-main-bis) !important;
 }
@@ -1582,13 +1582,13 @@
   background: var(--bulma-warning) !important;
   font-weight: 600;
 }
-.atelier-nav {
+.pole-nav {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
   margin-bottom: 1rem;
 }
-.atelier-nav a {
+.pole-nav a {
   padding: 0.4rem 0.75rem;
   border-radius: 4px;
   background: var(--bulma-background);
@@ -1596,12 +1596,12 @@
   text-decoration: none;
   font-size: 0.9rem;
 }
-.atelier-nav a.is-active {
+.pole-nav a.is-active {
   background: var(--bulma-link);
   color: var(--bulma-link-invert);
   font-weight: 600;
 }
-.atelier-nav a:hover:not(.is-active) {
+.pole-nav a:hover:not(.is-active) {
   background: var(--bulma-scheme-main-ter);
 }
 .cal-opening-row td {
@@ -1657,12 +1657,12 @@
   z-index: 100;
   min-width: 300px;
 }
-.atelier-cards {
+.pole-cards {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
 }
-.atelier-card {
+.pole-card {
   border: 1px solid var(--bulma-border);
   border-radius: 6px;
   padding: 1rem;
@@ -1674,19 +1674,19 @@
     border-color 0.2s,
     box-shadow 0.2s;
 }
-.atelier-card.has-need {
+.pole-card.has-need {
   border-color: var(--bulma-link);
   box-shadow: 0 0 0 1px var(--bulma-link);
 }
-.atelier-card .card-title {
+.pole-card .card-title {
   font-weight: 600;
   font-size: 0.95rem;
   margin-bottom: 0.6rem;
 }
-.atelier-card .field {
+.pole-card .field {
   margin-bottom: 0.5rem;
 }
-.atelier-card .card-actions {
+.pole-card .card-actions {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.6rem;

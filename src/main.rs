@@ -612,10 +612,10 @@ fn build_router(app_state: AppState) -> Router {
             get(routes::admin::qualifications_page_handler),
         )
         .route("/settings", get(routes::settings::settings_page_handler))
-        .route("/api/ateliers", post(routes::settings::api_create_atelier))
+        .route("/api/poles", post(routes::settings::api_create_pole))
         .route(
-            "/api/ateliers/{id}",
-            post(routes::settings::api_update_atelier).delete(routes::settings::api_delete_atelier),
+            "/api/poles/{id}",
+            post(routes::settings::api_update_pole).delete(routes::settings::api_delete_pole),
         )
         .route(
             "/api/qualifications",

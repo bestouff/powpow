@@ -1,5 +1,5 @@
 use super::{NavKind, TodoItem, capitalize_words, format_phone_international, page};
-use crate::models::{Atelier, Qualification, Role, Session, Staff, StaffQualif};
+use crate::models::{Pole, Qualification, Role, Session, Staff, StaffQualif};
 use chrono::Datelike;
 use maud::{Markup, PreEscaped, html};
 
@@ -74,7 +74,7 @@ fn staff_filter_label(icon: &str, label: &str, filter: &str) -> Markup {
 #[allow(clippy::too_many_arguments)]
 pub fn staff_list(
     staff_with_seasons: Vec<(Staff, Option<i16>)>,
-    ateliers: &[Atelier],
+    poles: &[Pole],
     roles: &[Role],
     qualifications: &[Qualification],
     staff_qualifs: &[StaffQualif],
@@ -126,7 +126,7 @@ pub fn staff_list(
                 }
 
                 p #staff-table-help .help.mb-3 {
-                    "Cliquez sur Dernière saison, un atelier, Admin ou Formations pour filtrer. Les filtres se combinent ; cliquez à nouveau pour les retirer. Survolez une icône d’en-tête pour afficher son intitulé."
+                    "Cliquez sur Dernière saison, un pôle, Admin ou Formations pour filtrer. Les filtres se combinent ; cliquez à nouveau pour les retirer. Survolez une icône d’en-tête pour afficher son intitulé."
                 }
 
                 div .is-flex.is-align-items-center.mb-3 {
@@ -141,15 +141,15 @@ pub fn staff_list(
                             thead {
                                 tr {
                                     th .sticky-col scope="col" { "Nom" }
-                                    th .has-text-centered.atelier-col.staff-season scope="col" {
+                                    th .has-text-centered.pole-col.staff-season scope="col" {
                                         (staff_filter_label("calendar-days", "Dernière saison", "membership"))
                                     }
-                                    @for atelier in ateliers {
-                                        th .has-text-centered.atelier-col scope="col" {
-                                            (staff_filter_label(&atelier.icon, &atelier.name, &format!("atelier:{}", atelier.id)))
+                                    @for pole in poles {
+                                        th .has-text-centered.pole-col scope="col" {
+                                            (staff_filter_label(&pole.icon, &pole.name, &format!("pole:{}", pole.id)))
                                         }
                                     }
-                                    th .has-text-centered.atelier-col scope="col" {
+                                    th .has-text-centered.pole-col scope="col" {
                                         (staff_filter_label("user-shield", "Admin", "admin"))
                                     }
                                     @if !qualifications.is_empty() {
@@ -171,10 +171,10 @@ pub fn staff_list(
                                         Some(s) => ("is-danger", s.to_string()),
                                         None => ("is-light", "\u{2014}".to_string()),
                                     };
-                                    @let staff_ateliers = roles.iter().filter(|role| role.staff == staff.id)
-                                        .map(|role| role.atelier.to_string()).collect::<Vec<_>>().join(",");
+                                    @let staff_poles = roles.iter().filter(|role| role.staff == staff.id)
+                                        .map(|role| role.pole.to_string()).collect::<Vec<_>>().join(",");
                                     tr data-current-member=(current_members.contains(&staff.id))
-                                        data-ateliers=(staff_ateliers)
+                                        data-poles=(staff_poles)
                                         data-is-admin=(staff.is_admin || staff.is_god)
                                         data-has-qualifications=(staff_qualifs.iter().any(|qualification| qualification.staff == staff.id)) {
                                         td .sticky-col {
@@ -185,27 +185,27 @@ pub fn staff_list(
                                         td .has-text-centered.staff-season {
                                             span class={"tag " (season_tag_class)} { (season_display) }
                                         }
-                                        @for atelier in ateliers {
-                                            @let role = roles.iter().find(|r| r.staff == staff.id && r.atelier == atelier.id);
+                                        @for pole in poles {
+                                            @let role = roles.iter().find(|r| r.staff == staff.id && r.pole == pole.id);
                                             @if let Some(r) = role {
                                                 @if r.chief {
-                                                    td .has-text-centered.atelier-col.has-background-warning title="Chef" {
+                                                    td .has-text-centered.pole-col.has-background-warning title="Chef" {
                                                         span .icon.has-text-black aria-hidden="true" { i .fa-solid.fa-crown {} }
                                                         span .is-sr-only { "Chef" }
                                                     }
                                                 } @else if r.validated {
-                                                    td .has-text-centered.atelier-col.has-background-info title="Validé" {
+                                                    td .has-text-centered.pole-col.has-background-info title="Validé" {
                                                         span .icon.has-text-white aria-hidden="true" { i .fa-solid.fa-check {} }
                                                         span .is-sr-only { "Validé" }
                                                     }
                                                 } @else {
-                                                    td .has-text-centered.atelier-col.has-background-grey title="En attente" {
+                                                    td .has-text-centered.pole-col.has-background-grey title="En attente" {
                                                         span .icon.has-text-white aria-hidden="true" { i .fa-solid.fa-clock {} }
                                                         span .is-sr-only { "En attente" }
                                                     }
                                                 }
                                             } @else {
-                                                td .has-text-centered.atelier-col {}
+                                                td .has-text-centered.pole-col {}
                                             }
                                         }
                                         // Admin column
@@ -271,7 +271,7 @@ pub fn staff_list(
                         span .tag.is-light { "Aucun paiement" }
                     }
                     p .staff-legend-items.mt-2 {
-                        strong { "Ateliers :" }
+                        strong { "Pôles :" }
                         span .tag.is-warning {
                             span .icon aria-hidden="true" { i .fa-solid.fa-crown {} }
                             " Chef"
@@ -286,10 +286,10 @@ pub fn staff_list(
                         }
                     }
                     div .staff-legend-items.mt-2 {
-                        @for atelier in ateliers {
+                        @for pole in poles {
                             span .icon-text {
-                                span .icon aria-hidden="true" { i class={"fa-solid fa-" (atelier.icon)} {} }
-                                span { (atelier.name) }
+                                span .icon aria-hidden="true" { i class={"fa-solid fa-" (pole.icon)} {} }
+                                span { (pole.name) }
                             }
                         }
                     }
@@ -320,7 +320,7 @@ pub fn staff_list(
 #[allow(clippy::fn_params_excessive_bools)]
 pub fn person_detail(
     staff: &Staff,
-    ateliers: &[Atelier],
+    poles: &[Pole],
     roles: &[Role],
     current_season: i16,
     prefix: &str,
@@ -328,7 +328,7 @@ pub fn person_detail(
     can_manage_profile: bool,
     is_admin: bool,
     is_god: bool,
-    chief_atelier_ids: &[uuid::Uuid],
+    chief_pole_ids: &[uuid::Uuid],
     show_contact: bool,
     todos: &[TodoItem],
     payment_history: &[crate::models::PaymentHistoryEntry],
@@ -339,11 +339,9 @@ pub fn person_detail(
     current_session_id: uuid::Uuid,
 ) -> Markup {
     let p = prefix;
-    let can_edit_ateliers = can_manage_profile || is_admin;
+    let can_edit_poles = can_manage_profile || is_admin;
     let can_edit_contact = is_self || is_god || (!staff.is_god && (can_manage_profile || is_admin));
-    let manages_person = roles
-        .iter()
-        .any(|role| chief_atelier_ids.contains(&role.atelier));
+    let manages_person = roles.iter().any(|role| chief_pole_ids.contains(&role.pole));
     let can_manage_qualifs = can_manage_profile || is_admin || manages_person;
 
     let comment_display = if staff.comment.is_empty() {
@@ -353,29 +351,29 @@ pub fn person_detail(
     };
 
     let info_text = if is_admin || (can_manage_profile && !is_self) {
-        "Cochez les ateliers auxquels ce membre participe pour la saison en cours."
+        "Cochez les pôles auxquels ce membre participe pour la saison en cours."
     } else if is_self {
-        "Cochez les ateliers auxquels vous participez pour la saison en cours."
+        "Cochez les pôles auxquels vous participez pour la saison en cours."
     } else {
-        "Ateliers auxquels ce membre participe pour la saison en cours."
+        "Pôles auxquels ce membre participe pour la saison en cours."
     };
 
     let mut whatsapp_groups: Vec<(&str, Vec<&str>)> = Vec::new();
     if can_manage_profile || is_admin {
-        for atelier in ateliers
+        for pole in poles
             .iter()
-            .filter(|a| roles.iter().any(|r| r.atelier == a.id))
+            .filter(|a| roles.iter().any(|r| r.pole == a.id))
         {
-            let Some(url) = atelier.whatsapp_group_url.as_deref() else {
+            let Some(url) = pole.whatsapp_group_url.as_deref() else {
                 continue;
             };
             if let Some((_, names)) = whatsapp_groups
                 .iter_mut()
                 .find(|(group_url, _)| *group_url == url)
             {
-                names.push(&atelier.name);
+                names.push(&pole.name);
             } else {
-                whatsapp_groups.push((url, vec![&atelier.name]));
+                whatsapp_groups.push((url, vec![&pole.name]));
             }
         }
     }
@@ -388,13 +386,10 @@ pub fn person_detail(
     days.sort();
     days.dedup();
 
-    let mut atelier_order: Vec<(uuid::Uuid, String, String, String)> = Vec::new();
+    let mut pole_order: Vec<(uuid::Uuid, String, String, String)> = Vec::new();
     for (need, name, slug, icon, _, _) in person_calendar {
-        if !atelier_order
-            .iter()
-            .any(|(id, _, _, _)| *id == need.atelier)
-        {
-            atelier_order.push((need.atelier, name.clone(), slug.clone(), icon.clone()));
+        if !pole_order.iter().any(|(id, _, _, _)| *id == need.pole) {
+            pole_order.push((need.pole, name.clone(), slug.clone(), icon.clone()));
         }
     }
 
@@ -612,40 +607,40 @@ pub fn person_detail(
                         }
                     }
 
-                    // Right column: ateliers + plannings + calendar
+                    // Right column: pôles + plannings + calendar
                     div .column {
-                        div .box.tutorial-section #person-ateliers tabindex="-1" aria-labelledby="person-ateliers-title" {
-                            h2 .title.is-4 #person-ateliers-title {
+                        div .box.tutorial-section #person-poles tabindex="-1" aria-labelledby="person-poles-title" {
+                            h2 .title.is-4 #person-poles-title {
                                 span .icon { i .fa-solid.fa-screwdriver-wrench {} }
-                                "\u{00a0}Ateliers (Saison " (current_season) ")"
+                                "\u{00a0}Pôles (Saison " (current_season) ")"
                             }
                             div .notification.is-info.is-light.mb-4 {
                                 span .icon { i .fa-solid.fa-circle-info {} }
                                 " " (info_text)
                             }
-                            div .ateliers-list {
-                                @for atelier in ateliers {
-                                    @let role = roles.iter().find(|r| r.atelier == atelier.id);
-                                    div .atelier-option {
-                                        label .checkbox.atelier-choice {
-                                            input .atelier-checkbox type="checkbox"
-                                                data-atelier-id=(atelier.id)
+                            div .poles-list {
+                                @for pole in poles {
+                                    @let role = roles.iter().find(|r| r.pole == pole.id);
+                                    div .pole-option {
+                                        label .checkbox.pole-choice {
+                                            input .pole-checkbox type="checkbox"
+                                                data-pole-id=(pole.id)
                                                 checked[role.is_some()]
-                                                disabled[!can_edit_ateliers];
-                                            span .icon aria-hidden="true" { i class={"fa-solid fa-" (atelier.icon)} {} }
-                                            span .atelier-name.is-size-5 { (atelier.name) }
-                                            @if atelier.needs_validation {
-                                                span .tag.is-warning.is-light.atelier-validation { "Validation requise" }
+                                                disabled[!can_edit_poles];
+                                            span .icon aria-hidden="true" { i class={"fa-solid fa-" (pole.icon)} {} }
+                                            span .pole-name.is-size-5 { (pole.name) }
+                                            @if pole.needs_validation {
+                                                span .tag.is-warning.is-light.pole-validation { "Validation requise" }
                                             }
                                         }
                                         // Role options
                                         @if let Some(r) = role {
-                                            @if is_admin || chief_atelier_ids.contains(&atelier.id) {
+                                            @if is_admin || chief_pole_ids.contains(&pole.id) {
                                                 div .ml-5.mt-1 {
-                                                    @if atelier.needs_validation {
+                                                    @if pole.needs_validation {
                                                         label .checkbox.mr-4 {
                                                             input .role-validated-checkbox type="checkbox"
-                                                                data-atelier-id=(atelier.id)
+                                                                data-pole-id=(pole.id)
                                                                 checked[r.validated || r.chief]
                                                                 disabled[r.chief];
                                                             span .icon.has-text-info { i .fa-solid.fa-check {} }
@@ -655,7 +650,7 @@ pub fn person_detail(
                                                     @if is_admin {
                                                         label .checkbox {
                                                             input .role-chief-checkbox type="checkbox"
-                                                                data-atelier-id=(atelier.id)
+                                                                data-pole-id=(pole.id)
                                                                 checked[r.chief];
                                                             span .icon.has-text-warning { i .fa-solid.fa-crown {} }
                                                             span { "Chef" }
@@ -672,7 +667,7 @@ pub fn person_detail(
                                                     i .fa-solid.fa-check.mr-1 {}
                                                     " Validé"
                                                 }
-                                            } @else if atelier.needs_validation {
+                                            } @else if pole.needs_validation {
                                                 span .tag.is-warning.is-light.ml-5.mt-1 {
                                                     i .fa-solid.fa-clock.mr-1 {}
                                                     " En attente de validation"
@@ -714,14 +709,14 @@ pub fn person_detail(
                                 }
                                 @if person_calendar.is_empty() {
                                     p .has-text-grey {
-                                        "Aucun créneau disponible pour le moment. Choisissez vos ateliers ; leurs demi-journées apparaîtront ici une fois les plannings publiés."
+                                        "Aucun créneau disponible pour le moment. Choisissez vos pôles ; leurs demi-journées apparaîtront ici une fois les plannings publiés."
                                     }
                                 } @else {
                                   div .pcal-scroll tabindex="0" role="region" aria-label="Plannings personnels" {
                                     table .pcal-table.table.is-bordered.is-narrow.is-hoverable {
                                         thead {
                                             tr {
-                                                th .pcal-atelier-col { "Atelier" }
+                                                th .pcal-pole-col { "Pôle" }
                                                 @for day in &days {
                                                     @let day_abbrev = day.format("%a").to_string();
                                                     @let day_name = match day_abbrev.as_str() {
@@ -744,16 +739,16 @@ pub fn person_detail(
                                             }
                                         }
                                         tbody {
-                                            @for (atelier_id, atelier_name, atelier_slug, atelier_icon) in &atelier_order {
+                                            @for (pole_id, pole_name, pole_slug, pole_icon) in &pole_order {
                                                 tr {
-                                                    td .pcal-atelier-col {
-                                                        a href={(p) "/calendar/" (atelier_slug)} {
-                                                            span .icon { i class={"fa-solid fa-" (atelier_icon)} {} }
-                                                            "\u{00a0}" (atelier_name)
+                                                    td .pcal-pole-col {
+                                                        a href={(p) "/calendar/" (pole_slug)} {
+                                                            span .icon { i class={"fa-solid fa-" (pole_icon)} {} }
+                                                            "\u{00a0}" (pole_name)
                                                         }
                                                     }
                                                     @for day in &days {
-                                                        @let entry = person_calendar.iter().find(|(n, _, _, _, _, _)| n.atelier == *atelier_id && n.day == *day);
+                                                        @let entry = person_calendar.iter().find(|(n, _, _, _, _, _)| n.pole == *pole_id && n.day == *day);
                                                         @if let Some((need, _, _, _, first_half, second_half)) = entry {
                                                             @let (first_label, second_label) = if need.nightly { ("soir", "nuit") } else { ("matin", "a-m") };
                                                             @let is_active = *first_half || *second_half;
@@ -761,7 +756,7 @@ pub fn person_detail(
                                                             @let first_title = if need.nightly { "Soirée" } else { "Matin" };
                                                             @let second_title = if need.nightly { "Nuit" } else { "Après-midi" };
                                                             td .pcal-cell.has-text-centered.pcal-active[is_active].pcal-sunday[is_sunday] {
-                                                                @if can_manage_profile || is_admin || chief_atelier_ids.contains(atelier_id) {
+                                                                @if can_manage_profile || is_admin || chief_pole_ids.contains(pole_id) {
                                                                     label .pcal-check title=(first_title) {
                                                                         input .pcal-presence-cb type="checkbox"
                                                                             data-need=(need.id)
@@ -1243,7 +1238,7 @@ pub fn person_detail(
             }}
             if (data.role_count > 0) {{
                 warnings.push('<span class="icon has-text-info"><i class="fa-solid fa-users"></i></span> ' +
-                    data.role_count + ' inscription(s) à des ateliers resteront enregistrées.');
+                    data.role_count + ' inscription(s) à des pôles resteront enregistrées.');
             }}
             if (data.other_payment_count === 0) {{
                 warnings.push('<span class="icon has-text-danger"><i class="fa-solid fa-user-slash"></i></span> ' +

@@ -1,6 +1,6 @@
 use super::{NavKind, page};
 use crate::models::{
-    Atelier, Equipment, EquipmentStatus, EquipmentType, Qualification, Staff, StaffQualif,
+    Equipment, EquipmentStatus, EquipmentType, Pole, Qualification, Staff, StaffQualif,
 };
 use maud::{Markup, html};
 
@@ -502,7 +502,7 @@ fn equipment_toggle(prefix: &str, eq: &Equipment) -> Markup {
     }
 }
 
-pub fn validation_page(pending: &[(Staff, Atelier)], prefix: &str) -> Markup {
+pub fn validation_page(pending: &[(Staff, Pole)], prefix: &str) -> Markup {
     let content = html! {
         section .section {
             div .container.is-fluid {
@@ -522,28 +522,28 @@ pub fn validation_page(pending: &[(Staff, Atelier)], prefix: &str) -> Markup {
                         thead {
                             tr {
                                 th { "Bénévole" }
-                                th { "Atelier" }
+                                th { "Pôle" }
                                 th { "Actions" }
                             }
                         }
                         tbody {
-                            @for (staff, atelier) in pending {
-                                tr id=(format!("row-{}-{}", staff.id, atelier.id)) {
+                            @for (staff, pole) in pending {
+                                tr id=(format!("row-{}-{}", staff.id, pole.id)) {
                                     td {
                                         a href=(format!("{prefix}/person/{}", staff.id)) {
                                             (staff.first_name) " " (staff.last_name)
                                         }
                                     }
-                                    td { (atelier.name) }
+                                    td { (pole.name) }
                                     td {
                                         div .buttons.are-small {
                                             button .button.is-success
-                                                onclick=(format!("doValidate('{}', '{}', true)", staff.id, atelier.id)) {
+                                                onclick=(format!("doValidate('{}', '{}', true)", staff.id, pole.id)) {
                                                 span .icon { i .fa-solid.fa-check {} }
                                                 span { "Valider" }
                                             }
                                             button .button.is-danger.is-outlined
-                                                onclick=(format!("doValidate('{}', '{}', false)", staff.id, atelier.id)) {
+                                                onclick=(format!("doValidate('{}', '{}', false)", staff.id, pole.id)) {
                                                 span .icon { i .fa-solid.fa-xmark {} }
                                                 span { "Refuser" }
                                             }

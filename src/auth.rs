@@ -267,7 +267,7 @@ pub async fn authorize_staff_management(
     state: &AppState,
     viewer: &Staff,
     staff_id: uuid::Uuid,
-    atelier_id: Option<uuid::Uuid>,
+    pole_id: Option<uuid::Uuid>,
 ) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
     if viewer.is_admin || viewer.is_god {
         return Ok(());
@@ -275,12 +275,12 @@ pub async fn authorize_staff_management(
     if can_manage_profile(state, viewer, staff_id).await? {
         return Ok(());
     }
-    match database::chief_manages_staff(&state.db, viewer.id, staff_id, atelier_id).await {
+    match database::chief_manages_staff(&state.db, viewer.id, staff_id, pole_id).await {
         Ok(true) => Ok(()),
         Ok(false) => Err((
             StatusCode::FORBIDDEN,
             Json(
-                serde_json::json!({"error": "Vous ne pouvez modifier que votre foyer ou le staff de vos ateliers."}),
+                serde_json::json!({"error": "Vous ne pouvez modifier que votre foyer ou le staff de vos pôles."}),
             ),
         )),
         Err(e) => {
@@ -325,7 +325,7 @@ impl FromRequestParts<AppState> for RequireChief {
             return Ok(RequireChief(staff));
         }
 
-        // Check if chief of any atelier
+        // Check if chief of any pôle
         match database::is_chief(&state.db, staff.id).await {
             Ok(true) => Ok(RequireChief(staff)),
             Ok(false) => Err(AuthError {

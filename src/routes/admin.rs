@@ -318,15 +318,15 @@ pub async fn validation_page_handler(
             .await
             .unwrap_or_default()
     } else {
-        // Chiefs see only their ateliers
-        let chief_ateliers = database::get_chief_ateliers(&state.db, me.id)
+        // Chiefs see only their pôles
+        let chief_poles = database::get_chief_poles(&state.db, me.id)
             .await
             .unwrap_or_default();
-        if chief_ateliers.is_empty() {
+        if chief_poles.is_empty() {
             Vec::new()
         } else {
-            let atelier_ids: Vec<uuid::Uuid> = chief_ateliers.iter().map(|a| a.id).collect();
-            database::get_pending_validations(&state.db, Some(&atelier_ids))
+            let pole_ids: Vec<uuid::Uuid> = chief_poles.iter().map(|a| a.id).collect();
+            database::get_pending_validations(&state.db, Some(&pole_ids))
                 .await
                 .unwrap_or_default()
         }

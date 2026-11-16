@@ -4,14 +4,14 @@ use chrono::{DateTime, Local, NaiveDate};
 use genpdf::{Alignment, Element as _, elements, fonts, style};
 use image::{ImageFormat, Rgba, RgbaImage};
 
-use crate::models::{AtelierDayPlanning, OpeningDayStatus};
+use crate::models::{OpeningDayStatus, PoleDayPlanning};
 
 const NAVY: style::Color = style::Color::Rgb(45, 57, 92);
 const ORANGE: style::Color = style::Color::Rgb(193, 92, 4);
 
 pub fn render(
     day: NaiveDate,
-    planning: &[AtelierDayPlanning],
+    planning: &[PoleDayPlanning],
     status: Option<OpeningDayStatus>,
     entity: &str,
     logo: Option<&[u8]>,
@@ -105,9 +105,9 @@ pub fn render(
         );
         document.push(elements::Break::new(0.7));
     }
-    for atelier in planning {
+    for pole in planning {
         document.push(
-            elements::Paragraph::new(&atelier.atelier_name).styled(
+            elements::Paragraph::new(&pole.pole_name).styled(
                 style::Style::new()
                     .bold()
                     .with_font_size(14)
@@ -119,8 +119,8 @@ pub fn render(
         shifts.set_cell_decorator(elements::FrameCellDecorator::new(true, true, false));
         shifts
             .row()
-            .element(shift(atelier, true).padded(3))
-            .element(shift(atelier, false).padded(3))
+            .element(shift(pole, true).padded(3))
+            .element(shift(pole, false).padded(3))
             .push()?;
         document.push(shifts);
         document.push(elements::Break::new(1));
@@ -130,8 +130,8 @@ pub fn render(
     Ok(bytes)
 }
 
-fn shift(atelier: &AtelierDayPlanning, first_half: bool) -> elements::LinearLayout {
-    let label = match (atelier.nightly, first_half) {
+fn shift(pole: &PoleDayPlanning, first_half: bool) -> elements::LinearLayout {
+    let label = match (pole.nightly, first_half) {
         (false, true) => "Matin",
         (false, false) => "Après-midi",
         (true, true) => "Soirée",
@@ -143,7 +143,7 @@ fn shift(atelier: &AtelierDayPlanning, first_half: bool) -> elements::LinearLayo
     );
     layout.push(elements::Break::new(0.4));
     let mut count = 0;
-    for member in atelier.staff.iter().filter(|member| {
+    for member in pole.staff.iter().filter(|member| {
         if first_half {
             member.first_half
         } else {
@@ -191,11 +191,11 @@ mod tests {
         let day = NaiveDate::from_ymd_opt(2026, 12, 31).unwrap();
         let exported_at =
             DateTime::parse_from_rfc3339("2026-11-12T18:27:43+01:00")?.with_timezone(&Local);
-        let mut atelier = AtelierDayPlanning {
-            atelier_id: uuid::Uuid::new_v4(),
-            atelier_name: "Accueil & café".into(),
-            atelier_slug: "accueil".into(),
-            atelier_icon: "users".into(),
+        let mut pole = PoleDayPlanning {
+            pole_id: uuid::Uuid::new_v4(),
+            pole_name: "Accueil & café".into(),
+            pole_slug: "accueil".into(),
+            pole_icon: "users".into(),
             nightly: false,
             staff: (0..90)
                 .map(|index| PlannedStaff {
@@ -212,7 +212,7 @@ mod tests {
             .write_to(&mut logo, ImageFormat::Png)?;
         let bytes = render(
             day,
-            &[atelier],
+            &[pole],
             Some(OpeningDayStatus::Canceled),
             "Station Étoile",
             Some(logo.get_ref()),
@@ -264,11 +264,11 @@ mod tests {
                 == Some(b"Image")
         }));
 
-        atelier = AtelierDayPlanning {
-            atelier_id: uuid::Uuid::new_v4(),
-            atelier_name: "Nocturne".into(),
-            atelier_slug: "nocturne".into(),
-            atelier_icon: "moon".into(),
+        pole = PoleDayPlanning {
+            pole_id: uuid::Uuid::new_v4(),
+            pole_name: "Nocturne".into(),
+            pole_slug: "nocturne".into(),
+            pole_icon: "moon".into(),
             nightly: true,
             staff: vec![PlannedStaff {
                 id: uuid::Uuid::new_v4(),
@@ -278,7 +278,7 @@ mod tests {
                 second_half: true,
             }],
         };
-        let bytes = render(day, &[atelier], None, "Station", None, exported_at)?;
+        let bytes = render(day, &[pole], None, "Station", None, exported_at)?;
         let text = lopdf::Document::load_mem(&bytes)?
             .extract_text(&[1])?
             .split_whitespace()

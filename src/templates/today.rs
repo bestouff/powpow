@@ -4,13 +4,13 @@ use maud::{Markup, html};
 use super::{NavKind, page};
 use crate::{
     forecast::Forecast,
-    models::{AtelierDayPlanning, Equipment, EquipmentStatus, EquipmentType, OpeningDayStatus},
+    models::{Equipment, EquipmentStatus, EquipmentType, OpeningDayStatus, PoleDayPlanning},
 };
 
 pub fn today_page(
     prefix: &str,
     today: NaiveDate,
-    planning: &[AtelierDayPlanning],
+    planning: &[PoleDayPlanning],
     opening_status: Option<OpeningDayStatus>,
     equipments: &[Equipment],
     forecast: Option<&Forecast>,
@@ -49,21 +49,21 @@ pub fn today_page(
                 }
                 h2 .title.is-4 { "Planning du jour" }
                 @if planning.is_empty() {
-                    div .notification.is-light { "Aucun atelier prévu aujourd'hui." }
+                    div .notification.is-light { "Aucun pôle prévu aujourd'hui." }
                 } @else {
                     div .columns.is-multiline {
-                        @for atelier in planning {
+                        @for pole in planning {
                             div .column.is-half-desktop {
                                 article .box {
                                     h3 .title.is-5 {
-                                        a href={(prefix) "/calendar/" (atelier.atelier_slug)} {
-                                            span .icon.mr-1 { i class={"fa-solid fa-" (atelier.atelier_icon)} {} }
-                                            (atelier.atelier_name)
+                                        a href={(prefix) "/calendar/" (pole.pole_slug)} {
+                                            span .icon.mr-1 { i class={"fa-solid fa-" (pole.pole_icon)} {} }
+                                            (pole.pole_name)
                                         }
                                     }
                                     div .columns {
-                                        (shift(atelier, true, prefix))
-                                        (shift(atelier, false, prefix))
+                                        (shift(pole, true, prefix))
+                                        (shift(pole, false, prefix))
                                     }
                                 }
                             }
@@ -215,14 +215,14 @@ fn equipment_status(equipments: &[Equipment], kind: EquipmentType) -> Markup {
     }
 }
 
-fn shift(atelier: &AtelierDayPlanning, first_half: bool, prefix: &str) -> Markup {
-    let label = match (atelier.nightly, first_half) {
+fn shift(pole: &PoleDayPlanning, first_half: bool, prefix: &str) -> Markup {
+    let label = match (pole.nightly, first_half) {
         (false, true) => "Matin",
         (false, false) => "Après-midi",
         (true, true) => "Soirée",
         (true, false) => "Nuit",
     };
-    let staff: Vec<_> = atelier
+    let staff: Vec<_> = pole
         .staff
         .iter()
         .filter(|staff| {

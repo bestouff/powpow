@@ -223,16 +223,16 @@ fn format_needs(upcoming: &[(NaiveDate, String, i16, i64)]) -> String {
     }
 
     let mut lines = vec!["Besoins en bénévoles cette semaine :".to_string()];
-    for (day, atelier, needed, filled) in upcoming {
+    for (day, pole, needed, filled) in upcoming {
         let deficit = i64::from(*needed) - filled;
         let day_str = format_date_fr(*day);
         if deficit > 0 {
             lines.push(format!(
-                "  - {day_str}, {atelier} : {filled}/{needed} (manque {deficit})"
+                "  - {day_str}, {pole} : {filled}/{needed} (manque {deficit})"
             ));
         } else {
             lines.push(format!(
-                "  - {day_str}, {atelier} : {filled}/{needed} (complet !)"
+                "  - {day_str}, {pole} : {filled}/{needed} (complet !)"
             ));
         }
     }

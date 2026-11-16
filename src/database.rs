@@ -1,6 +1,6 @@
 use crate::models::{
-    self, Atelier, Cash, ContentBlock, ContentImage, Equipment, Membership, Need,
-    PaymentHistoryEntry, Photo, PhotoMeta, Qualification, Role, Session, Staff, StaffQualif, User,
+    self, Cash, ContentBlock, ContentImage, Equipment, Membership, Need, PaymentHistoryEntry,
+    Photo, PhotoMeta, Pole, Qualification, Role, Session, Staff, StaffQualif, User,
 };
 use anyhow::Result;
 use futures_util::StreamExt;
@@ -380,7 +380,7 @@ pub async fn get_staff_by_id(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Opti
     Ok(staff)
 }
 
-/// Check if a staff member is chief of any atelier
+/// Check if a staff member is chief of any pôle
 pub async fn is_chief(pool: &PgPool, staff_id: uuid::Uuid) -> Result<bool> {
     let row = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM roles WHERE staff = $1 AND chief = true)",
@@ -411,8 +411,8 @@ pub async fn get_admin_emails_for_weekly(pool: &PgPool) -> Result<Vec<String>> {
     Ok(emails)
 }
 
-/// Get chiefs (staff + email) for a given atelier
-pub async fn get_chiefs_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Result<Vec<Staff>> {
+/// Get chiefs (staff + email) for a given pôle
+pub async fn get_chiefs_for_pole(pool: &PgPool, pole_id: uuid::Uuid) -> Result<Vec<Staff>> {
     let chiefs = sqlx::query_as::<_, Staff>(
         r"
         SELECT s.* FROM staff s
@@ -420,15 +420,15 @@ pub async fn get_chiefs_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Re
         WHERE r.atelier = r.atelier AND r.chief = true AND r.atelier = $1 AND s.email != ''
         ",
     )
-    .bind(atelier_id)
+    .bind(pole_id)
     .fetch_all(pool)
     .await?;
     Ok(chiefs)
 }
 
-/// Get ateliers where a staff member is chief
-pub async fn get_chief_ateliers(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<Atelier>> {
-    let ateliers = sqlx::query_as::<_, Atelier>(
+/// Get pôles where a staff member is chief
+pub async fn get_chief_poles(pool: &PgPool, staff_id: uuid::Uuid) -> Result<Vec<Pole>> {
+    let poles = sqlx::query_as::<_, Pole>(
         r"
         SELECT a.* FROM ateliers a
         JOIN roles r ON r.atelier = a.id
@@ -439,7 +439,7 @@ pub async fn get_chief_ateliers(pool: &PgPool, staff_id: uuid::Uuid) -> Result<V
     .bind(staff_id)
     .fetch_all(pool)
     .await?;
-    Ok(ateliers)
+    Ok(poles)
 }
 
 /// Get all memberships with their associated user info, with optional search filter
@@ -603,21 +603,21 @@ pub async fn get_all_staff_with_season(pool: &PgPool) -> Result<Vec<(Staff, Opti
     Ok(result)
 }
 
-/// Get all ateliers
-pub async fn get_all_ateliers(pool: &PgPool) -> Result<Vec<Atelier>> {
-    let ateliers = sqlx::query_as::<_, Atelier>(r"SELECT * FROM ateliers ORDER BY name")
+/// Get all pôles
+pub async fn get_all_poles(pool: &PgPool) -> Result<Vec<Pole>> {
+    let poles = sqlx::query_as::<_, Pole>(r"SELECT * FROM ateliers ORDER BY name")
         .fetch_all(pool)
         .await?;
 
-    Ok(ateliers)
+    Ok(poles)
 }
 
-/// Check whether a chief and a staff member share an atelier, optionally a specific one.
+/// Check whether a chief and a staff member share a pôle, optionally a specific one.
 pub async fn chief_manages_staff(
     pool: &PgPool,
     chief: uuid::Uuid,
     staff: uuid::Uuid,
-    atelier: Option<uuid::Uuid>,
+    pole: Option<uuid::Uuid>,
 ) -> Result<bool> {
     Ok(sqlx::query_scalar(
         r"SELECT EXISTS (
@@ -628,7 +628,7 @@ pub async fn chief_manages_staff(
     )
     .bind(chief)
     .bind(staff)
-    .bind(atelier)
+    .bind(pole)
     .fetch_one(pool)
     .await?)
 }
@@ -666,7 +666,7 @@ pub async fn has_current_membership(pool: &PgPool, staff_id: uuid::Uuid) -> Resu
 pub async fn add_role(
     pool: &PgPool,
     staff_id: uuid::Uuid,
-    atelier_id: uuid::Uuid,
+    pole_id: uuid::Uuid,
     validated: bool,
 ) -> Result<()> {
     sqlx::query(
@@ -677,7 +677,7 @@ pub async fn add_role(
         ",
     )
     .bind(staff_id)
-    .bind(atelier_id)
+    .bind(pole_id)
     .bind(validated)
     .execute(pool)
     .await?;
@@ -686,14 +686,10 @@ pub async fn add_role(
 }
 
 /// Remove a role for a staff member
-pub async fn remove_role(
-    pool: &PgPool,
-    staff_id: uuid::Uuid,
-    atelier_id: uuid::Uuid,
-) -> Result<()> {
+pub async fn remove_role(pool: &PgPool, staff_id: uuid::Uuid, pole_id: uuid::Uuid) -> Result<()> {
     sqlx::query(r"DELETE FROM roles WHERE staff = $1 AND atelier = $2")
         .bind(staff_id)
-        .bind(atelier_id)
+        .bind(pole_id)
         .execute(pool)
         .await?;
 
@@ -722,14 +718,14 @@ pub async fn clear_expired_staff_roles(pool: &PgPool, season: i16) -> Result<u64
 pub async fn update_role(
     pool: &PgPool,
     staff_id: uuid::Uuid,
-    atelier_id: uuid::Uuid,
+    pole_id: uuid::Uuid,
     validated: Option<bool>,
     chief: Option<bool>,
 ) -> Result<()> {
     if let Some(v) = validated {
         sqlx::query(r"UPDATE roles SET validated = $3 WHERE staff = $1 AND atelier = $2")
             .bind(staff_id)
-            .bind(atelier_id)
+            .bind(pole_id)
             .bind(v)
             .execute(pool)
             .await?;
@@ -742,14 +738,14 @@ pub async fn update_role(
                 r"UPDATE roles SET chief = $3, validated = true WHERE staff = $1 AND atelier = $2",
             )
             .bind(staff_id)
-            .bind(atelier_id)
+            .bind(pole_id)
             .bind(c)
             .execute(pool)
             .await?;
         } else {
             sqlx::query(r"UPDATE roles SET chief = $3 WHERE staff = $1 AND atelier = $2")
                 .bind(staff_id)
-                .bind(atelier_id)
+                .bind(pole_id)
                 .bind(c)
                 .execute(pool)
                 .await?;
@@ -759,14 +755,14 @@ pub async fn update_role(
     Ok(())
 }
 
-/// Get an atelier by ID
-pub async fn get_atelier_by_id(pool: &PgPool, atelier_id: uuid::Uuid) -> Result<Option<Atelier>> {
-    let atelier = sqlx::query_as::<_, Atelier>(r"SELECT * FROM ateliers WHERE id = $1")
-        .bind(atelier_id)
+/// Get a pôle by ID
+pub async fn get_pole_by_id(pool: &PgPool, pole_id: uuid::Uuid) -> Result<Option<Pole>> {
+    let pole = sqlx::query_as::<_, Pole>(r"SELECT * FROM ateliers WHERE id = $1")
+        .bind(pole_id)
         .fetch_optional(pool)
         .await?;
 
-    Ok(atelier)
+    Ok(pole)
 }
 
 /// Get all roles
@@ -1178,7 +1174,7 @@ pub async fn get_payment_season(
 pub struct UnimportConsequences {
     /// Number of presence slots the staff has in the season date range.
     pub presences: i64,
-    /// Number of roles (atelier memberships) the staff has.
+    /// Number of roles (pôle memberships) the staff has.
     pub roles: i64,
     /// Number of other payments this staff has (excluding the one being removed).
     pub other_payments: i64,
@@ -1379,20 +1375,20 @@ pub async fn count_unimported_cash(pool: &PgPool) -> Result<i64> {
 
 // Calendar / presence functions
 
-/// Get an atelier by slug
-pub async fn get_atelier_by_slug(pool: &PgPool, slug: &str) -> Result<Option<Atelier>> {
-    let atelier = sqlx::query_as::<_, Atelier>(r"SELECT * FROM ateliers WHERE slug = $1")
+/// Get a pôle by slug
+pub async fn get_pole_by_slug(pool: &PgPool, slug: &str) -> Result<Option<Pole>> {
+    let pole = sqlx::query_as::<_, Pole>(r"SELECT * FROM ateliers WHERE slug = $1")
         .bind(slug)
         .fetch_optional(pool)
         .await?;
 
-    Ok(atelier)
+    Ok(pole)
 }
 
-/// Get all needs for an atelier, ordered by day
-pub async fn get_needs_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Result<Vec<Need>> {
+/// Get all needs for a pôle, ordered by day
+pub async fn get_needs_for_pole(pool: &PgPool, pole_id: uuid::Uuid) -> Result<Vec<Need>> {
     let needs = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE atelier = $1 ORDER BY day")
-        .bind(atelier_id)
+        .bind(pole_id)
         .fetch_all(pool)
         .await?;
 
@@ -1425,9 +1421,9 @@ pub async fn get_presence_for_needs(
     Ok(result)
 }
 
-/// Get staff with a role in this atelier
+/// Get staff with a role in this pôle
 /// Sorted: chiefs first, then alphabetically by last name
-pub async fn get_staff_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Result<Vec<Staff>> {
+pub async fn get_staff_for_pole(pool: &PgPool, pole_id: uuid::Uuid) -> Result<Vec<Staff>> {
     let staff = sqlx::query_as::<_, Staff>(
         r"
         SELECT s.* FROM staff s
@@ -1435,7 +1431,7 @@ pub async fn get_staff_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Res
         ORDER BY r.chief DESC, s.last_name, s.first_name
         ",
     )
-    .bind(atelier_id)
+    .bind(pole_id)
     .fetch_all(pool)
     .await?;
 
@@ -1443,7 +1439,7 @@ pub async fn get_staff_for_atelier(pool: &PgPool, atelier_id: uuid::Uuid) -> Res
 }
 
 /// Get upcoming needs with their deficit (quantity - filled) for the next N days.
-/// Returns (day, `atelier_name`, quantity, minimum half-day coverage) rows.
+/// Returns (day, `pole_name`, quantity, minimum half-day coverage) rows.
 pub async fn get_upcoming_needs_deficit(
     pool: &PgPool,
     from: chrono::NaiveDate,
@@ -1451,7 +1447,7 @@ pub async fn get_upcoming_needs_deficit(
 ) -> Result<Vec<(chrono::NaiveDate, String, i16, i64)>> {
     let rows = sqlx::query(
         r"
-        SELECT n.day, a.name AS atelier_name, n.quantity,
+        SELECT n.day, a.name AS pole_name, n.quantity,
                LEAST(COUNT(DISTINCT p.staff) FILTER (WHERE p.first_half),
                      COUNT(DISTINCT p.staff) FILTER (WHERE p.second_half)) AS filled
         FROM needs n
@@ -1471,7 +1467,7 @@ pub async fn get_upcoming_needs_deficit(
     for row in rows {
         result.push((
             row.try_get("day")?,
-            row.try_get("atelier_name")?,
+            row.try_get("pole_name")?,
             row.try_get("quantity")?,
             row.try_get("filled")?,
         ));
@@ -1493,7 +1489,7 @@ pub async fn get_all_need_days(pool: &PgPool) -> Result<Vec<chrono::NaiveDate>> 
     Ok(result)
 }
 
-/// Get all needs for a given day (across all ateliers)
+/// Get all needs for a given day (across all pôles)
 pub async fn get_needs_for_day(pool: &PgPool, day: chrono::NaiveDate) -> Result<Vec<Need>> {
     let needs = sqlx::query_as::<_, Need>(r"SELECT * FROM needs WHERE day = $1 ORDER BY atelier")
         .bind(day)
@@ -1530,7 +1526,7 @@ pub async fn get_all_future_needs_with_counts(
         let need = Need {
             id: row.try_get("id")?,
             day: row.try_get("day")?,
-            atelier: row.try_get("atelier")?,
+            pole: row.try_get("atelier")?,
             quantity: row.try_get("quantity")?,
             minimal_quantity: row.try_get("minimal_quantity")?,
             nightly: row.try_get("nightly")?,
@@ -1540,10 +1536,10 @@ pub async fn get_all_future_needs_with_counts(
     Ok(result)
 }
 
-/// Upsert a need (INSERT or UPDATE on conflict day+atelier)
+/// Upsert a need (INSERT or UPDATE on conflict day+pôle)
 pub async fn upsert_need(
     pool: &PgPool,
-    atelier_id: uuid::Uuid,
+    pole_id: uuid::Uuid,
     day: chrono::NaiveDate,
     quantity: i16,
     minimal_quantity: i16,
@@ -1561,7 +1557,7 @@ pub async fn upsert_need(
         ",
     )
     .bind(day)
-    .bind(atelier_id)
+    .bind(pole_id)
     .bind(quantity)
     .bind(minimal_quantity)
     .bind(nightly)
@@ -1571,15 +1567,15 @@ pub async fn upsert_need(
     Ok(need)
 }
 
-/// Delete a need by (atelier, day). Returns true if a row was deleted.
+/// Delete a need by (pôle, day). Returns true if a row was deleted.
 /// Associated presence rows are removed via ON DELETE CASCADE.
 pub async fn delete_need(
     pool: &PgPool,
-    atelier_id: uuid::Uuid,
+    pole_id: uuid::Uuid,
     day: chrono::NaiveDate,
 ) -> Result<bool> {
     let result = sqlx::query(r"DELETE FROM needs WHERE atelier = $1 AND day = $2")
-        .bind(atelier_id)
+        .bind(pole_id)
         .bind(day)
         .execute(pool)
         .await?;
@@ -1636,12 +1632,12 @@ pub async fn create_opening_days(
         for need in needs {
             models::validate_staffing_thresholds(need.quantity, need.minimal_quantity)
                 .map_err(anyhow::Error::msg)?;
-            anyhow::ensure!(seen.insert(need.atelier_id), "Rôle indiqué plusieurs fois");
+            anyhow::ensure!(seen.insert(need.pole_id), "Rôle indiqué plusieurs fois");
             anyhow::ensure!(
                 sqlx::query_scalar::<_, bool>(
                     "SELECT EXISTS (SELECT 1 FROM ateliers WHERE id = $1)"
                 )
-                .bind(need.atelier_id)
+                .bind(need.pole_id)
                 .fetch_one(&mut *tx)
                 .await?,
                 "Rôle inconnu"
@@ -1678,7 +1674,7 @@ pub async fn create_opening_days(
                      ON CONFLICT (day, atelier) DO UPDATE SET quantity = EXCLUDED.quantity,
                          minimal_quantity = EXCLUDED.minimal_quantity, nightly = EXCLUDED.nightly",
                 )
-                .bind(day).bind(need.atelier_id).bind(need.quantity).bind(need.minimal_quantity).bind(need.nightly)
+                .bind(day).bind(need.pole_id).bind(need.quantity).bind(need.minimal_quantity).bind(need.nightly)
                 .execute(&mut *tx).await?.rows_affected();
             }
             created
@@ -1702,7 +1698,7 @@ pub async fn create_opening_days(
                 .await?
         {
             anyhow::bail!(
-                "Aucun atelier n'a de besoin par défaut pour un jour d'ouverture. Configurez les ateliers avant de créer ce jour."
+                "Aucun pôle n'a de besoin par défaut pour un jour d'ouverture. Configurez les pôles avant de créer ce jour."
             );
         }
         days_created += 1;
@@ -1726,7 +1722,7 @@ pub async fn update_opening_day_status(
     Ok(result.rows_affected() > 0)
 }
 
-/// Delete all needs (and cascade presence) for a given day across all ateliers.
+/// Delete all needs (and cascade presence) for a given day across all pôles.
 #[allow(dead_code)]
 pub async fn delete_needs_for_day(pool: &PgPool, day: chrono::NaiveDate) -> Result<u64> {
     let result = sqlx::query(r"DELETE FROM needs WHERE day = $1")
@@ -1804,8 +1800,8 @@ pub async fn get_need_by_id(
     Ok(need)
 }
 
-/// Check whether a staff member already has presence on the same day for a different atelier,
-/// on the specified half-day. Returns the conflicting atelier name if found.
+/// Check whether a staff member already has presence on the same day for a different pôle,
+/// on the specified half-day. Returns the conflicting pôle name if found.
 pub async fn check_presence_conflict(
     pool: impl sqlx::PgExecutor<'_>,
     staff_id: uuid::Uuid,
@@ -1841,9 +1837,9 @@ pub async fn check_presence_conflict(
     Ok(row)
 }
 
-/// Get all upcoming needs (today or later) where a staff member has a role in the atelier,
+/// Get all upcoming needs (today or later) where a staff member has a role in the pôle,
 /// along with their presence status. Used for the "Mon Calendrier" widget.
-/// Returns tuples of (`Need`, `atelier_name`, `atelier_slug`, `atelier_icon`, `first_half`, `second_half`).
+/// Returns tuples of (`Need`, `pole_name`, `pole_slug`, `pole_icon`, `first_half`, `second_half`).
 #[allow(clippy::type_complexity)]
 pub async fn get_person_calendar(
     pool: &PgPool,
@@ -1853,7 +1849,7 @@ pub async fn get_person_calendar(
     let rows = sqlx::query(
         r"
         SELECT n.id, n.day, n.atelier, n.quantity, n.minimal_quantity, n.nightly,
-               a.name AS atelier_name, a.slug AS atelier_slug, a.icon AS atelier_icon,
+               a.name AS pole_name, a.slug AS pole_slug, a.icon AS pole_icon,
                COALESCE(p.first_half, false) AS first_half,
                COALESCE(p.second_half, false) AS second_half
         FROM needs n
@@ -1874,21 +1870,21 @@ pub async fn get_person_calendar(
         let need = Need {
             id: row.try_get("id")?,
             day: row.try_get("day")?,
-            atelier: row.try_get("atelier")?,
+            pole: row.try_get("atelier")?,
             quantity: row.try_get("quantity")?,
             minimal_quantity: row.try_get("minimal_quantity")?,
             nightly: row.try_get("nightly")?,
         };
-        let atelier_name: String = row.try_get("atelier_name")?;
-        let atelier_slug: String = row.try_get("atelier_slug")?;
-        let atelier_icon: String = row.try_get("atelier_icon")?;
+        let pole_name: String = row.try_get("pole_name")?;
+        let pole_slug: String = row.try_get("pole_slug")?;
+        let pole_icon: String = row.try_get("pole_icon")?;
         let first_half: bool = row.try_get("first_half")?;
         let second_half: bool = row.try_get("second_half")?;
         result.push((
             need,
-            atelier_name,
-            atelier_slug,
-            atelier_icon,
+            pole_name,
+            pole_slug,
+            pole_icon,
             first_half,
             second_half,
         ));
@@ -2432,8 +2428,8 @@ pub async fn count_audit(pool: &PgPool) -> Result<i64> {
     Ok(count)
 }
 
-/// Count pending (unvalidated) role requests for ateliers where a given staff is chief.
-/// Returns `Vec<(atelier_name, count)>`.
+/// Count pending (unvalidated) role requests for pôles where a given staff is chief.
+/// Returns `Vec<(pole_name, count)>`.
 pub async fn count_pending_validations_for_chief(
     pool: &PgPool,
     staff_id: uuid::Uuid,
@@ -2461,7 +2457,7 @@ pub async fn count_pending_validations_for_chief(
 }
 
 /// Count total pending (unvalidated) role requests.
-/// If `staff_id` is Some, count only for ateliers where that staff is chief.
+/// If `staff_id` is Some, count only for pôles where that staff is chief.
 /// If None, count all pending validations (for admins).
 pub async fn count_pending_validations(pool: &PgPool, staff_id: Option<uuid::Uuid>) -> Result<i64> {
     let row = if let Some(sid) = staff_id {
@@ -2484,14 +2480,14 @@ pub async fn count_pending_validations(pool: &PgPool, staff_id: Option<uuid::Uui
     Ok(row.try_get("cnt")?)
 }
 
-/// Get pending (unvalidated) role requests with staff and atelier details.
-/// If `chief_of_ateliers` is Some, filter to those ateliers only (for chiefs).
+/// Get pending (unvalidated) role requests with staff and pôle details.
+/// If `chief_of_poles` is Some, filter to those pôles only (for chiefs).
 /// If None, return all pending validations (for admins).
 pub async fn get_pending_validations(
     pool: &PgPool,
-    chief_of_ateliers: Option<&[uuid::Uuid]>,
-) -> Result<Vec<(Staff, Atelier)>> {
-    let rows = if let Some(atelier_ids) = chief_of_ateliers {
+    chief_of_poles: Option<&[uuid::Uuid]>,
+) -> Result<Vec<(Staff, Pole)>> {
+    let rows = if let Some(pole_ids) = chief_of_poles {
         sqlx::query(
             r"
             SELECT s.*, a.id AS a_id, a.name AS a_name, a.slug AS a_slug, a.icon AS a_icon, a.needs_validation AS a_needs_validation, a.default_nightly AS a_default_nightly, a.opening_day_typical_needed AS a_opening_day_typical_needed, a.opening_day_minimal_needed AS a_opening_day_minimal_needed, a.whatsapp_group_url AS a_whatsapp_group_url
@@ -2502,7 +2498,7 @@ pub async fn get_pending_validations(
             ORDER BY a.name, s.last_name, s.first_name
             ",
         )
-        .bind(atelier_ids)
+        .bind(pole_ids)
         .fetch_all(pool)
         .await?
     } else {
@@ -2537,7 +2533,7 @@ pub async fn get_pending_validations(
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         };
-        let atelier = Atelier {
+        let pole = Pole {
             id: row.try_get("a_id")?,
             name: row.try_get("a_name")?,
             slug: row.try_get("a_slug")?,
@@ -2548,7 +2544,7 @@ pub async fn get_pending_validations(
             opening_day_minimal_needed: row.try_get("a_opening_day_minimal_needed")?,
             whatsapp_group_url: row.try_get("a_whatsapp_group_url")?,
         };
-        result.push((staff, atelier));
+        result.push((staff, pole));
     }
 
     Ok(result)
@@ -3225,9 +3221,9 @@ pub async fn get_news_image(pool: &PgPool, id: uuid::Uuid) -> Result<Option<(Vec
     Ok(row)
 }
 
-/// Create a new atelier.
+/// Create a new pôle.
 #[allow(clippy::too_many_arguments)]
-pub async fn create_atelier(
+pub async fn create_pole(
     pool: &PgPool,
     name: &str,
     slug: &str,
@@ -3237,8 +3233,8 @@ pub async fn create_atelier(
     opening_day_typical_needed: i16,
     opening_day_minimal_needed: i16,
     whatsapp_group_url: Option<&str>,
-) -> Result<Atelier> {
-    let atelier = sqlx::query_as::<_, Atelier>(
+) -> Result<Pole> {
+    let pole = sqlx::query_as::<_, Pole>(
         r"INSERT INTO ateliers (id, name, slug, icon, needs_validation, default_nightly, opening_day_typical_needed, opening_day_minimal_needed, whatsapp_group_url)
           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
           RETURNING *",
@@ -3254,12 +3250,12 @@ pub async fn create_atelier(
     .fetch_one(pool)
     .await?;
 
-    Ok(atelier)
+    Ok(pole)
 }
 
-/// Update an existing atelier.
+/// Update an existing pôle.
 #[allow(clippy::too_many_arguments)]
-pub async fn update_atelier(
+pub async fn update_pole(
     pool: &PgPool,
     id: uuid::Uuid,
     name: &str,
@@ -3270,8 +3266,8 @@ pub async fn update_atelier(
     opening_day_typical_needed: i16,
     opening_day_minimal_needed: i16,
     whatsapp_group_url: Option<&str>,
-) -> Result<Atelier> {
-    let atelier = sqlx::query_as::<_, Atelier>(
+) -> Result<Pole> {
+    let pole = sqlx::query_as::<_, Pole>(
         r"UPDATE ateliers
           SET name = $2, slug = $3, icon = $4, needs_validation = $5,
               default_nightly = $6, opening_day_typical_needed = $7, opening_day_minimal_needed = $8, whatsapp_group_url = $9
@@ -3290,11 +3286,11 @@ pub async fn update_atelier(
     .fetch_one(pool)
     .await?;
 
-    Ok(atelier)
+    Ok(pole)
 }
 
-/// Delete an atelier by ID.
-pub async fn delete_atelier(pool: &PgPool, id: uuid::Uuid) -> Result<()> {
+/// Delete a pôle by ID.
+pub async fn delete_pole(pool: &PgPool, id: uuid::Uuid) -> Result<()> {
     sqlx::query(r"DELETE FROM ateliers WHERE id = $1")
         .bind(id)
         .execute(pool)
@@ -3337,7 +3333,7 @@ pub async fn staff_delete_blockers(pool: &PgPool, id: uuid::Uuid) -> Result<Vec<
         .fetch_one(pool)
         .await?;
     if has_roles {
-        reasons.push("est inscrit à un ou plusieurs ateliers".into());
+        reasons.push("est inscrit à un ou plusieurs pôles".into());
     }
 
     let has_presence: bool =
@@ -3375,7 +3371,7 @@ mod chief_permissions_tests {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL pointing to a PostgreSQL database"]
-    async fn chief_permissions_are_scoped_to_shared_ateliers() -> anyhow::Result<()> {
+    async fn chief_permissions_are_scoped_to_shared_poles() -> anyhow::Result<()> {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(1)
             .connect(&std::env::var("DATABASE_URL")?)
@@ -3599,15 +3595,15 @@ mod opening_day_tests {
             assert!(super::create_opening_days(&pool, end, end + chrono::Duration::days(4), None).await.is_err());
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 5);
             let custom = [
-                crate::models::OpeningDayNeed { atelier_id: first, quantity: 4, minimal_quantity: 2, nightly: true },
-                crate::models::OpeningDayNeed { atelier_id: second, quantity: 0, minimal_quantity: 0, nightly: false },
+                crate::models::OpeningDayNeed { pole_id: first, quantity: 4, minimal_quantity: 2, nightly: true },
+                crate::models::OpeningDayNeed { pole_id: second, quantity: 0, minimal_quantity: 0, nightly: false },
             ];
             // Custom needs work without defaults and do not modify overlapping days.
             assert_eq!(super::create_opening_days(&pool, end, end + chrono::Duration::days(4), Some(&custom)).await?, (2, 2));
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM needs WHERE day > $1 AND quantity = 4 AND minimal_quantity = 2 AND nightly AND atelier = $2")
                 .bind(end + chrono::Duration::days(2)).bind(first).fetch_one(&pool).await?, 2);
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT sum(quantity)::bigint FROM needs WHERE day = $1").bind(end).fetch_one(&pool).await?, 14);
-            let invalid = [crate::models::OpeningDayNeed { atelier_id: uuid::Uuid::new_v4(), quantity: 1, minimal_quantity: 1, nightly: false }];
+            let invalid = [crate::models::OpeningDayNeed { pole_id: uuid::Uuid::new_v4(), quantity: 1, minimal_quantity: 1, nightly: false }];
             assert!(super::create_opening_days(&pool, end, end + chrono::Duration::days(5), Some(&invalid)).await.is_err());
             assert!(super::create_opening_days(&pool, end, end, Some(&[])).await.is_err());
             assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM opening_days").fetch_one(&pool).await?, 7);

@@ -15,14 +15,12 @@ pub async fn settings_page_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     let prefix = get_prefix(&headers);
-    let ateliers = database::get_all_ateliers(&state.db)
-        .await
-        .unwrap_or_default();
-    templates::settings_page(&prefix, &ateliers)
+    let poles = database::get_all_poles(&state.db).await.unwrap_or_default();
+    templates::settings_page(&prefix, &poles)
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CreateAtelierRequest {
+pub struct CreatePoleRequest {
     name: String,
     slug: String,
     icon: String,
@@ -56,10 +54,10 @@ fn normalize_whatsapp_group_url(value: Option<&str>) -> Result<Option<String>, &
     Ok(Some(format!("https://chat.whatsapp.com/{code}")))
 }
 
-pub async fn api_create_atelier(
+pub async fn api_create_pole(
     RequireAdmin(admin): RequireAdmin,
     State(state): State<AppState>,
-    Json(payload): Json<CreateAtelierRequest>,
+    Json(payload): Json<CreatePoleRequest>,
 ) -> impl IntoResponse {
     let name = payload.name.trim();
     let slug = payload.slug.trim();
@@ -90,7 +88,7 @@ pub async fn api_create_atelier(
             }
         };
 
-    match database::create_atelier(
+    match database::create_pole(
         &state.db,
         name,
         slug,
@@ -103,22 +101,22 @@ pub async fn api_create_atelier(
     )
     .await
     {
-        Ok(atelier) => {
+        Ok(pole) => {
             let _ = database::insert_audit(
                 &state.db,
                 Some(admin.id),
                 &format!("{} {}", admin.first_name, admin.last_name),
-                "Création atelier",
-                &format!("name={} slug={}", atelier.name, atelier.slug),
+                "Création pôle",
+                &format!("name={} slug={}", pole.name, pole.slug),
             )
             .await;
             (
                 StatusCode::OK,
-                Json(serde_json::json!({"success": true, "id": atelier.id})),
+                Json(serde_json::json!({"success": true, "id": pole.id})),
             )
         }
         Err(e) => {
-            error!("Error creating atelier: {}", e);
+            error!("Error creating pôle: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": e.to_string()})),
@@ -127,11 +125,11 @@ pub async fn api_create_atelier(
     }
 }
 
-pub async fn api_update_atelier(
+pub async fn api_update_pole(
     RequireAdmin(admin): RequireAdmin,
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
-    Json(payload): Json<CreateAtelierRequest>,
+    Json(payload): Json<CreatePoleRequest>,
 ) -> impl IntoResponse {
     let name = payload.name.trim();
     let slug = payload.slug.trim();
@@ -162,7 +160,7 @@ pub async fn api_update_atelier(
             }
         };
 
-    match database::update_atelier(
+    match database::update_pole(
         &state.db,
         id,
         name,
@@ -176,33 +174,33 @@ pub async fn api_update_atelier(
     )
     .await
     {
-        Ok(atelier) => {
+        Ok(pole) => {
             let _ = database::insert_audit(
                 &state.db,
                 Some(admin.id),
                 &format!("{} {}", admin.first_name, admin.last_name),
-                "Modification atelier",
+                "Modification pôle",
                 &format!(
                     "id={} name={} slug={} icon={} validation={} nightly={} comfortable={} minimal={} whatsapp={}",
-                    atelier.id,
-                    atelier.name,
-                    atelier.slug,
-                    atelier.icon,
-                    atelier.needs_validation,
-                    atelier.default_nightly,
-                    atelier.opening_day_typical_needed,
-                    atelier.opening_day_minimal_needed,
-                    atelier.whatsapp_group_url.is_some(),
+                    pole.id,
+                    pole.name,
+                    pole.slug,
+                    pole.icon,
+                    pole.needs_validation,
+                    pole.default_nightly,
+                    pole.opening_day_typical_needed,
+                    pole.opening_day_minimal_needed,
+                    pole.whatsapp_group_url.is_some(),
                 ),
             )
             .await;
             (
                 StatusCode::OK,
-                Json(serde_json::json!({"success": true, "id": atelier.id})),
+                Json(serde_json::json!({"success": true, "id": pole.id})),
             )
         }
         Err(e) => {
-            error!("Error updating atelier: {}", e);
+            error!("Error updating pôle: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": e.to_string()})),
@@ -211,32 +209,32 @@ pub async fn api_update_atelier(
     }
 }
 
-pub async fn api_delete_atelier(
+pub async fn api_delete_pole(
     RequireAdmin(admin): RequireAdmin,
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
 ) -> impl IntoResponse {
-    // Look up the atelier name for audit logging before deleting
-    let atelier_name = database::get_atelier_by_id(&state.db, id)
+    // Look up the pôle name for audit logging before deleting
+    let pole_name = database::get_pole_by_id(&state.db, id)
         .await
         .ok()
         .flatten()
         .map_or_else(|| id.to_string(), |a| a.name);
 
-    match database::delete_atelier(&state.db, id).await {
+    match database::delete_pole(&state.db, id).await {
         Ok(()) => {
             let _ = database::insert_audit(
                 &state.db,
                 Some(admin.id),
                 &format!("{} {}", admin.first_name, admin.last_name),
-                "Suppression atelier",
-                &format!("id={id} name={atelier_name}"),
+                "Suppression pôle",
+                &format!("id={id} name={pole_name}"),
             )
             .await;
             (StatusCode::OK, Json(serde_json::json!({"success": true})))
         }
         Err(e) => {
-            error!("Error deleting atelier: {}", e);
+            error!("Error deleting pôle: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": e.to_string()})),

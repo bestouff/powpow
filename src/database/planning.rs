@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use crate::models::{AtelierDayPlanning, PlannedStaff};
+use crate::models::{PlannedStaff, PoleDayPlanning};
 
 pub async fn has_activity(pool: &PgPool, day: NaiveDate) -> anyhow::Result<bool> {
     Ok(
@@ -13,10 +13,10 @@ pub async fn has_activity(pool: &PgPool, day: NaiveDate) -> anyhow::Result<bool>
     )
 }
 
-/// Load every scheduled atelier and its assigned staff for one local calendar day.
-pub async fn for_day(pool: &PgPool, day: NaiveDate) -> anyhow::Result<Vec<AtelierDayPlanning>> {
+/// Load every scheduled pôle and its assigned staff for one local calendar day.
+pub async fn for_day(pool: &PgPool, day: NaiveDate) -> anyhow::Result<Vec<PoleDayPlanning>> {
     let rows = sqlx::query(
-        "SELECT a.id AS atelier_id, a.name, a.slug, a.icon, n.nightly,
+        "SELECT a.id AS pole_id, a.name, a.slug, a.icon, n.nightly,
                 s.id AS staff_id, s.first_name, s.last_name, p.first_half, p.second_half
          FROM needs n
          JOIN ateliers a ON a.id = n.atelier
@@ -29,18 +29,15 @@ pub async fn for_day(pool: &PgPool, day: NaiveDate) -> anyhow::Result<Vec<Atelie
     .fetch_all(pool)
     .await?;
 
-    let mut planning: Vec<AtelierDayPlanning> = Vec::new();
+    let mut planning: Vec<PoleDayPlanning> = Vec::new();
     for row in rows {
-        let atelier_id = row.try_get("atelier_id")?;
-        if planning
-            .last()
-            .is_none_or(|entry| entry.atelier_id != atelier_id)
-        {
-            planning.push(AtelierDayPlanning {
-                atelier_id,
-                atelier_name: row.try_get("name")?,
-                atelier_slug: row.try_get("slug")?,
-                atelier_icon: row.try_get("icon")?,
+        let pole_id = row.try_get("pole_id")?;
+        if planning.last().is_none_or(|entry| entry.pole_id != pole_id) {
+            planning.push(PoleDayPlanning {
+                pole_id,
+                pole_name: row.try_get("name")?,
+                pole_slug: row.try_get("slug")?,
+                pole_icon: row.try_get("icon")?,
                 nightly: row.try_get("nightly")?,
                 staff: Vec::new(),
             });
@@ -48,7 +45,7 @@ pub async fn for_day(pool: &PgPool, day: NaiveDate) -> anyhow::Result<Vec<Atelie
         if let Some(id) = row.try_get::<Option<Uuid>, _>("staff_id")? {
             planning
                 .last_mut()
-                .expect("atelier was added")
+                .expect("pôle was added")
                 .staff
                 .push(PlannedStaff {
                     id,
@@ -68,15 +65,15 @@ pub enum Error {
     InvalidHalf,
     #[error("Bénévole ou besoin introuvable")]
     NotFound,
-    #[error("Une inscription validée à cet atelier est nécessaire.")]
+    #[error("Une inscription validée à ce pôle est nécessaire.")]
     Enrollment,
-    #[error("Vous êtes déjà inscrit(e) sur ce créneau pour l'atelier « {0} »")]
+    #[error("Vous êtes déjà inscrit(e) sur ce créneau pour le pôle « {0} »")]
     Conflict(String),
     #[error(transparent)]
     Database(#[from] anyhow::Error),
 }
 
-/// Serialize a member's read/check/write cycle across all ateliers. A lock on
+/// Serialize a member's read/check/write cycle across all pôles. A lock on
 /// an existing staff row also works when no presence rows exist yet.
 pub async fn toggle(
     pool: &PgPool,
@@ -104,10 +101,10 @@ pub async fn toggle(
         if !super::can_register_for_need(&mut *tx, staff, need_id).await? {
             return Err(Error::Enrollment);
         }
-        if let Some(atelier) =
+        if let Some(pole) =
             super::check_presence_conflict(&mut *tx, staff, need.day, need_id, half).await?
         {
-            return Err(Error::Conflict(atelier));
+            return Err(Error::Conflict(pole));
         }
     }
     let (mut first, mut second) = super::get_presence(&mut *tx, need_id, staff)

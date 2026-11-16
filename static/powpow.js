@@ -346,7 +346,7 @@ function initStaffFilters() {
         if (filter === "membership") return row.dataset.currentMember === "true";
         if (filter === "admin") return row.dataset.isAdmin === "true";
         if (filter === "qualifications") return row.dataset.hasQualifications === "true";
-        return row.dataset.ateliers.split(",").includes(filter.slice("atelier:".length));
+        return row.dataset.poles.split(",").includes(filter.slice("pole:".length));
       });
       row.hidden = !matches;
       if (matches) count += 1;
@@ -881,15 +881,15 @@ function initPersonDetail(prefix) {
   var staffId = personDataEl ? personDataEl.dataset.staffId : null;
   if (!staffId) return;
 
-  // Block 7: Atelier checkbox handler
-  document.querySelectorAll(".atelier-checkbox").forEach(function (checkbox) {
+  // Block 7: Pôle checkbox handler
+  document.querySelectorAll(".pole-checkbox").forEach(function (checkbox) {
     checkbox.addEventListener("change", async function () {
-      var atelierId = this.dataset.atelierId;
+      var poleId = this.dataset.poleId;
       var checked = this.checked;
 
-      // Confirm unsubscription from an atelier
+      // Confirm unsubscription from a pôle
       if (!checked) {
-        if (!confirm("Se désinscrire de cet atelier ?")) {
+        if (!confirm("Se désinscrire de ce pôle ?")) {
           this.checked = true;
           return;
         }
@@ -901,7 +901,7 @@ function initPersonDetail(prefix) {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ atelier_id: atelierId, add: checked }),
+            body: JSON.stringify({ pole_id: poleId, add: checked }),
           },
         );
 
@@ -911,7 +911,7 @@ function initPersonDetail(prefix) {
         }
 
         showNotification(
-          checked ? "Atelier ajouté" : "Atelier retiré",
+          checked ? "Pôle ajouté" : "Pôle retiré",
           "success",
         );
         setTimeout(function () {
@@ -931,10 +931,10 @@ function initPersonDetail(prefix) {
   );
   validatedCheckboxes.forEach(function (checkbox) {
     checkbox.addEventListener("change", async function () {
-      var atelierId = this.dataset.atelierId;
+      var poleId = this.dataset.poleId;
       var checked = this.checked;
 
-      if (!confirm(checked ? "Valider ce bénévole pour cet atelier ?" : "Retirer la validation de ce bénévole pour cet atelier ?")) {
+      if (!confirm(checked ? "Valider ce bénévole pour ce pôle ?" : "Retirer la validation de ce bénévole pour ce pôle ?")) {
         this.checked = !checked;
         return;
       }
@@ -945,7 +945,7 @@ function initPersonDetail(prefix) {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ atelier_id: atelierId, validated: checked }),
+            body: JSON.stringify({ pole_id: poleId, validated: checked }),
           },
         );
 
@@ -970,15 +970,15 @@ function initPersonDetail(prefix) {
     .querySelectorAll(".role-chief-checkbox")
     .forEach(function (checkbox) {
       checkbox.addEventListener("change", async function () {
-        var atelierId = this.dataset.atelierId;
+        var poleId = this.dataset.poleId;
         var checked = this.checked;
         var validatedCheckbox = document.querySelector(
-          '.role-validated-checkbox[data-atelier-id="' + atelierId + '"]',
+          '.role-validated-checkbox[data-pole-id="' + poleId + '"]',
         );
 
         // Confirm removal of the chief status
         if (!checked) {
-          if (!confirm("Retirer le statut de chef de cet atelier ?")) {
+          if (!confirm("Retirer le statut de chef de ce pôle ?")) {
             this.checked = true;
             return;
           }
@@ -990,7 +990,7 @@ function initPersonDetail(prefix) {
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ atelier_id: atelierId, chief: checked }),
+              body: JSON.stringify({ pole_id: poleId, chief: checked }),
             },
           );
 
@@ -1283,7 +1283,7 @@ function initCalendarView(prefix) {
         if (!response.ok) {
           if (response.status === 403) {
             throw new Error(
-              "Vous ne pouvez modifier que votre disponibilité ou celle du staff de vos ateliers",
+              "Vous ne pouvez modifier que votre disponibilité ou celle du staff de vos pôles",
             );
           }
           var body = await response.json().catch(function () {
@@ -1379,12 +1379,12 @@ function initCalendarEditor(prefix) {
   var dayModal = document.getElementById("day-modal");
   if (!dayModal) return;
 
-  var ateliersEl = document.getElementById("ateliers-data");
+  var polesEl = document.getElementById("poles-data");
   var editableEl = document.getElementById("editable-data");
-  if (!ateliersEl || !editableEl) return;
+  if (!polesEl || !editableEl) return;
 
-  var ateliers = JSON.parse(ateliersEl.textContent);
-  var editableAteliers = new Set(JSON.parse(editableEl.textContent));
+  var poles = JSON.parse(polesEl.textContent);
+  var editablePoles = new Set(JSON.parse(editableEl.textContent));
 
   function formatDateTitle(dayStr) {
     var parts = dayStr.split("-");
@@ -1425,18 +1425,18 @@ function initCalendarEditor(prefix) {
 
   function renderCardsInto(container, targetDay, dayNeedsMap) {
     container.innerHTML = "";
-    for (var i = 0; i < ateliers.length; i++) {
-      var atelier = ateliers[i];
-      var existing = dayNeedsMap[atelier.id] || null;
+    for (var i = 0; i < poles.length; i++) {
+      var pole = poles[i];
+      var existing = dayNeedsMap[pole.id] || null;
       var hasNeed = !!existing;
       var qty = existing ? existing.quantity : 0;
       var minimal = existing ? existing.minimal_quantity : 0;
-      var nightly = existing ? existing.nightly : atelier.default_nightly;
+      var nightly = existing ? existing.nightly : pole.default_nightly;
 
-      var canEdit = editableAteliers.has(atelier.id);
+      var canEdit = editablePoles.has(pole.id);
       var card = document.createElement("div");
-      card.className = "atelier-card" + (hasNeed ? " has-need" : "");
-      card.dataset.atelierId = atelier.id;
+      card.className = "pole-card" + (hasNeed ? " has-need" : "");
+      card.dataset.poleId = pole.id;
 
       if (canEdit) {
         card.innerHTML =
@@ -1490,9 +1490,9 @@ function initCalendarEditor(prefix) {
           "</div></div>";
       }
 
-      card.querySelector(".card-title").textContent = atelier.name;
+      card.querySelector(".card-title").textContent = pole.name;
       if (canEdit) {
-        (function (card, atelier, targetDay) {
+        (function (card, pole, targetDay) {
           var cb = card.querySelector(".nightly-cb");
           var lblDay = card.querySelector('[data-role="day"]');
           var lblNight = card.querySelector('[data-role="night"]');
@@ -1523,7 +1523,7 @@ function initCalendarEditor(prefix) {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    atelier_id: atelier.id,
+                    pole_id: pole.id,
                     day: targetDay,
                     quantity: q,
                     minimal_quantity: Number(minimal.value),
@@ -1531,7 +1531,7 @@ function initCalendarEditor(prefix) {
                   }),
                 });
                 if (!resp.ok) throw new Error(await resp.text());
-                showNotification(atelier.name + " enregistré", "success");
+                showNotification(pole.name + " enregistré", "success");
                 location.reload();
               } catch (err) {
                 showNotification("Erreur: " + err.message, "danger");
@@ -1544,7 +1544,7 @@ function initCalendarEditor(prefix) {
               if (
                 !confirm(
                   "Supprimer le besoin pour " +
-                    atelier.name +
+                    pole.name +
                     "\u00a0? Les présences associées seront aussi supprimées.",
                 )
               )
@@ -1554,19 +1554,19 @@ function initCalendarEditor(prefix) {
                   method: "DELETE",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    atelier_id: atelier.id,
+                    pole_id: pole.id,
                     day: targetDay,
                   }),
                 });
                 if (!resp.ok) throw new Error(await resp.text());
-                showNotification(atelier.name + " supprimé", "success");
+                showNotification(pole.name + " supprimé", "success");
                 location.reload();
               } catch (err) {
                 showNotification("Erreur: " + err.message, "danger");
               }
             });
           }
-        })(card, atelier, targetDay);
+        })(card, pole, targetDay);
       }
 
       container.appendChild(card);
@@ -1588,9 +1588,9 @@ function initCalendarEditor(prefix) {
         .then(function (needs) {
           var map = {};
           for (var i = 0; i < needs.length; i++)
-            map[needs[i].atelier] = needs[i];
+            map[needs[i].pole] = needs[i];
           renderCardsInto(
-            document.getElementById("day-atelier-cards"),
+            document.getElementById("day-pole-cards"),
             day,
             map,
           );
@@ -1689,9 +1689,9 @@ function initCalendarEditor(prefix) {
       })
       .then(function (needs) {
         var map = {};
-        for (var i = 0; i < needs.length; i++) map[needs[i].atelier] = needs[i];
+        for (var i = 0; i < needs.length; i++) map[needs[i].pole] = needs[i];
         renderCardsInto(
-          document.getElementById("add-atelier-cards"),
+          document.getElementById("add-pole-cards"),
           addSelectedDay,
           map,
         );
@@ -1841,13 +1841,13 @@ function initCalendarEditor(prefix) {
     openingDaySubmit.addEventListener("click", function () {
       if (!openingSelectedDay) return;
       var needs = [];
-      var cards = document.querySelectorAll("#opening-day-needs .atelier-card");
+      var cards = document.querySelectorAll("#opening-day-needs .pole-card");
       for (var i = 0; i < cards.length; i++) {
         var quantityInput = cards[i].querySelector(".opening-qty");
         var minimalInput = cards[i].querySelector(".opening-minimal");
         if (!validateStaffingInputs(quantityInput, minimalInput)) return;
         needs.push({
-          atelier_id: cards[i].dataset.atelierId,
+          pole_id: cards[i].dataset.poleId,
           quantity: Number(quantityInput.value),
           minimal_quantity: Number(minimalInput.value),
           nightly: cards[i].querySelector(".opening-nightly").checked,
@@ -2155,23 +2155,23 @@ function initValidationPage(prefix) {
   // (already defined below as a global function)
 }
 
-async function doValidate(staffId, atelierId, accept) {
+async function doValidate(staffId, poleId, accept) {
   var prefix = document.body.dataset.prefix || "";
-  var row = document.getElementById("row-" + staffId + "-" + atelierId);
+  var row = document.getElementById("row-" + staffId + "-" + poleId);
   if (!row) return;
   try {
     if (accept) {
       var r = await fetch(prefix + "/api/person/" + staffId + "/role", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ atelier_id: atelierId, validated: true }),
+        body: JSON.stringify({ pole_id: poleId, validated: true }),
       });
       if (!r.ok) throw new Error("Erreur validation");
     } else {
       var r2 = await fetch(prefix + "/api/person/" + staffId + "/role", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ atelier_id: atelierId, add: false }),
+        body: JSON.stringify({ pole_id: poleId, add: false }),
       });
       if (!r2.ok) throw new Error("Erreur suppression");
     }

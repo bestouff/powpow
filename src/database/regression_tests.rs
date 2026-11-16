@@ -6,14 +6,14 @@ async fn staff(pool: &PgPool) -> Result<Staff> {
 }
 
 async fn need(pool: &PgPool, name: &str) -> Result<Need> {
-    let atelier: uuid::Uuid = sqlx::query_scalar(
+    let pole: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO ateliers (name, slug, needs_validation) VALUES ($1, $1, true) RETURNING id",
     )
     .bind(name)
     .fetch_one(pool)
     .await?;
     Ok(sqlx::query_as("INSERT INTO needs (day, atelier, quantity, nightly) VALUES (current_date + 7, $1, 2, false) RETURNING *")
-        .bind(atelier).fetch_one(pool).await?)
+        .bind(pole).fetch_one(pool).await?)
 }
 
 #[sqlx::test]
@@ -22,9 +22,9 @@ async fn planning_requires_validated_enrollment(pool: PgPool) -> Result<()> {
     let person = staff(&pool).await?;
     let need = need(&pool, "Validation").await?;
     assert!(!can_register_for_need(&pool, person.id, need.id).await?);
-    add_role(&pool, person.id, need.atelier, false).await?;
+    add_role(&pool, person.id, need.pole, false).await?;
     assert!(!can_register_for_need(&pool, person.id, need.id).await?);
-    update_role(&pool, person.id, need.atelier, Some(true), None).await?;
+    update_role(&pool, person.id, need.pole, Some(true), None).await?;
     assert!(can_register_for_need(&pool, person.id, need.id).await?);
     Ok(())
 }
@@ -36,7 +36,7 @@ async fn concurrent_planning_checks_are_atomic(pool: PgPool) -> Result<()> {
     let first = need(&pool, "First").await?;
     let second = need(&pool, "Second").await?;
     for need in [&first, &second] {
-        add_role(&pool, person.id, need.atelier, true).await?;
+        add_role(&pool, person.id, need.pole, true).await?;
     }
     let (a, b) = tokio::join!(
         planning::toggle(&pool, person.id, first.id, "first", true),
@@ -63,20 +63,20 @@ async fn concurrent_planning_checks_are_atomic(pool: PgPool) -> Result<()> {
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
-async fn leaving_or_revoking_an_atelier_clears_future_presence(pool: PgPool) -> Result<()> {
+async fn leaving_or_revoking_a_pole_clears_future_presence(pool: PgPool) -> Result<()> {
     let person = staff(&pool).await?;
     let future = need(&pool, "Leaving").await?;
-    add_role(&pool, person.id, future.atelier, true).await?;
+    add_role(&pool, person.id, future.pole, true).await?;
     planning::toggle(&pool, person.id, future.id, "first", true).await?;
     let past: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, atelier, quantity, nightly) VALUES (current_date - 7, $1, 2, false) RETURNING id")
-        .bind(future.atelier).fetch_one(&pool).await?;
+        .bind(future.pole).fetch_one(&pool).await?;
     upsert_presence(&pool, past, person.id, true, false).await?;
-    remove_role(&pool, person.id, future.atelier).await?;
+    remove_role(&pool, person.id, future.pole).await?;
     assert!(get_presence(&pool, future.id, person.id).await?.is_none());
     assert!(get_presence(&pool, past, person.id).await?.is_some());
-    add_role(&pool, person.id, future.atelier, true).await?;
+    add_role(&pool, person.id, future.pole, true).await?;
     planning::toggle(&pool, person.id, future.id, "first", true).await?;
-    update_role(&pool, person.id, future.atelier, Some(false), None).await?;
+    update_role(&pool, person.id, future.pole, Some(false), None).await?;
     assert!(get_presence(&pool, future.id, person.id).await?.is_none());
     Ok(())
 }
@@ -106,7 +106,7 @@ async fn unimport_uses_june_to_may_seasons(pool: PgPool) -> Result<()> {
     let need = need(&pool, "Season").await?;
     for date in ["2025-05-31", "2025-06-01", "2026-05-31", "2026-06-01"] {
         let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, atelier, quantity, nightly) VALUES ($1::text::date, $2, 1, false) RETURNING id")
-            .bind(date).bind(need.atelier).fetch_one(&pool).await?;
+            .bind(date).bind(need.pole).fetch_one(&pool).await?;
         upsert_presence(&pool, id, person.id, true, false).await?;
     }
     assert_eq!(

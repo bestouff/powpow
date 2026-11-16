@@ -1,5 +1,5 @@
 use super::{NavKind, capitalize_words, page};
-use crate::models::{Atelier, Need, Staff};
+use crate::models::{Need, Pole, Staff};
 use chrono::Datelike;
 use maud::{Markup, PreEscaped, html};
 use std::collections::HashMap;
@@ -33,7 +33,7 @@ fn staffing_style(need: &Need, filled: i64) -> StaffingStyle {
 }
 
 #[derive(serde::Serialize)]
-struct AtelierJs<'a> {
+struct PoleJs<'a> {
     id: uuid::Uuid,
     name: &'a str,
     slug: &'a str,
@@ -47,11 +47,11 @@ struct AtelierJs<'a> {
     clippy::cast_possible_wrap
 )]
 pub fn calendar(
-    atelier: &Atelier,
+    pole: &Pole,
     needs: &[Need],
     staff_list: &[Staff],
     presence: &HashMap<(uuid::Uuid, uuid::Uuid), (bool, bool)>,
-    all_ateliers: &[Atelier],
+    all_poles: &[Pole],
     prefix: &str,
     viewer: Option<&Staff>,
     can_manage_presence: bool,
@@ -88,13 +88,13 @@ pub fn calendar(
             div .container.is-fluid {
                 h1 .title.is-4.mb-3 {
                     span .icon { i .fa-solid.fa-calendar-days {} }
-                    " Planning \u{2014} " (atelier.name)
+                    " Planning \u{2014} " (pole.name)
                 }
 
-                div .atelier-nav {
-                    @for a in all_ateliers {
+                div .pole-nav {
+                    @for a in all_poles {
                         @let show_past_param = if show_past { "?show_past=true" } else { "" };
-                        a .navbar-item.is-active[a.id == atelier.id] href={(p) "/calendar/" (a.slug) (show_past_param)} {
+                        a .navbar-item.is-active[a.id == pole.id] href={(p) "/calendar/" (a.slug) (show_past_param)} {
                             span .icon { i class={"fa-solid fa-" (a.icon)} {} }
                             "\u{00a0}" (a.name)
                         }
@@ -103,9 +103,9 @@ pub fn calendar(
 
                 // Toggle: show past days
                 @let toggle_href = if show_past {
-                    format!("{p}/calendar/{}", atelier.slug)
+                    format!("{p}/calendar/{}", pole.slug)
                 } else {
-                    format!("{p}/calendar/{}?show_past=true", atelier.slug)
+                    format!("{p}/calendar/{}?show_past=true", pole.slug)
                 };
                 div .mb-3 {
                     a .nightly-switch href=(toggle_href) style="text-decoration:none" {
@@ -242,19 +242,19 @@ pub fn calendar(
                 @if needs.is_empty() {
                     div .notification.is-warning.is-light.mt-4 {
                         span .icon { i .fa-solid.fa-triangle-exclamation {} }
-                        " Aucun besoin déclaré pour cet atelier."
+                        " Aucun besoin déclaré pour ce pôle."
                     }
                 } @else if staff_list.is_empty() {
                     div .notification.is-info.is-light.mt-4 {
                         span .icon { i .fa-solid.fa-circle-info {} }
-                        " Aucun bénévole assigné à cet atelier."
+                        " Aucun bénévole assigné à ce pôle."
                     }
                 }
             }
         }
     };
 
-    let title = format!("Planning {} - PowPow", atelier.name);
+    let title = format!("Planning {} - PowPow", pole.name);
     page(
         &title,
         p,
@@ -328,7 +328,7 @@ pub fn render_upcoming_week_email(upcoming: &[(chrono::NaiveDate, String, i16, i
         }
     };
 
-    for (day, atelier_name, quantity, filled) in upcoming {
+    for (day, pole_name, quantity, filled) in upcoming {
         let missing = i64::from(*quantity) - filled;
         if current_day != Some(*day) {
             if let Some(prev_day) = current_day {
@@ -337,7 +337,7 @@ pub fn render_upcoming_week_email(upcoming: &[(chrono::NaiveDate, String, i16, i
             current_day = Some(*day);
             day_deficits.clear();
         }
-        day_deficits.push((atelier_name.clone(), missing.max(0)));
+        day_deficits.push((pole_name.clone(), missing.max(0)));
     }
     if let Some(prev_day) = current_day {
         flush_day(prev_day, &day_deficits, &mut html);
@@ -348,7 +348,7 @@ pub fn render_upcoming_week_email(upcoming: &[(chrono::NaiveDate, String, i16, i
 
 #[allow(clippy::too_many_arguments)]
 pub fn calendar_editor(
-    all_ateliers: &[Atelier],
+    all_poles: &[Pole],
     editable_ids: &[uuid::Uuid],
     future_needs: &[(Need, i64, i64)],
     prefix: &str,
@@ -382,10 +382,10 @@ pub fn calendar_editor(
         }
     }
 
-    // Build needs_map: (atelier_id, day) -> (&Need, h1_count, h2_count)
+    // Build needs_map: (pole_id, day) -> (&Need, h1_count, h2_count)
     let mut needs_map: HashMap<(uuid::Uuid, chrono::NaiveDate), (&Need, i64, i64)> = HashMap::new();
     for (n, h1, h2) in future_needs {
-        needs_map.insert((n.atelier, n.day), (n, *h1, *h2));
+        needs_map.insert((n.pole, n.day), (n, *h1, *h2));
     }
 
     // French day-of-week abbreviations
@@ -411,14 +411,14 @@ pub fn calendar_editor(
     let opening_map: HashMap<chrono::NaiveDate, &crate::models::OpeningDay> =
         opening_days.iter().map(|od| (od.day, od)).collect();
 
-    // Build editable atelier IDs as JSON array for JS
+    // Build editable pôle IDs as JSON array for JS
     let editable_json: String =
         serde_json::to_string(editable_ids).unwrap_or_else(|_| "[]".to_string());
 
-    // Build atelier cards data as JSON for JS (used in the modal)
-    let atelier_cards: Vec<AtelierJs<'_>> = all_ateliers
+    // Build pôle cards data as JSON for JS (used in the modal)
+    let pole_cards: Vec<PoleJs<'_>> = all_poles
         .iter()
-        .map(|a| AtelierJs {
+        .map(|a| PoleJs {
             id: a.id,
             name: &a.name,
             slug: &a.slug,
@@ -426,7 +426,7 @@ pub fn calendar_editor(
             default_nightly: a.default_nightly,
         })
         .collect();
-    let ateliers_json: String = super::script_json(&atelier_cards);
+    let poles_json: String = super::script_json(&pole_cards);
 
     let extra_head = html! {
         link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-calendar-js@7.1.2/dist/css/bulma-calendar.min.css" integrity="sha384-PWg6kRaCiFAMYaANyvWqUS4fYZ2uKHjaQj1BDiCnzwBvLZTVoh6TvAFYRA+QpRhT" crossorigin="anonymous";
@@ -434,7 +434,7 @@ pub fn calendar_editor(
 
     let content = html! {
         div #notification-container {}
-        script #ateliers-data type="application/json" { (PreEscaped(&ateliers_json)) }
+        script #poles-data type="application/json" { (PreEscaped(&poles_json)) }
         script #editable-data type="application/json" { (PreEscaped(&editable_json)) }
 
         section .section.pt-4.pb-4 {
@@ -448,7 +448,7 @@ pub fn calendar_editor(
                 @if logged_in {
                     div .calendar-links {
                         span .has-text-grey.mr-1.cal-label { "Plannings :" }
-                        @for a in all_ateliers {
+                        @for a in all_poles {
                             @let show_past_param = if show_past { "?show_past=true" } else { "" };
                             a .tag.is-medium.is-link.is-light href={(p) "/calendar/" (a.slug) (show_past_param)} {
                                 span .icon { i class={"fa-solid fa-" (a.icon)} {} }
@@ -503,9 +503,9 @@ pub fn calendar_editor(
                 div .cal-scroll tabindex="0" role="region" aria-label="Planning" {
                     table .cal-table.table.is-bordered.is-narrow.is-hoverable {
                         thead {
-                            // Header row 1: Atelier + date columns
+                            // Header row 1: Pôle + date columns
                             tr {
-                                th .cal-name-col rowspan="2" { "Atelier" }
+                                th .cal-name-col rowspan="2" { "Pôle" }
                                 @for d in &days {
                                     @let is_past = *d < today;
                                     @let is_today = *d == today;
@@ -575,9 +575,9 @@ pub fn calendar_editor(
                                     }
                                 }
                             }
-                            @for atelier in all_ateliers {
+                            @for pole in all_poles {
                                 tr {
-                                    td .cal-name-col { (atelier.name) }
+                                    td .cal-name-col { (pole.name) }
                                     @for d in &days {
                                         @let (has_day, has_night) = day_types.get(d).copied().unwrap_or((false, false));
                                         @let mixed = has_day && has_night;
@@ -585,7 +585,7 @@ pub fn calendar_editor(
                                         @let day_str = d.format("%Y-%m-%d").to_string();
                                         @let is_past = *d < today;
                                         @let past_cls = if is_past { " cal-past" } else { "" };
-                                        @let entry = needs_map.get(&(atelier.id, *d));
+                                        @let entry = needs_map.get(&(pole.id, *d));
                                         @match entry {
                                             None => {
                                                 @for idx in 0..n_subcols {
@@ -648,7 +648,7 @@ pub fn calendar_editor(
                     button .delete aria-label="close" #close-day-modal {}
                 }
                 section .modal-card-body {
-                    div .atelier-cards #day-atelier-cards {}
+                    div .pole-cards #day-pole-cards {}
                 }
             }
         }
@@ -669,7 +669,7 @@ pub fn calendar_editor(
                         div .editor-right {
                             div #add-edit-panel .d-none {
                                 h2 .subtitle.is-5.mb-3 #add-panel-title { "\u{2014}" }
-                                div .atelier-cards #add-atelier-cards {}
+                                div .pole-cards #add-pole-cards {}
                             }
                             div .notification.is-info.is-light #add-no-selection {
                                 span .icon { i .fa-solid.fa-hand-pointer {} }
@@ -697,26 +697,26 @@ pub fn calendar_editor(
                     div .mt-4.has-text-centered.d-none #opening-day-confirm {
                         p .mb-3 #opening-day-confirm-text {}
                         p .mb-3 { "Ces besoins seront appliqués à chaque nouveau jour. Indiquez 0 pour un rôle sans besoin." }
-                        div .atelier-cards.has-text-left.mb-4 #opening-day-needs {
-                            @for atelier in all_ateliers {
-                                div .atelier-card data-atelier-id=(atelier.id) {
-                                    div .card-title { (atelier.name) }
+                        div .pole-cards.has-text-left.mb-4 #opening-day-needs {
+                            @for pole in all_poles {
+                                div .pole-card data-pole-id=(pole.id) {
+                                    div .card-title { (pole.name) }
                                     div .field {
                                         label .label.is-small {
                                             "Besoin confortable"
                                             input .input.is-small.opening-qty type="number" min="0" max="32767" step="1" required
-                                                value=(atelier.opening_day_typical_needed);
+                                                value=(pole.opening_day_typical_needed);
                                         }
                                     }
                                     div .field {
                                         label .label.is-small {
                                             "Besoin minimal"
                                             input .input.is-small.opening-minimal type="number" min="0" max="32767" step="1" required
-                                                value=(atelier.opening_day_minimal_needed);
+                                                value=(pole.opening_day_minimal_needed);
                                         }
                                     }
                                     label .checkbox {
-                                        input .opening-nightly type="checkbox" checked[atelier.default_nightly];
+                                        input .opening-nightly type="checkbox" checked[pole.default_nightly];
                                         " Nocturne"
                                     }
                                 }
@@ -783,7 +783,7 @@ mod tests {
         let mut need = Need {
             id: uuid::Uuid::nil(),
             day: "2030-01-01".parse().unwrap(),
-            atelier: uuid::Uuid::nil(),
+            pole: uuid::Uuid::nil(),
             quantity: 4,
             minimal_quantity: 2,
             nightly: false,

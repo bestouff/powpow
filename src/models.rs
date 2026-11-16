@@ -303,9 +303,9 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Session {
     }
 }
 
-// Atelier model
+// Pôle model
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Atelier {
+pub struct Pole {
     pub id: uuid::Uuid,
     pub name: String,
     pub slug: String,
@@ -318,9 +318,9 @@ pub struct Atelier {
     pub whatsapp_group_url: Option<String>,
 }
 
-impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
+impl FromRow<'_, sqlx::postgres::PgRow> for Pole {
     fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
-        Ok(Atelier {
+        Ok(Pole {
             id: row.try_get("id")?,
             name: row.try_get("name")?,
             slug: row.try_get("slug")?,
@@ -334,11 +334,11 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Atelier {
     }
 }
 
-// Role model (staff assignment to an atelier)
+// Role model (staff assignment to a pôle)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Role {
     pub staff: uuid::Uuid,
-    pub atelier: uuid::Uuid,
+    pub pole: uuid::Uuid,
     pub validated: bool,
     pub chief: bool,
 }
@@ -347,7 +347,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Role {
     fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
         Ok(Role {
             staff: row.try_get("staff")?,
-            atelier: row.try_get("atelier")?,
+            pole: row.try_get("atelier")?,
             validated: row.try_get("validated")?,
             chief: row.try_get("chief")?,
         })
@@ -397,12 +397,12 @@ impl FromRow<'_, sqlx::postgres::PgRow> for StaffQualif {
     }
 }
 
-// Need model (day when staff are needed for an atelier)
+// Need model (day when staff are needed for a pôle)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Need {
     pub id: uuid::Uuid,
     pub day: chrono::NaiveDate,
-    pub atelier: uuid::Uuid,
+    pub pole: uuid::Uuid,
     /// Comfortable staffing target for each half-day.
     pub quantity: i16,
     pub minimal_quantity: i16,
@@ -417,11 +417,11 @@ pub struct PlannedStaff {
     pub second_half: bool,
 }
 
-pub struct AtelierDayPlanning {
-    pub atelier_id: uuid::Uuid,
-    pub atelier_name: String,
-    pub atelier_slug: String,
-    pub atelier_icon: String,
+pub struct PoleDayPlanning {
+    pub pole_id: uuid::Uuid,
+    pub pole_name: String,
+    pub pole_slug: String,
+    pub pole_icon: String,
     pub nightly: bool,
     pub staff: Vec<PlannedStaff>,
 }
@@ -429,7 +429,7 @@ pub struct AtelierDayPlanning {
 /// Staffing needs shared by every new day in an opening-day range.
 #[derive(Debug, Deserialize)]
 pub struct OpeningDayNeed {
-    pub atelier_id: uuid::Uuid,
+    pub pole_id: uuid::Uuid,
     pub quantity: i16,
     pub minimal_quantity: i16,
     pub nightly: bool,
@@ -440,7 +440,7 @@ impl FromRow<'_, sqlx::postgres::PgRow> for Need {
         Ok(Need {
             id: row.try_get("id")?,
             day: row.try_get("day")?,
-            atelier: row.try_get("atelier")?,
+            pole: row.try_get("atelier")?,
             quantity: row.try_get("quantity")?,
             minimal_quantity: row.try_get("minimal_quantity")?,
             nightly: row.try_get("nightly")?,

@@ -48,7 +48,7 @@ pub fn links(base: &reqwest::Url, token: &str) -> Result<SubscriptionLinks> {
 pub struct CalendarEntry {
     pub need_id: Uuid,
     pub day: NaiveDate,
-    pub atelier_name: String,
+    pub pole_name: String,
     pub nightly: bool,
     pub first_half: bool,
     pub second_half: bool,
@@ -116,7 +116,7 @@ pub fn render(
         text(
             &mut ics,
             "SUMMARY",
-            &format!("{} — {}", entry.atelier_name, entry.period()),
+            &format!("{} — {}", entry.pole_name, entry.period()),
         );
         text(
             &mut ics,

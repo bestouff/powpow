@@ -116,7 +116,7 @@ pub async fn api_badge_counts(
                 .unwrap_or(0)
         }
         Some(s) => {
-            // Chiefs see only their ateliers' pending validations
+            // Chiefs see only their pôles' pending validations
             let is_chief = database::is_chief(&state.db, s.id).await.unwrap_or(false);
             if is_chief {
                 database::count_pending_validations(&state.db, Some(s.id))

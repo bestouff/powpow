@@ -19,35 +19,35 @@ Five privilege tiers:
 | Level         | Access                                                                                                |
 | ------------- | ----------------------------------------------------------------------------------------------------- |
 | **Anonymous** | See the frontpage, current opening status, equipments availability                                    |
-| **Staff**     | View their own profile, register for ateliers, mark presence on the calendar                          |
-| **Chief**     | Manage the ateliers they lead, validate role requests from volunteers                                 |
+| **Staff**     | View their own profile, register for pôles, mark presence on the calendar                             |
+| **Chief**     | Manage the pôles they lead, validate role requests from volunteers                                    |
 | **Admin**     | Full management: import memberships, manage staff, edit content                                       |
 | **God**       | Everything above, plus the ability to grant/revoke admin and god status, backup /restore the database |
 
-### Ateliers and roles
+### Pôles and roles
 
-The station's work is organized into _ateliers_ (workshops/activity groups). Volunteers can register interest in ateliers, and atelier chiefs can approve or reject requests. Each atelier can optionally require validation before a volunteer is confirmed.
+The station's work is organized into _pôles_ (activity groups). Volunteers can register interest in pôles, and pôle chiefs can approve or reject requests. Each pôle can optionally require validation before a volunteer is confirmed.
 
-### Atelier WhatsApp groups
+### Pôle WhatsApp groups
 
-Admins can set an optional **Groupe WhatsApp** invitation link for each atelier
+Admins can set an optional **Groupe WhatsApp** invitation link for each pôle
 under **Administration → Paramètres**. In WhatsApp, copy the group's **Invite via
 link** URL (`https://chat.whatsapp.com/…`). Clear the field to remove the link.
 
 A volunteer's profile, accessible from **Staff**, shows the groups for their
-selected ateliers, including pending registrations. The links are visible to the
-volunteer, members sharing their email, and admins. Joining or leaving an atelier
+selected pôles, including pending registrations. The links are visible to the
+volunteer, members sharing their email, and admins. Joining or leaving a pôle
 updates this list; joining the WhatsApp group itself requires following its link.
-Several ateliers can share the same link. The profile shows each group once,
-labelled with the person's corresponding ateliers.
+Several pôles can share the same link. The profile shows each group once,
+labelled with the person's corresponding pôles.
 
 ### Calendar and planning
 
 - Define **opening days** for the station
-- Set **staffing needs** per atelier per day (number of volunteers needed)
+- Set **staffing needs** per pôle per day (number of volunteers needed)
 - Volunteers mark their **presence** for specific days
-- **Infos du jour** (`/today`) shows the day's weather forecast, current piste and téléski statuses, and volunteers by atelier and shift, using the server's local date. Access requires staff authentication and current membership. The page refreshes automatically every five minutes while visible, and catches up when returning to an overdue background tab. The Open-Meteo forecast for Saint-Hilaire at 1,200 m refreshes in the background every 15 minutes, independently of the dicton feature; an unavailable forecast does not block the planning.
-- **Planning PDFs** (`/calendar/pdf/YYYY-MM-DD`) export any scheduled day with the station logo, atelier shifts, volunteer names, and an export timestamp. The `/today` page offers downloads for today and tomorrow, or disabled buttons when no activity is scheduled. Downloads require the same membership as `/today`. The logo comes from `hero-subtitle`, falling back to `navbar`; fonts are bundled for portable, accented text.
+- **Infos du jour** (`/today`) shows the day's weather forecast, current piste and téléski statuses, and volunteers by pôle and shift, using the server's local date. Access requires staff authentication and current membership. The page refreshes automatically every five minutes while visible, and catches up when returning to an overdue background tab. The Open-Meteo forecast for Saint-Hilaire at 1,200 m refreshes in the background every 15 minutes, independently of the dicton feature; an unavailable forecast does not block the planning.
+- **Planning PDFs** (`/calendar/pdf/YYYY-MM-DD`) export any scheduled day with the station logo, pôle shifts, volunteer names, and an export timestamp. The `/today` page offers downloads for today and tomorrow, or disabled buttons when no activity is scheduled. Downloads require the same membership as `/today`. The logo comes from `hero-subtitle`, falling back to `navbar`; fonts are bundled for portable, accented text.
 - The system computes **deficits** (days where not enough volunteers have signed up)
 - A **weekly Monday morning email** is sent to admins summarizing unimported memberships and upcoming staffing shortfalls
 
@@ -60,7 +60,7 @@ that calendar on Android. Members sharing an email can also manage each other's
 subscription links.
 
 The feed contains past and upcoming registered presences, with one all-day event
-per atelier and date. Titles indicate the selected periods, such as
+per pôle and date. Titles indicate the selected periods, such as
 “Buvette — matin et après-midi” or “Damage — soirée et nuit”. Night shifts use
 their planning date. Attendance changes update the same event; unregistering
 removes it on the next refresh. Changes are made in PowPow, and calendar providers
@@ -153,7 +153,7 @@ Visitors can restart it with **Aide** in the navigation menu.
 On small screens, the first step opens the menu to reveal the login link.
 
 Authenticated volunteers with a current membership receive a separate four-step
-guide: their personal-page link, atelier selection and chief validation, half-day
+guide: their personal-page link, pôle selection and chief validation, half-day
 planning, and qualifications with their dates of completion. **Suivant** and
 **Précédent** let them explore each section at their own pace. Progress survives
 profile reloads and is stored separately for each account in this browser.
@@ -510,7 +510,7 @@ src/
   dicton.rs        # Daily AI-generated "dicton du jour" (weather + HF API)
   helloasso.rs     # HelloAsso API client
   mailchimp.rs     # Mailchimp API client
-  models.rs        # Data models (Staff, Atelier, Equipment, NewsRow, etc.)
+  models.rs        # Data models (Staff, Pole, Equipment, NewsRow, etc.)
   news.rs          # RSS feed sync, image download, XML entity decoding
   personal_email.rs # Shared typed mail delivery
   public_http.rs   # Public-only, size-limited RSS downloads

@@ -30,10 +30,10 @@ pub async fn load(pool: &PgPool, token: &str) -> Result<Option<(Staff, Vec<Calen
     let Some(staff) = staff else {
         return Ok(None);
     };
-    // Presence is the source of truth. Do not join current roles: leaving an
-    // atelier must not erase historical registrations from subscribed calendars.
+    // Presence is the source of truth. Do not join current roles: leaving a
+    // pôle must not erase historical registrations from subscribed calendars.
     let entries = sqlx::query_as(
-        "SELECT n.id AS need_id, n.day, a.name AS atelier_name, n.nightly,
+        "SELECT n.id AS need_id, n.day, a.name AS pole_name, n.nightly,
         p.first_half, p.second_half,
         GREATEST(p.calendar_updated_at, n.calendar_updated_at, a.calendar_updated_at) AS modified_at
         FROM presence p JOIN needs n ON n.id = p.needs JOIN ateliers a ON a.id = n.atelier

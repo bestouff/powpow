@@ -17,10 +17,10 @@ function initVolunteerTutorial(prefix, viewer = null) {
   const send = document.getElementById("send-btn");
   const success = document.getElementById("success-box");
   const isOwnPage = viewer && document.getElementById("person-data")?.dataset.staffId === viewer.id;
-  const ateliers = isOwnPage ? document.getElementById("person-ateliers") : null;
+  const poles = isOwnPage ? document.getElementById("person-poles") : null;
   const planning = isOwnPage ? document.getElementById("person-calendar") : null;
   const qualifications = isOwnPage ? document.getElementById("person-qualifications") : null;
-  const memberSteps = ["profile", "ateliers", "planning", "qualifications"];
+  const memberSteps = ["profile", "poles", "planning", "qualifications"];
   const burger = document.querySelector(".navbar-burger");
   const menu = document.getElementById("main-navbar");
   const missing = document.getElementById("tutorial-missing");
@@ -110,7 +110,7 @@ function initVolunteerTutorial(prefix, viewer = null) {
     restartHintTimer = null;
     target?.classList.remove("tutorial-target");
     step = next;
-    target = {login, search, membership, send, inbox: success, profile: login, ateliers, planning, qualifications, restart: help}[step];
+    target = {login, search, membership, send, inbox: success, profile: login, poles, planning, qualifications, restart: help}[step];
     if (!target) return;
     target.classList.add("tutorial-target");
     if (target.classList.contains("tutorial-section")) target.scrollTop = 0;
@@ -128,9 +128,9 @@ function initVolunteerTutorial(prefix, viewer = null) {
       send: ["4", "Recevez votre lien de connexion", "Votre nom est sélectionné. Cliquez sur « Envoyer le lien de connexion » pour recevoir l’email qui vous permettra de vous connecter."],
       inbox: ["5", "Consultez votre boîte mail", `Ouvrez votre boîte de réception, repérez ${email} et cliquez sur le lien qu’il contient pour vous connecter. Pensez aussi à vérifier les courriers indésirables.`],
       profile: ["1", "Votre page personnelle", "Cliquez sur votre nom pour ouvrir votre page personnelle. Ce lien reste accessible dans le menu : vous pouvez y revenir à tout moment."],
-      ateliers: ["2", "Choisissez vos ateliers", "Cochez les rôles auxquels vous souhaitez participer. Pour les ateliers marqués « Validation requise », vous devrez attendre que le chef valide votre participation."],
-      planning: ["3", "Indiquez vos disponibilités", "Cochez les demi-journées auxquelles vous souhaitez participer : matin, après-midi, ou les deux. Pour les activités nocturnes, choisissez soirée ou nuit." + (planning && !planning.querySelector(".pcal-table") ? " Aucun créneau n’est encore disponible : choisissez vos ateliers et revenez une fois leurs plannings publiés." : "")],
-      qualifications: ["4", "Déclarez vos qualifications", "Certains rôles demandent des qualifications. Dans « Formations », choisissez vos qualifications et leur date d’obtention, puis cliquez sur « Ajouter »." + (qualifications && !qualifications.querySelector("#pq-qual") ? " Si votre qualification n’est pas proposée, contactez votre chef d’atelier." : "")],
+      poles: ["2", "Choisissez vos pôles", "Cochez les rôles auxquels vous souhaitez participer. Pour les pôles marqués « Validation requise », vous devrez attendre que le chef valide votre participation."],
+      planning: ["3", "Indiquez vos disponibilités", "Cochez les demi-journées auxquelles vous souhaitez participer : matin, après-midi, ou les deux. Pour les activités nocturnes, choisissez soirée ou nuit." + (planning && !planning.querySelector(".pcal-table") ? " Aucun créneau n’est encore disponible : choisissez vos pôles et revenez une fois leurs plannings publiés." : "")],
+      qualifications: ["4", "Déclarez vos qualifications", "Certains rôles demandent des qualifications. Dans « Formations », choisissez vos qualifications et leur date d’obtention, puis cliquez sur « Ajouter »." + (qualifications && !qualifications.querySelector("#pq-qual") ? " Si votre qualification n’est pas proposée, contactez votre chef de pôle." : "")],
       restart: ["", "Le guide reste disponible", "Cliquez sur « Aide » pour relancer le guide à tout moment."],
     }[step];
     root.dataset.step = step;
@@ -241,9 +241,9 @@ function initVolunteerTutorial(prefix, viewer = null) {
   }
 
   function openProfile() {
-    if (isOwnPage) show("ateliers", true);
+    if (isOwnPage) show("poles", true);
     else {
-      remember("ateliers");
+      remember("poles");
       window.location.assign(login.href);
     }
   }
@@ -263,7 +263,7 @@ function initVolunteerTutorial(prefix, viewer = null) {
     if (!isGuiding()) return;
     if (!viewer) remember("search");
     else if (step === "profile") {
-      remember("ateliers");
+      remember("poles");
       if (isOwnPage && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && event.button === 0) {
         event.preventDefault();
         openProfile();
@@ -296,7 +296,7 @@ function initVolunteerTutorial(prefix, viewer = null) {
     }).catch(() => {});
   });
   const observer = new ResizeObserver(scheduleLayout);
-  [card, login, search, membership, send, success, ateliers, planning, qualifications, help, menu].filter(Boolean).forEach(element => observer.observe(element));
+  [card, login, search, membership, send, success, poles, planning, qualifications, help, menu].filter(Boolean).forEach(element => observer.observe(element));
 
   const saved = savedStep();
   if (saved !== "done") {

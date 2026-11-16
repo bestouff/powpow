@@ -93,7 +93,7 @@ async fn planning_pdf_downloads_select_dates_and_require_membership(
             StatusCode::BAD_REQUEST
         );
     }
-    let atelier: uuid::Uuid = sqlx::query_scalar(
+    let pole: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO ateliers (name, slug, needs_validation) VALUES ('Accueil PDF', 'pdf-accueil', false) RETURNING id",
     )
     .fetch_one(&state.db)
@@ -109,7 +109,7 @@ async fn planning_pdf_downloads_select_dates_and_require_membership(
             .bind(person.id)
             .execute(&state.db)
             .await?;
-        database::upsert_need(&state.db, atelier, day, 2, 1, false).await?;
+        database::upsert_need(&state.db, pole, day, 2, 1, false).await?;
         let need = database::get_needs_for_day(&state.db, day).await?.remove(0);
         database::upsert_presence(&state.db, need.id, person.id, true, false).await?;
         let page = app
@@ -237,7 +237,7 @@ async fn today_requires_staff_and_shows_only_todays_assignments(
     assert!(
         response_text(response)
             .await?
-            .contains("Aucun atelier prévu aujourd'hui.")
+            .contains("Aucun pôle prévu aujourd'hui.")
     );
 
     let mut staff = Vec::new();
@@ -260,7 +260,7 @@ async fn today_requires_staff_and_shows_only_todays_assignments(
             .await?;
         staff.push(person.id);
     }
-    let mut ateliers = Vec::new();
+    let mut poles = Vec::new();
     for (name, slug, nightly) in [
         ("Accueil <pistes>", "today-accueil", false),
         ("Buvette", "today-buvette", false),
@@ -268,20 +268,12 @@ async fn today_requires_staff_and_shows_only_todays_assignments(
     ] {
         let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation, default_nightly, icon) VALUES ($1, $2, false, $3, 'users') RETURNING id")
             .bind(name).bind(slug).bind(nightly).fetch_one(&state.db).await?;
-        ateliers.push(id);
+        poles.push(id);
         database::upsert_need(&state.db, id, today, 4, 1, nightly).await?;
     }
     let needs = database::get_needs_for_day(&state.db, today).await?;
-    let day_need = needs
-        .iter()
-        .find(|need| need.atelier == ateliers[0])
-        .unwrap()
-        .id;
-    let night_need = needs
-        .iter()
-        .find(|need| need.atelier == ateliers[2])
-        .unwrap()
-        .id;
+    let day_need = needs.iter().find(|need| need.pole == poles[0]).unwrap().id;
+    let night_need = needs.iter().find(|need| need.pole == poles[2]).unwrap().id;
     for (person, first, second) in [
         (staff[0], true, false),
         (staff[1], false, true),
@@ -290,9 +282,9 @@ async fn today_requires_staff_and_shows_only_todays_assignments(
         database::upsert_presence(&state.db, day_need, person, first, second).await?;
     }
     database::upsert_presence(&state.db, night_need, staff[3], true, true).await?;
-    database::add_role(&state.db, staff[5], ateliers[0], true).await?;
+    database::add_role(&state.db, staff[5], poles[0], true).await?;
     for day in [today.pred_opt().unwrap(), today.succ_opt().unwrap()] {
-        database::upsert_need(&state.db, ateliers[0], day, 4, 1, false).await?;
+        database::upsert_need(&state.db, poles[0], day, 4, 1, false).await?;
         let need = database::get_needs_for_day(&state.db, day).await?.remove(0);
         database::upsert_presence(&state.db, need.id, staff[4], true, true).await?;
     }
@@ -434,7 +426,7 @@ async fn today_shows_forecast_and_current_equipment_statuses(pool: PgPool) -> an
     )
     .await?;
     assert!(body.contains("Prévisions temporairement indisponibles."));
-    assert!(body.contains("Aucun atelier prévu aujourd'hui."));
+    assert!(body.contains("Aucun pôle prévu aujourd'hui."));
 
     let response: forecast::WeatherResponse = serde_json::from_value(serde_json::json!({
         "daily": {
@@ -513,7 +505,7 @@ async fn today_shows_forecast_and_current_equipment_statuses(pool: PgPool) -> an
     assert!(body.contains("Prévisions temporairement indisponibles."));
     assert!(body.contains("0 / 3 ouvertes"));
     assert!(body.contains("0 / 3 ouverts"));
-    assert!(body.contains("Aucun atelier prévu aujourd'hui."));
+    assert!(body.contains("Aucun pôle prévu aujourd'hui."));
     Ok(())
 }
 
@@ -1273,7 +1265,7 @@ async fn calendar_feed_tracks_attendance_with_stable_events(pool: PgPool) -> any
     let state = state(pool);
     let (owner, cookie) = member(&state, "owner@example.org").await?;
     let (other, _) = member(&state, "other@example.org").await?;
-    let atelier: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation) VALUES ('Buvette', 'feed-test', false) RETURNING id").fetch_one(&state.db).await?;
+    let pole: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation) VALUES ('Buvette', 'feed-test', false) RETURNING id").fetch_one(&state.db).await?;
     let mut needs = vec![];
     for (day, nightly) in [
         ("2026-03-29", false),
@@ -1281,7 +1273,7 @@ async fn calendar_feed_tracks_attendance_with_stable_events(pool: PgPool) -> any
         ("2026-12-31", false),
     ] {
         let id: uuid::Uuid = sqlx::query_scalar("INSERT INTO needs (day, atelier, quantity, nightly) VALUES ($1::text::date, $2, 2, $3) RETURNING id")
-            .bind(day).bind(atelier).bind(nightly).fetch_one(&state.db).await?;
+            .bind(day).bind(pole).bind(nightly).fetch_one(&state.db).await?;
         needs.push(id);
     }
     // Historical attendance must survive missing current roles.
@@ -1329,7 +1321,7 @@ async fn calendar_feed_tracks_attendance_with_stable_events(pool: PgPool) -> any
     assert!(body.contains("SUMMARY:Buvette — matin et après-midi\r\n"));
     assert_eq!(body.matches("BEGIN:VEVENT").count(), 2);
     sqlx::query("UPDATE ateliers SET name = 'Accueil' WHERE id = $1")
-        .bind(atelier)
+        .bind(pole)
         .execute(&state.db)
         .await?;
     let renamed = request(&app, "GET", &path, None, serde_json::Value::Null).await;
@@ -1391,25 +1383,19 @@ async fn staffing_thresholds_validate_settings_and_flow_into_calendars(
         "opening_day_typical_needed": 3, "opening_day_minimal_needed": 2
     });
     assert_eq!(
-        request(
-            &app,
-            "POST",
-            "/api/ateliers",
-            Some(&cookie),
-            payload.clone()
-        )
-        .await
-        .status(),
+        request(&app, "POST", "/api/poles", Some(&cookie), payload.clone())
+            .await
+            .status(),
         StatusCode::OK
     );
-    let atelier = database::get_atelier_by_slug(&state.db, "renfort")
+    let pole = database::get_pole_by_slug(&state.db, "renfort")
         .await?
         .unwrap();
-    let endpoint = format!("/api/ateliers/{}", atelier.id);
+    let endpoint = format!("/api/poles/{}", pole.id);
     for (comfortable, minimal) in [(1, 2), (-1, 0), (2, -1)] {
         payload["opening_day_typical_needed"] = comfortable.into();
         payload["opening_day_minimal_needed"] = minimal.into();
-        for path in ["/api/ateliers", &endpoint] {
+        for path in ["/api/poles", &endpoint] {
             assert_eq!(
                 request(&app, "POST", path, Some(&cookie), payload.clone())
                     .await
@@ -1458,11 +1444,12 @@ async fn staffing_thresholds_validate_settings_and_flow_into_calendars(
     let need = database::get_needs_for_day(&state.db, day)
         .await?
         .into_iter()
-        .find(|need| need.atelier == atelier.id)
+        .find(|need| need.pole == pole.id)
         .unwrap();
     assert_eq!((need.quantity, need.minimal_quantity), (3, 2));
 
-    let mut custom = serde_json::json!({"atelier_id": atelier.id, "day": day, "quantity": 3, "minimal_quantity": 2});
+    let mut custom =
+        serde_json::json!({"pole_id": pole.id, "day": day, "quantity": 3, "minimal_quantity": 2});
     for (comfortable, minimal) in [(1, 2), (-1, 0), (2, -1)] {
         custom["quantity"] = comfortable.into();
         custom["minimal_quantity"] = minimal.into();
@@ -1486,12 +1473,12 @@ async fn staffing_thresholds_validate_settings_and_flow_into_calendars(
     let saved: serde_json::Value = serde_json::from_str(&response_text(response).await?)?;
     assert_eq!(saved["minimal_quantity"], 2);
     assert_eq!(saved["quantity"], 4);
-    database::upsert_need(&state.db, atelier.id, day, 3, 2, false).await?;
+    database::upsert_need(&state.db, pole.id, day, 3, 2, false).await?;
 
     // First half is exactly minimal, second is exactly comfortable.
     for index in 0..3 {
         let (volunteer, _) = member(&state, &format!("staffing-{index}@example.org")).await?;
-        database::add_role(&state.db, volunteer.id, atelier.id, true).await?;
+        database::add_role(&state.db, volunteer.id, pole.id, true).await?;
         database::upsert_presence(&state.db, need.id, volunteer.id, index < 2, true).await?;
     }
     let overview = response_text(
@@ -1525,13 +1512,11 @@ async fn staffing_thresholds_validate_settings_and_flow_into_calendars(
     assert!(detail.contains("data-minimal-quantity=\"2\""));
 
     let backup = database::backup_all_tables(&state.db).await?;
-    database::upsert_need(&state.db, atelier.id, day, 8, 7, true).await?;
+    database::upsert_need(&state.db, pole.id, day, 8, 7, true).await?;
     database::restore_from_sql(&state.db, &backup).await?;
     let restored = database::get_need_by_id(&state.db, need.id).await?.unwrap();
     assert_eq!((restored.quantity, restored.minimal_quantity), (3, 2));
-    let restored = database::get_atelier_by_id(&state.db, atelier.id)
-        .await?
-        .unwrap();
+    let restored = database::get_pole_by_id(&state.db, pole.id).await?.unwrap();
     assert_eq!(
         (
             restored.opening_day_typical_needed,
@@ -1566,7 +1551,7 @@ async fn whatsapp_group_settings_require_admin_and_validate_links(
         (Some(volunteer_cookie.as_str()), StatusCode::FORBIDDEN),
     ] {
         assert_eq!(
-            request(&app, "POST", "/api/ateliers", cookie, payload.clone())
+            request(&app, "POST", "/api/poles", cookie, payload.clone())
                 .await
                 .status(),
             status
@@ -1575,20 +1560,20 @@ async fn whatsapp_group_settings_require_admin_and_validate_links(
     let response = request(
         &app,
         "POST",
-        "/api/ateliers",
+        "/api/poles",
         Some(&admin_cookie),
         payload.clone(),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let atelier = database::get_atelier_by_slug(&state.db, "buvette")
+    let pole = database::get_pole_by_slug(&state.db, "buvette")
         .await?
         .unwrap();
     assert_eq!(
-        atelier.whatsapp_group_url.as_deref(),
+        pole.whatsapp_group_url.as_deref(),
         Some("https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv")
     );
-    let endpoint = format!("/api/ateliers/{}", atelier.id);
+    let endpoint = format!("/api/poles/{}", pole.id);
     assert_eq!(
         request(
             &app,
@@ -1603,7 +1588,7 @@ async fn whatsapp_group_settings_require_admin_and_validate_links(
     );
 
     payload["whatsapp_group_url"] = serde_json::json!("javascript:alert(1)");
-    for endpoint in ["/api/ateliers", endpoint.as_str()] {
+    for endpoint in ["/api/poles", endpoint.as_str()] {
         let response = request(&app, "POST", endpoint, Some(&admin_cookie), payload.clone()).await;
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert!(
@@ -1613,11 +1598,11 @@ async fn whatsapp_group_settings_require_admin_and_validate_links(
         );
     }
     assert_eq!(
-        database::get_atelier_by_id(&state.db, atelier.id)
+        database::get_pole_by_id(&state.db, pole.id)
             .await?
             .unwrap()
             .whatsapp_group_url,
-        atelier.whatsapp_group_url
+        pole.whatsapp_group_url
     );
 
     payload["whatsapp_group_url"] =
@@ -1647,9 +1632,7 @@ async fn whatsapp_group_settings_require_admin_and_validate_links(
         .status(),
         StatusCode::OK
     );
-    let updated = database::get_atelier_by_id(&state.db, atelier.id)
-        .await?
-        .unwrap();
+    let updated = database::get_pole_by_id(&state.db, pole.id).await?.unwrap();
     assert!(updated.default_nightly);
     assert_eq!(
         updated.whatsapp_group_url.as_deref(),
@@ -1664,7 +1647,7 @@ async fn whatsapp_group_settings_require_admin_and_validate_links(
         StatusCode::OK
     );
     assert!(
-        database::get_atelier_by_id(&state.db, atelier.id)
+        database::get_pole_by_id(&state.db, pole.id)
             .await?
             .unwrap()
             .whatsapp_group_url
@@ -1672,7 +1655,7 @@ async fn whatsapp_group_settings_require_admin_and_validate_links(
     );
     database::restore_from_sql(&state.db, &backup).await?;
     assert_eq!(
-        database::get_atelier_by_id(&state.db, atelier.id)
+        database::get_pole_by_id(&state.db, pole.id)
             .await?
             .unwrap()
             .whatsapp_group_url,
@@ -1683,7 +1666,7 @@ async fn whatsapp_group_settings_require_admin_and_validate_links(
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
-async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> anyhow::Result<()> {
+async fn whatsapp_groups_follow_profile_pole_subscriptions(pool: PgPool) -> anyhow::Result<()> {
     let state = state(pool);
     let (owner, owner_cookie) = member(&state, "family@example.org").await?;
     let (_, household_cookie) = member(&state, "family@example.org").await?;
@@ -1693,7 +1676,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         .bind(admin.id)
         .execute(&state.db)
         .await?;
-    let subscribed = database::create_atelier(
+    let subscribed = database::create_pole(
         &state.db,
         "Buvette & accueil",
         "buvette",
@@ -1705,7 +1688,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         Some("https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv"),
     )
     .await?;
-    database::create_atelier(
+    database::create_pole(
         &state.db,
         "Pistes",
         "pistes",
@@ -1717,7 +1700,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         Some("https://chat.whatsapp.com/ZyXwVuTsRqPoNmLkJiHgFe"),
     )
     .await?;
-    let no_group = database::create_atelier(
+    let no_group = database::create_pole(
         &state.db,
         "Location",
         "location",
@@ -1729,7 +1712,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         None,
     )
     .await?;
-    let shared_group = database::create_atelier(
+    let shared_group = database::create_pole(
         &state.db,
         "Renfort buvette",
         "renfort-buvette",
@@ -1741,7 +1724,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         subscribed.whatsapp_group_url.as_deref(),
     )
     .await?;
-    // Interest in an atelier is enough, including roles awaiting validation.
+    // Interest in a pôle is enough, including roles awaiting validation.
     database::add_role(&state.db, owner.id, subscribed.id, false).await?;
     database::add_role(&state.db, owner.id, no_group.id, true).await?;
     database::add_role(&state.db, owner.id, shared_group.id, true).await?;
@@ -1783,7 +1766,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         "POST",
         &format!("/api/person/{}/role", owner.id),
         Some(&owner_cookie),
-        serde_json::json!({"atelier_id": subscribed.id, "add": false}),
+        serde_json::json!({"pole_id": subscribed.id, "add": false}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1805,7 +1788,7 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
         "POST",
         &format!("/api/person/{}/role", owner.id),
         Some(&owner_cookie),
-        serde_json::json!({"atelier_id": shared_group.id, "add": false}),
+        serde_json::json!({"pole_id": shared_group.id, "add": false}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1827,20 +1810,18 @@ async fn whatsapp_groups_follow_profile_atelier_subscriptions(pool: PgPool) -> a
 
 #[sqlx::test]
 #[ignore = "requires DATABASE_URL pointing to PostgreSQL"]
-async fn atelier_names_are_escaped_in_reminders_and_calendar_data(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn pole_names_are_escaped_in_reminders_and_calendar_data(pool: PgPool) -> anyhow::Result<()> {
     let state = state(pool);
     let (chief, cookie) = member(&state, "chief@example.org").await?;
     let (pending, _) = member(&state, "pending@example.org").await?;
     let attack = "</script><script>window.reviewXss=1</script>";
-    let atelier: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation) VALUES ($1, 'test-escaping', true) RETURNING id")
+    let pole: uuid::Uuid = sqlx::query_scalar("INSERT INTO ateliers (name, slug, needs_validation) VALUES ($1, 'test-escaping', true) RETURNING id")
         .bind(attack).fetch_one(&state.db).await?;
-    database::add_role(&state.db, chief.id, atelier, true).await?;
-    database::update_role(&state.db, chief.id, atelier, None, Some(true)).await?;
-    database::add_role(&state.db, pending.id, atelier, false).await?;
+    database::add_role(&state.db, chief.id, pole, true).await?;
+    database::update_role(&state.db, chief.id, pole, None, Some(true)).await?;
+    database::add_role(&state.db, pending.id, pole, false).await?;
     sqlx::query("INSERT INTO needs (day, atelier, quantity, nightly) VALUES (current_date + 1, $1, 1, false)")
-        .bind(atelier).execute(&state.db).await?;
+        .bind(pole).execute(&state.db).await?;
     let app = build_router(state);
     for path in [format!("/person/{}", chief.id), "/calendar".into()] {
         let response = request(&app, "GET", &path, Some(&cookie), serde_json::Value::Null).await;
