@@ -71,6 +71,24 @@ async function initWebcamExport(prefix) {
   const track = selection.querySelector(".webcam-export-range");
   const label = document.getElementById("export-range-label");
   const download = document.getElementById("export-download");
+  const thumbnails = new Map();
+
+  async function loadImage(filename) {
+    const image = new Image();
+    image.src = prefix + "/webcam/images/" + encodeURIComponent(filename);
+    await image.decode();
+    return image.src;
+  }
+
+  function thumbnail(filename) {
+    if (!thumbnails.has(filename)) {
+      thumbnails.set(filename, loadImage(filename).catch(error => {
+        thumbnails.delete(filename);
+        throw error;
+      }));
+    }
+    return thumbnails.get(filename);
+  }
 
   function seconds(time) {
     if (!time) return null;
@@ -116,11 +134,9 @@ async function initWebcamExport(prefix) {
         time.removeAttribute("datetime");
       }
       try {
-        const image = new Image();
-        image.src = prefix + "/webcam/images/" + encodeURIComponent(filename);
-        await image.decode();
+        const src = await (full ? loadImage(filename) : thumbnail(filename));
         if (current !== generation) return;
-        photo.src = image.src;
+        photo.src = src;
         photo.hidden = false;
         placeholder.hidden = true;
         time.textContent = frame.label;
@@ -188,6 +204,19 @@ async function initWebcamExport(prefix) {
     }
     update(true);
     selection.hidden = false;
+
+    // Warm the whole day, starting near both handles. Previews share in-flight requests.
+    const from = seconds(start.value) ?? firstSecond;
+    const to = seconds(end.value) ?? lastSecond;
+    const distance = frame => Math.min(Math.abs(frame.seconds - from), Math.abs(frame.seconds - to));
+    const order = [...images].sort((a, b) => distance(a) - distance(b));
+    let next = 0;
+    async function preload() {
+      while (next < order.length) {
+        try { await thumbnail(order[next++].thumbnail); } catch (_) { /* Retry on selection. */ }
+      }
+    }
+    for (let worker = 0; worker < 4; worker++) preload();
   } catch (_) {
     status.textContent = "Les aperçus sont indisponibles. Vous pouvez saisir les heures ci-dessus.";
   }

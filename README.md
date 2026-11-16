@@ -188,7 +188,8 @@ staff. The link preserves the webcam's selected day and camera; opening the expo
 page directly selects the latest capture's day, like `/webcam`. Choose start/end
 times using the two-handle slider or the time fields. The endpoint previews show
 the first and last captures within the selected interval, with thumbnails while
-dragging and full images on release. Times use the server's timezone even when
+dragging and full images on release. The day's thumbnails preload in the background,
+four at a time, starting near the selected endpoints. Times use the server's timezone even when
 the browser is elsewhere. Choose an integer speed
 factor (2000× by default). Open-Meteo supplies sunrise and sunset for the chosen
 date, using `DIRECT_WEBCAM_COORDINATES` or the station coordinates (45.31, 5.85).
