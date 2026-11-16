@@ -70,11 +70,9 @@ async fn webcam_exports_require_staff_and_preserve_camera_date_and_timing(
                 .body(Body::empty())?,
         )
         .await?;
-    assert!(
-        response_text(response)
-            .await?
-            .contains("href=\"/powpow/webcam/export?camera=station\"")
-    );
+    assert!(response_text(response).await?.contains(&format!(
+        "href=\"/powpow/webcam/export?date={date}&amp;camera=station\""
+    )));
     let response = request(
         &app,
         "GET",
@@ -86,10 +84,23 @@ async fn webcam_exports_require_staff_and_preserve_camera_date_and_timing(
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()["cache-control"], "private, no-store");
     let html = response_text(response).await?;
-    assert!(html.contains(&format!("name=\"date\" value=\"{today}\"")));
+    assert!(html.contains(&format!("name=\"date\" value=\"{date}\"")));
     assert!(html.contains("value=\"2000\""));
+    assert!(html.contains("id=\"export-range-start\""));
+    assert!(html.contains("id=\"export-range-end\""));
+    let response = request(
+        &app,
+        "GET",
+        &format!("/webcam/export?camera=station&date={today}"),
+        Some(&cookie),
+        serde_json::Value::Null,
+    )
+    .await;
+    let html = response_text(response).await?;
+    assert!(html.contains(&format!("name=\"date\" value=\"{today}\"")));
     assert!(html.contains("horaires du soleil sont indisponibles"));
     assert!(html.contains("Aucune image disponible"));
+    assert!(!html.contains("id=\"export-selection\""));
     let response = app
         .clone()
         .oneshot(
@@ -108,6 +119,15 @@ async fn webcam_exports_require_staff_and_preserve_camera_date_and_timing(
     assert!(html.contains("value=\"17:00:00\""));
     assert!(html.contains("value=\"200\""));
     assert!(html.contains("value=\"station\""));
+    assert!(html.contains(&format!(
+        "data-list=\"/powpow/webcam/{date}_station_list.json\""
+    )));
+    assert!(html.contains(&format!(
+        "href=\"/powpow/webcam?date={date}&amp;camera=station\""
+    )));
+    for side in ["start", "end"] {
+        assert!(html.contains(&format!("id=\"export-preview-{side}\"")));
+    }
 
     let response = request(&app, "GET", &video, Some(&cookie), serde_json::Value::Null).await;
     assert_eq!(response.status(), StatusCode::OK);

@@ -50,17 +50,147 @@ document.addEventListener("DOMContentLoaded", function () {
   initPhotoPage(prefix);
   initManualImport();
   initWebcam(prefix);
-  initWebcamExport();
+  initWebcamExport(prefix);
   initHomeWebcam(prefix);
   initToday();
 });
 
-function initWebcamExport() {
+async function initWebcamExport(prefix) {
   const form = document.getElementById("webcam-export-form");
   if (!form) return;
   document.getElementById("export-date").addEventListener("change", function () {
     if (this.validity.valid) form.requestSubmit(document.getElementById("export-refresh"));
   });
+  const selection = document.getElementById("export-selection");
+  if (!selection) return;
+  const status = document.getElementById("export-selection-status");
+  const start = document.getElementById("export-start");
+  const end = document.getElementById("export-end");
+  const startSlider = document.getElementById("export-range-start");
+  const endSlider = document.getElementById("export-range-end");
+  const track = selection.querySelector(".webcam-export-range");
+  const label = document.getElementById("export-range-label");
+  const download = document.getElementById("export-download");
+
+  function seconds(time) {
+    if (!time) return null;
+    const [hours, minutes, seconds = 0] = time.split(":").map(Number);
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+  function clock(value) {
+    return [Math.floor(value / 3600), Math.floor(value / 60) % 60, value % 60]
+      .map(part => String(part).padStart(2, "0")).join(":");
+  }
+
+  // Each endpoint owns its request generation, so a slow image cannot replace a newer choice.
+  function preview(side) {
+    const figure = document.getElementById("export-preview-" + side);
+    const photo = figure.querySelector("img");
+    const time = figure.querySelector("time");
+    const placeholder = figure.querySelector(".webcam-export-placeholder");
+    const message = selection.querySelector('[data-preview-status="' + side + '"]');
+    let generation = 0;
+    let requested = "";
+    let displayed = "";
+    return async (frame, full) => {
+      const filename = frame ? (full ? frame.filename : frame.thumbnail) : "";
+      if (filename && filename === requested) return;
+      requested = filename;
+      const current = ++generation;
+      message.textContent = "";
+      if (!frame) {
+        displayed = "";
+        photo.hidden = true;
+        placeholder.hidden = false;
+        placeholder.textContent = "Aucune image dans cette plage.";
+        time.textContent = "";
+        time.removeAttribute("datetime");
+        return;
+      }
+      // Hide a previous endpoint until its replacement is decoded.
+      if (displayed !== frame.filename && displayed !== frame.thumbnail) {
+        photo.hidden = true;
+        placeholder.hidden = false;
+        placeholder.textContent = "Chargement de l’aperçu…";
+        time.textContent = "";
+        time.removeAttribute("datetime");
+      }
+      try {
+        const image = new Image();
+        image.src = prefix + "/webcam/images/" + encodeURIComponent(filename);
+        await image.decode();
+        if (current !== generation) return;
+        photo.src = image.src;
+        photo.hidden = false;
+        placeholder.hidden = true;
+        time.textContent = frame.label;
+        time.dateTime = frame.received_at;
+        displayed = filename;
+      } catch (_) {
+        if (current !== generation) return;
+        requested = "";
+        placeholder.textContent = "Aperçu indisponible.";
+        message.textContent = "L’image n’a pas pu être chargée. Déplacez la poignée pour réessayer.";
+      }
+    };
+  }
+
+  try {
+    const response = await fetch(selection.dataset.list, {cache: "no-cache"});
+    if (!response.ok) throw new Error("Cannot load webcam export timeline");
+    const list = await response.json();
+    if (list.date !== form.elements.date.value || list.camera !== form.elements.camera.value || !list.images.length) {
+      throw new Error("Wrong or empty webcam export timeline");
+    }
+    // The ISO time includes the server's UTC offset. Do not reinterpret it in the browser's timezone.
+    const images = list.images.map(frame => ({...frame, seconds: seconds(frame.received_at.slice(11).split(/[Z+-]/)[0])}));
+    const firstPreview = preview("start");
+    const lastPreview = preview("end");
+    const firstSecond = Math.min(86398, Math.floor(images[0].seconds));
+    const lastSecond = Math.min(86399, Math.floor(images[images.length - 1].seconds) + 1);
+
+    function update(full) {
+      const from = seconds(start.value);
+      const to = seconds(end.value);
+      startSlider.value = String(from ?? firstSecond);
+      endSlider.value = String(to ?? lastSecond);
+      startSlider.setAttribute("aria-valuetext", clock(Number(startSlider.value)));
+      endSlider.setAttribute("aria-valuetext", clock(Number(endSlider.value)));
+      startSlider.setAttribute("aria-valuemax", String(Math.max(0, Number(endSlider.value) - 1)));
+      endSlider.setAttribute("aria-valuemin", String(Math.min(86399, Number(startSlider.value) + 1)));
+      track.style.setProperty("--export-start", (Number(startSlider.value) / 86399 * 100) + "%");
+      track.style.setProperty("--export-end", (Math.max(Number(startSlider.value), Number(endSlider.value)) / 86399 * 100) + "%");
+      const ordered = from !== null && to !== null && from < to;
+      end.setCustomValidity(from !== null && to !== null && !ordered ? "La fin doit être après le début." : "");
+      label.textContent = ordered ? clock(from) + " → " + clock(to) : "Choisissez les heures de début et de fin.";
+      const selected = ordered ? images.filter(frame => frame.seconds >= from && frame.seconds < to) : [];
+      download.disabled = !selected.length;
+      status.textContent = ordered && !selected.length ? "Aucune image dans cette plage. Déplacez les poignées ou modifiez les heures." : "";
+      firstPreview(selected[0], full);
+      lastPreview(selected[selected.length - 1], full);
+    }
+
+    for (const [slider, input, otherSlider, otherInput, isStart] of [
+      [startSlider, start, endSlider, end, true],
+      [endSlider, end, startSlider, start, false],
+    ]) {
+      slider.addEventListener("input", () => {
+        const other = isStart ? Math.max(1, Number(otherSlider.value)) : Math.min(86398, Number(otherSlider.value));
+        const value = isStart ? Math.max(0, Math.min(Number(slider.value), other - 1)) : Math.min(86399, Math.max(Number(slider.value), other + 1));
+        input.value = clock(value);
+        if (!otherInput.value || other !== Number(otherSlider.value)) otherInput.value = clock(other);
+        update(false);
+      });
+      slider.addEventListener("change", () => update(true));
+      input.addEventListener("input", () => update(false));
+      input.addEventListener("change", () => update(true));
+      slider.disabled = false;
+    }
+    update(true);
+    selection.hidden = false;
+  } catch (_) {
+    status.textContent = "Les aperçus sont indisponibles. Vous pouvez saisir les heures ci-dessus.";
+  }
 }
 
 function initToday() {
@@ -111,6 +241,9 @@ function initHomeWebcam(prefix) {
 function initWebcam(prefix) {
   const page = document.getElementById("webcam-page");
   if (!page) return;
+  document.getElementById("webcam-date").addEventListener("change", function () {
+    if (this.validity.valid) this.form.requestSubmit();
+  });
   initWebcamFullscreen(page);
   let interacting = false;
   let navigating = false;

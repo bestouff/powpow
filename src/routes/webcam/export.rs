@@ -31,9 +31,8 @@ pub async fn page(
     Query(query): Query<PageQuery>,
 ) -> Response {
     let today = Local::now().date_naive();
-    let date = query.date.unwrap_or(today);
     let speed = query.speed.unwrap_or(DEFAULT_SPEED);
-    if date > today
+    if query.date.is_some_and(|date| date > today)
         || !(1..=MAX_SPEED).contains(&speed)
         || query
             .camera
@@ -44,10 +43,10 @@ pub async fn page(
     }
     let gallery = state
         .webcam
-        .gallery(Some(date), None, query.camera.as_deref());
+        .gallery(query.date, None, query.camera.as_deref());
     let sun = state
         .webcam_sun
-        .get(date, state.config.webcam.coordinates)
+        .get(gallery.date, state.config.webcam.coordinates)
         .await;
     let defaults = sun.map(|sun| sun.defaults(Utc::now()));
     let warning = if sun.is_none() {

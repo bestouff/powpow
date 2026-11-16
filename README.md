@@ -184,7 +184,12 @@ saving time changes.
 The original image files retain their original pixels.
 
 The **Exporter une vidéo** link opens `/webcam/export`, available to authenticated
-staff. Choose a day (today by default), start/end times, and an integer speed
+staff. The link preserves the webcam's selected day and camera; opening the export
+page directly selects the latest capture's day, like `/webcam`. Choose start/end
+times using the two-handle slider or the time fields. The endpoint previews show
+the first and last captures within the selected interval, with thumbnails while
+dragging and full images on release. Times use the server's timezone even when
+the browser is elsewhere. Choose an integer speed
 factor (2000× by default). Open-Meteo supplies sunrise and sunset for the chosen
 date, using `DIRECT_WEBCAM_COORDINATES` or the station coordinates (45.31, 5.85).
 No API key is needed. Older dates use its historical API. Sun times are cached;

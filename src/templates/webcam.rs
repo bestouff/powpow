@@ -33,7 +33,7 @@ pub fn webcam_page(
                         }
                     }
                     div .level-right {
-                        a .button.is-link.is-light href={(prefix) "/webcam/export" @if let Some(camera) = &gallery.camera { "?camera=" (camera) }} {
+                        a .button.is-link.is-light href={(prefix) "/webcam/export?date=" (gallery.date) @if let Some(camera) = &gallery.camera { "&camera=" (camera) }} {
                             span .icon { i .fa-solid.fa-film aria-hidden="true" {} }
                             span { "Exporter une vidéo" }
                         }
@@ -110,7 +110,6 @@ pub fn webcam_page(
                                         input .input #webcam-date type="date" name="date" value=(gallery.date) required;
                                     }
                                 }
-                                button .button.is-link.is-fullwidth type="submit" { "Afficher" }
                             }
                         }
                     }

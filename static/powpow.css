@@ -1375,6 +1375,84 @@
   max-width: 100%;
 }
 
+/* Two native range inputs share one track and remain keyboard-accessible. */
+.webcam-export-range {
+  position: relative;
+  height: 3rem;
+  --export-start: 0%;
+  --export-end: 100%;
+}
+.webcam-export-track {
+  position: absolute;
+  inset: calc(50% - 3px) 0.75rem auto;
+  height: 6px;
+  border-radius: 3px;
+  background: #d7dce2;
+}
+.webcam-export-track span {
+  position: absolute;
+  inset: 0 calc(100% - var(--export-end)) 0 var(--export-start);
+  border-radius: inherit;
+  background: var(--bulma-link);
+}
+.webcam-export-range input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  color: var(--bulma-link);
+  --thumb-offset: -0.75rem;
+}
+/* Opposite sides keep both handles reachable even for a very short interval. */
+#export-range-end { color: var(--color-accent-dark); --thumb-offset: 0.75rem; }
+.webcam-export-range input:focus-visible { z-index: 2; outline: none; }
+.webcam-export-range input::-moz-range-track { background: transparent; border: 0; }
+.webcam-export-range input::-webkit-slider-runnable-track { height: 6px; background: transparent; border: 0; }
+.webcam-export-range input::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 1px 5px #0006;
+  pointer-events: auto;
+  cursor: ew-resize;
+  transform: translateY(var(--thumb-offset));
+}
+.webcam-export-range input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: -9px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 1px 5px #0006;
+  pointer-events: auto;
+  cursor: ew-resize;
+  transform: translateY(var(--thumb-offset));
+}
+.webcam-export-range input:focus-visible::-moz-range-thumb { outline: 3px solid currentColor; outline-offset: 2px; }
+.webcam-export-range input:focus-visible::-webkit-slider-thumb { outline: 3px solid currentColor; outline-offset: 2px; }
+.webcam-export-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+#export-range-label { font-variant-numeric: tabular-nums; font-weight: 600; }
+.webcam-export-preview { aspect-ratio: 16 / 9; }
+.webcam-export-preview .webcam-photo { height: 100%; object-fit: contain; }
+.webcam-export-preview [hidden] { display: none; }
+.webcam-export-placeholder { padding: 2rem 1rem; color: white; text-align: center; }
+
 /* === Profile pôle choices === */
 .poles-list {
   display: grid;

@@ -2,7 +2,7 @@ use chrono::{Local, NaiveTime};
 use maud::{Markup, html};
 
 use super::{NavKind, page};
-use crate::webcam::{Gallery, export::MAX_SPEED};
+use crate::webcam::{Gallery, export::MAX_SPEED, previews};
 
 pub fn webcam_export_page(
     prefix: &str,
@@ -17,7 +17,7 @@ pub fn webcam_export_page(
             div .container {
                 h1 .title { "Exporter une vidéo de la webcam" }
                 p .subtitle { "Un accéléré de la journée, à télécharger au format MP4 (H.264)." }
-                a .button.is-light.mb-5 href={(prefix) "/webcam" @if let Some(camera) = &gallery.camera { "?camera=" (camera) }} { "Retour à la webcam" }
+                a .button.is-light.mb-5 href={(prefix) "/webcam?date=" (gallery.date) @if let Some(camera) = &gallery.camera { "&camera=" (camera) }} { "Retour à la webcam" }
                 @if let Some(warning) = warning {
                     div .notification.is-warning role="status" { (warning) }
                 }
@@ -55,8 +55,44 @@ pub fn webcam_export_page(
                         "Heures locales du serveur, comme dans les archives. Lever et coucher du soleil : "
                         a href="https://open-meteo.com/" { "Open-Meteo" } "."
                     }
+                    @if let Some(camera) = &gallery.camera && !gallery.images.is_empty() {
+                        section #export-selection .mb-5
+                          data-list={(prefix) "/webcam/" (previews::list_name(gallery.date, camera))} hidden {
+                            h2 .title.is-5.mb-2 { "Choisir la plage à exporter" }
+                            p .help #export-range-help { "Déplacez les poignées (bleue : début, orange : fin) ou saisissez les heures ci-dessus. Relâchez pour charger l’image complète. Les flèches du clavier permettent un réglage à la seconde." }
+                            div .webcam-export-range {
+                                div .webcam-export-track aria-hidden="true" { span {} }
+                                input #export-range-start type="range" min="0" max="86399" step="1" value="0"
+                                  aria-label="Heure de début" aria-describedby="export-range-help" disabled;
+                                input #export-range-end type="range" min="0" max="86399" step="1" value="86399"
+                                  aria-label="Heure de fin" aria-describedby="export-range-help" disabled;
+                            }
+                            div .webcam-export-scale aria-hidden="true" {
+                                span { "00:00" } span { "06:00" } span { "12:00" } span { "18:00" } span { "23:59" }
+                            }
+                            p .has-text-centered.my-3 {
+                                output #export-range-label for="export-range-start export-range-end" {}
+                            }
+                            div .columns {
+                                @for (side, title) in [("start", "Première image de la plage"), ("end", "Dernière image de la plage")] {
+                                    div .column {
+                                        figure .webcam-view.webcam-export-preview id={"export-preview-" (side)} {
+                                            img .webcam-photo alt=(title) hidden;
+                                            p .webcam-export-placeholder { "Choisissez une plage horaire." }
+                                            figcaption .webcam-caption {
+                                                div .webcam-caption-heading { strong { (title) } time {} }
+                                            }
+                                        }
+                                        p .help data-preview-status=(side) role="status" {}
+                                    }
+                                }
+                            }
+                        }
+                        p .help.mb-4 #export-selection-status role="status" {}
+                        noscript { p .help.mb-4 { "Activez JavaScript pour utiliser les poignées et les aperçus, ou saisissez les heures ci-dessus." } }
+                    }
                     p .mb-4 { "La vidéo conserve le temps entre les prises de vue. La première image couvre le début de la plage ; chaque image reste affichée jusqu’à la suivante. Résolution maximale : 1280 × 720." }
-                    button .button.is-link type="submit" disabled[gallery.images.is_empty()] {
+                    button #export-download .button.is-link type="submit" disabled[gallery.images.is_empty()] {
                         span .icon { i .fa-solid.fa-download aria-hidden="true" {} }
                         span { "Créer et télécharger la vidéo" }
                     }
