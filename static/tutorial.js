@@ -298,11 +298,19 @@ function initVolunteerTutorial(prefix, viewer = null) {
   const observer = new ResizeObserver(scheduleLayout);
   [card, login, search, membership, send, success, poles, planning, qualifications, help, menu].filter(Boolean).forEach(element => observer.observe(element));
 
+  // Only an explicit login link starts the welcome guide. Consume the marker so
+  // visiting or reloading the login page does not reopen it on its own.
+  const url = new URL(window.location.href);
+  const requested = !viewer && search && url.searchParams.get("guide") === "1";
+  if (requested) {
+    url.searchParams.delete("guide");
+    window.history.replaceState(window.history.state, "", url);
+  }
   const saved = savedStep();
   if (saved !== "done") {
     if (viewer) show(isOwnPage && memberSteps.includes(saved) ? saved : "profile");
-    else if (search || document.getElementById("hero")) {
-      show(search ? (saved === "membership" && loginStep() === "search" ? "membership" : loginStep()) : "login");
+    else if (requested) {
+      show(saved === "membership" && loginStep() === "search" ? "membership" : loginStep());
     }
   }
 }

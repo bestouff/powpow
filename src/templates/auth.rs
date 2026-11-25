@@ -18,7 +18,7 @@ pub fn email_change_page(prefix: &str, title: &str, message: &str, token: Option
                                 }
                                 p .help.mt-3 { "Votre adresse actuelle reste active jusqu'à cette confirmation." }
                             } @else {
-                                a .button.is-primary href={(prefix) "/login"} { "Se connecter" }
+                                a .button.is-primary href={(prefix) "/login?guide=1"} { "Se connecter" }
                             }
                         }
                     }

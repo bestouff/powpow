@@ -278,7 +278,7 @@ fn navbar(prefix: &str, kind: &NavKind, active: &str, block: Option<&ContentBloc
                             span .icon.mr-1 { i .fa-solid.fa-circle-question {} }
                             "Aide"
                         }
-                        a .navbar-item #login-btn href={(p) "/login"} {
+                        a .navbar-item #login-btn href={(p) "/login?guide=1"} {
                             i .fa-solid.fa-right-to-bracket {}
                             "\u{00a0}Se connecter"
                         }

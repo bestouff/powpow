@@ -139,9 +139,10 @@ and import once without starting the web server, run `powpow --sync-meteo`.
 
 ### Volunteer welcome guide
 
-Anonymous visitors to the home and login pages see a short French guide with
-hand-drawn red circles and arrows. It points to **Se connecter**, then the name
-search (at least four characters). **Je ne trouve pas mon nom** points to the
+Clicking **Se connecter** starts a short French guide for anonymous visitors on
+the login page, with hand-drawn red circles and arrows. Ordinary page visits and
+reloads do not start it. The guide highlights the name search (at least four
+characters). **Je ne trouve pas mon nom** points to the
 HelloAsso membership link configured in `about-association`, falling back to
 `HELLOASSO_ASSOCIATION_SLUG` when needed. Selecting a name highlights **Envoyer le
 lien de connexion** (step 4). After a successful send, step 5 directs the visitor

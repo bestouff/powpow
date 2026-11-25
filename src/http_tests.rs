@@ -47,7 +47,7 @@ async fn login_membership_link_survives_missing_cms_content(pool: PgPool) -> any
         assert!(body.contains(&format!("href=\"{expected}\"")));
         assert!(body.contains("id=\"membership-link\""));
         assert!(body.contains("data-entity-name=\"Association &lt;Ski&gt; &amp; amis\""));
-        assert!(body.contains("href=\"/powpow/login\""));
+        assert!(body.contains("href=\"/powpow/login?guide=1\""));
         if configured.is_some() {
             assert!(body.contains("Adhérer &lt;ici&gt;"));
         }
